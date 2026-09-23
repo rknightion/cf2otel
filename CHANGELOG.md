@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/rknightion/cf2otel/compare/v0.2.0...v0.2.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* handle unavailable AI Gateway bodies and firewall schema ([1b7ca51](https://github.com/rknightion/cf2otel/commit/1b7ca51ccfec438729719e9f1d0fd6667ece37c2))
+
 ## [0.2.0](https://github.com/rknightion/cf2otel/compare/v0.1.3...v0.2.0) (2026-09-23)
 
 
