@@ -4,7 +4,7 @@ title: 'Cloudflare API client: read-only REST + GraphQL with entitlement-aware q
 status: Parked
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-23 16:15'
+updated_date: '2026-09-23 16:36'
 labels:
   - 'wave:1'
   - cfapi
@@ -42,4 +42,6 @@ internal/cfapi. The only package that talks to Cloudflare. See doc-0003 for the 
 Parked AC3: client fails closed on a notOlderThan retention gap instead of clamping the requested window. This preserves gap visibility but does not satisfy the literal clamp criterion; decide contract wording or implement an explicit partial window with disclosure.
 
 Decision 2026-09-23 (Rob): AC3 reworded. Wave 1 failed closed on a retention gap, which never self-heals: the scheduler never advances, so a window older than notOlderThan (31d on the HTTP and Access Groups datasets, or a misconfigured initial_lookback) stalls that collector permanently. Silent clamping was rejected because it hides loss. Contract: skip forward to the retention floor with explicit gap disclosure. Implemented in wave 2 alongside CFO-0025.
+
+Correction: the reworded retention criterion is AC6 (the old AC3 was removed and the new text appended). Wave 2 prep also found the skip-forward must use a margin past the floor, because the cutoff is computed as time.Now()-notOlderThan when the query runs and so moves forward every tick.
 <!-- SECTION:NOTES:END -->
