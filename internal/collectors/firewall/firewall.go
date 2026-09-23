@@ -30,12 +30,22 @@ func zones(ctx context.Context, cfg *config.Config, api cfapi.Client) ([]cfapi.Z
 		return all, nil
 	}
 	selected := make([]cfapi.Zone, 0, len(wanted))
+	matched := make([]bool, len(wanted))
 	for _, zone := range all {
-		for _, nameOrID := range wanted {
+		included := false
+		for i, nameOrID := range wanted {
 			if nameOrID == zone.ID || strings.EqualFold(nameOrID, zone.Name) {
-				selected = append(selected, zone)
-				break
+				matched[i] = true
+				included = true
 			}
+		}
+		if included {
+			selected = append(selected, zone)
+		}
+	}
+	for _, found := range matched {
+		if !found {
+			return nil, fmt.Errorf("configured firewall zone absent from discovery")
 		}
 	}
 	return selected, nil

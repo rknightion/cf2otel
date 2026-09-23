@@ -110,6 +110,35 @@ func TestSeverityForAction(t *testing.T) {
 	}
 }
 
+func TestConfiguredZoneMissingFromDiscoveryDoesNotAdvance(t *testing.T) {
+	from := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Minute)
+	for _, name := range []string{"events", "metrics"} {
+		t.Run(name, func(t *testing.T) {
+			cfg := &config.Config{Cloudflare: config.CloudflareConfig{Zones: []string{"present.example.test", "missing.example.test"}}}
+			api := &firewallFakeAPI{
+				zones:    []cfapi.Zone{{ID: "zone-present", Name: "present.example.test"}},
+				settings: map[string]cfapi.DatasetSettings{"zone-present/" + groupsDataset: settings(true, "count")},
+				query:    func(cfapi.GraphQLRequest) (any, error) { return []map[string]any{}, nil },
+			}
+			var c collector.WindowCollector
+			if name == "events" {
+				c = NewEvents(cfg, api)
+			} else {
+				c = NewMetrics(cfg, api)
+			}
+			out := &telemetry.Buffer{}
+			mark, err := c.CollectWindow(context.Background(), from, to, out)
+			if err == nil || !strings.Contains(err.Error(), "configured firewall zone") {
+				t.Fatalf("error = %v, want unresolved configured zone", err)
+			}
+			if !mark.Equal(from) || len(out.Records) != 0 || len(out.Metrics) != 0 || len(api.queries) != 0 {
+				t.Fatalf("mark=%s records=%d metrics=%d queries=%d, want no progress", mark, len(out.Records), len(out.Metrics), len(api.queries))
+			}
+		})
+	}
+}
+
 func TestEventsFilterWindowBoundariesAndDeduplicate(t *testing.T) {
 	from := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
 	to := from.Add(time.Minute)
