@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cf2otel.fullname" . }}
+  labels:
+    {{- include "cf2otel.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    {{- include "cf2otel.config" . | nindent 4 }}

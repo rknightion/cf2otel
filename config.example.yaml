@@ -34,3 +34,25 @@ health:
 log:
   level: info
   format: json
+
+# Enabled collector names are fixed by the domain registry. AI Gateway
+# metrics come from aigateway.logs until GraphQL Groups lag is bounded.
+collectors:
+  access.logins:
+    enabled: true
+  access.login_metrics:
+    enabled: true
+  access.scim:
+    enabled: true
+  inventory.access:
+    enabled: true
+  httpreq.events:
+    enabled: true
+  httpreq.metrics:
+    enabled: true
+  aigateway.logs:
+    enabled: true
+  aigateway.metrics:
+    enabled: false
+  selfobs:
+    enabled: true

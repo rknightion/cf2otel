@@ -73,6 +73,19 @@ tidy:
 build:
     go build -trimpath -ldflags "{{ ldflags }}" -o bin/cf2otel ./cmd/cf2otel
 
+# Regenerate Grafana dashboard and alert manifests
+[group('gen')]
+gen:
+    python3 grafana/build_dashboard.py
+    python3 grafana/build_rules.py
+
+# Verify generated Grafana manifests match their source
+[group('check')]
+[no-exit-message]
+gen-check:
+    python3 grafana/build_dashboard.py --check
+    python3 grafana/build_rules.py --check
+
 # Run govulncheck
 [group('check')]
 [no-exit-message]
@@ -81,7 +94,7 @@ vuln:
 
 # The pre-commit gate: everything that runs with only the Go toolchain
 [group('check')]
-check: fmt-check lint vet test tidy-check build vuln
+check: fmt-check lint vet test tidy-check build vuln gen-check
 
 # Build release archives locally without publishing
 [group('build')]

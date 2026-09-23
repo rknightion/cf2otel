@@ -20,9 +20,12 @@ type GraphQLRequest struct {
 	ScopeID      string
 	Dataset      string
 	WantedFields []string
-	Filter       map[string]any
-	From, To     time.Time
-	Limit        int
+	// JoinFields are selected in every field chunk and uniquely identify a row
+	// within one query window. A wide query without them must fail closed.
+	JoinFields []string
+	Filter     map[string]any
+	From, To   time.Time
+	Limit      int
 }
 type DatasetSettings struct {
 	Enabled           bool     `json:"enabled"`
@@ -37,9 +40,12 @@ type Account struct {
 	Name string `json:"name"`
 }
 type Zone struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Status string `json:"status"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Account struct {
+		ID string `json:"id"`
+	} `json:"account"`
 }
 type Gateway struct {
 	ID   string `json:"id"`
@@ -51,6 +57,12 @@ type Client interface {
 	Accounts(ctx context.Context) ([]Account, error)
 	Zones(ctx context.Context) ([]Zone, error)
 	Gateways(ctx context.Context, accountID string) ([]Gateway, error)
+}
+
+// PageGetter preserves result_info alongside result for collectors that must
+// follow server-capped REST pages. Get unwraps result and cannot supply it.
+type PageGetter interface {
+	GetPage(ctx context.Context, path string, query url.Values, out any) error
 }
 type Page struct {
 	Result     json.RawMessage `json:"result"`

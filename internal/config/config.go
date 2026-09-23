@@ -116,6 +116,11 @@ func Default() Config {
 	for _, name := range collectorNames {
 		c.Collectors[name] = CollectorConfig{Enabled: true, Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
 	}
+	// GraphQL AI Gateway Groups showed unbounded ingestion lag in the verified
+	// account. REST logs provide the wave-1 metrics; do not schedule Groups.
+	metrics := c.Collectors["aigateway.metrics"]
+	metrics.Enabled = false
+	c.Collectors["aigateway.metrics"] = metrics
 	return c
 }
 func (c Config) Collector(name string) CollectorConfig { return c.Collectors[name] }

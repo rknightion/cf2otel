@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-09-23 10:01'
+updated_date: '2026-09-23 12:12'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -116,9 +116,12 @@ Not available without Enterprise on the verified account: Logpull (`/zones/{z}/l
    `sampleInterval` where the dataset exposes it (it is **not** a field on `httpRequestsAdaptive`),
    derive rate metrics from the `*Groups` datasets (whose `count` is already sample-corrected), never
    by counting raw rows.
-7. **`aiGatewayRequestsAdaptiveGroups` returned zero rows for a 6-day window** while the REST log
-   listed a request from minutes earlier. Unresolved: reconcile before trusting GraphQL for AI Gateway
-   metrics; the REST log is the verified source.
+7. **AI Gateway GraphQL Groups can arrive late.** In a read-only 2026-09-23 check, a 3-hour
+   `aiGatewayRequestsAdaptiveGroups` window returned zero while REST listed 38 requests; the newest REST
+   request was already 13.9 minutes old. Repeating the identical GraphQL window later returned 38.
+   Separate 1-hour and 3-hour comparisons matched REST at 2/2 and 39/39. The upper ingestion-lag
+   bound remains unknown, so wave 1 leaves `aigateway.metrics` unregistered and derives bounded metrics
+   from the verified REST log. Do not interpret a fresh empty Groups result as zero activity.
 8. **Service-token traffic dominates Access analytics.** One app produced ~210,000 `nonidentity`
    logins in six days against a few hundred for everything else. Keep `nonidentity` separable from
    identity logins in every signal.

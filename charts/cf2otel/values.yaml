@@ -1,0 +1,85 @@
+image:
+  repository: ghcr.io/rknightion/cf2otel
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# This outbound-only poller must have exactly one writer for its checkpoint PVC.
+# An existing Secret must provide both keys. The chart never creates a Secret.
+existingSecret:
+  name: cf2otel
+  cloudflareTokenKey: cloudflare-api-token
+  otlpTokenKey: otlp-token
+
+serviceAccount:
+  create: true
+  name: ""
+podAnnotations: {}
+podLabels: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  capabilities:
+    drop: [ALL]
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+state:
+  size: 1Gi
+  # Empty means use the cluster's default StorageClass.
+  storageClassName: ""
+  accessModes: [ReadWriteOnce]
+
+# Non-secret configuration only. Account and Grafana instance IDs are supplied
+# by the installer; no live identifiers are embedded in this public chart.
+config:
+  cloudflare:
+    account_id: ""
+    zones: []
+  access:
+    include_service_tokens: false
+  http:
+    scope: access_protected
+    hosts: []
+    zones: []
+  identity:
+    enabled: true
+    match_window: 15m
+    max_candidates: 100000
+  ai_gateway:
+    gateways: []
+    capture_bodies: false
+    max_body_bytes: 16384
+    link_caller_traces: true
+  otlp:
+    endpoint: https://otlp.example.invalid
+    protocol: http
+    grafana_cloud:
+      instance_id: ""
+  state:
+    dir: /var/lib/cf2otel
+  health:
+    listen: 127.0.0.1:9464
+  log:
+    level: info
+    format: json

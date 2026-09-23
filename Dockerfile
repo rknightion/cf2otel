@@ -22,5 +22,6 @@ FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c
 COPY --from=build /out/cf2otel /usr/local/bin/cf2otel
 COPY --from=build --chown=65532:65532 /out/state /var/lib/cf2otel
 USER 65532:65532
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["/usr/local/bin/cf2otel", "-healthcheck"]
 ENTRYPOINT ["/usr/local/bin/cf2otel"]
 CMD []

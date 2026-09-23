@@ -1,0 +1,97 @@
+{
+  "apiVersion": "rules.alerting.grafana.app/v0alpha1",
+  "kind": "AlertRule",
+  "metadata": {
+    "annotations": {
+      "grafana.app/folder": "REPLACE_WITH_FOLDER_UID"
+    },
+    "labels": {
+      "grafana.app/folder": "REPLACE_WITH_FOLDER_UID"
+    },
+    "name": "cf2otel-export-failure"
+  },
+  "spec": {
+    "annotations": {
+      "__dashboardUid__": "cf2otel",
+      "__panelId__": "403",
+      "description": "OTLP export failures occurred in the last 15 minutes.",
+      "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
+      "summary": "cf2otel export is failing"
+    },
+    "execErrState": "Error",
+    "expressions": {
+      "A": {
+        "datasourceUID": "grafanacloud-prom",
+        "model": {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "sum(increase(cf2otel_export_errors_total{service_name=\"cf2otel\"}[15m])) or on() (0 * sum(increase(cf2otel_export_success_total{service_name=\"cf2otel\"}[15m])))",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        },
+        "queryType": "instant",
+        "relativeTimeRange": {
+          "from": "15m",
+          "to": "0s"
+        }
+      },
+      "B": {
+        "datasourceUID": "__expr__",
+        "model": {
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "reducer": "last",
+          "refId": "B",
+          "type": "reduce"
+        }
+      },
+      "C": {
+        "datasourceUID": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  0
+                ],
+                "type": "gt"
+              }
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "B",
+          "refId": "C",
+          "type": "threshold"
+        },
+        "source": true
+      }
+    },
+    "for": "5m",
+    "labels": {
+      "category": "collector",
+      "pipeline": "cf2otel",
+      "service": "cf2otel",
+      "severity": "warning",
+      "source": "cf2otel"
+    },
+    "noDataState": "Alerting",
+    "panelRef": {
+      "dashboardUID": "cf2otel",
+      "panelID": 403
+    },
+    "paused": false,
+    "title": "cf2otel export is failing",
+    "trigger": {
+      "interval": "1m"
+    }
+  }
+}

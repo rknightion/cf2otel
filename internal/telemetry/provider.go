@@ -33,6 +33,7 @@ type Providers struct {
 	metrics *sdkmetric.MeterProvider
 	logs    *sdklog.LoggerProvider
 	traces  *sdktrace.TracerProvider
+	hook    *exportObserver
 }
 
 func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
@@ -103,10 +104,17 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 	if o.Interval <= 0 {
 		o.Interval = 15 * time.Second
 	}
+	hook := &exportObserver{}
+	mx = observedMetricExporter{Exporter: mx, hook: hook}
+	lx = observedLogExporter{Exporter: lx, hook: hook}
+	tx = observedTraceExporter{SpanExporter: tx, hook: hook}
 	mp := sdkmetric.NewMeterProvider(sdkmetric.WithResource(res), sdkmetric.WithReader(sdkmetric.NewPeriodicReader(mx, sdkmetric.WithInterval(o.Interval))))
 	lp := sdklog.NewLoggerProvider(sdklog.WithResource(res), sdklog.WithProcessor(sdklog.NewBatchProcessor(lx)))
 	tp := sdktrace.NewTracerProvider(sdktrace.WithResource(res), sdktrace.WithBatcher(tx))
-	return &Providers{Emitter: NewEmitter(mp.Meter(semconv.ServiceName), lp.Logger(semconv.ServiceName), tp.Tracer(semconv.ServiceName)), metrics: mp, logs: lp, traces: tp}, nil
+	return &Providers{Emitter: NewEmitter(mp.Meter(semconv.ServiceName), lp.Logger(semconv.ServiceName), tp.Tracer(semconv.ServiceName)), metrics: mp, logs: lp, traces: tp, hook: hook}, nil
+}
+func (p *Providers) SetExportObserver(fn func(context.Context, string, error)) {
+	p.hook.Set(fn)
 }
 func (p *Providers) Shutdown(ctx context.Context) error {
 	return errors.Join(p.metrics.Shutdown(ctx), p.logs.Shutdown(ctx), p.traces.Shutdown(ctx))

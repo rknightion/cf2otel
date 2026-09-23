@@ -1,0 +1,35 @@
+name: Trigger Documentation Sync
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'docs.toml'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: docs-sync-${{ github.repository }}
+  cancel-in-progress: true
+jobs:
+  trigger-sync:
+    name: trigger documentation sync
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - id: bao
+        uses: rknightion/.github/.github/actions/broker-token@bc58399e49a8d8131a379f530fffe8c9659667f9 # role input + token-mask hardening
+        with:
+          permission-set: docs-sync
+          role: docs-sync-cf2otel
+          tailscale-client-id: ${{ secrets.TS_WIF_CLIENT_ID }}
+          tailscale-audience: ${{ secrets.TS_WIF_AUDIENCE }}
+      - uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4
+        with:
+          token: ${{ steps.bao.outputs.token }}
+          repository: m7kni/m7kni-net-site
+          event-type: docs-update
+          client-payload: '{"repository": "cf2otel"}'

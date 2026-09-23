@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "cf2otel.fullname" . }}
+  labels:
+    {{- include "cf2otel.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "cf2otel.fullname" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "cf2otel.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include "cf2otel.config" . | sha256sum }}
+        checksum/secret: {{ (lookup "v1" "Secret" .Release.Namespace .Values.existingSecret.name).data | default dict | toJson | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "cf2otel.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "cf2otel.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: cf2otel
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["-config", "/etc/cf2otel/config.yaml"]
+          env:
+            - name: CF2OTEL_CLOUDFLARE__API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "existingSecret.name is required" .Values.existingSecret.name | quote }}
+                  key: {{ required "existingSecret.cloudflareTokenKey is required" .Values.existingSecret.cloudflareTokenKey | quote }}
+            - name: CF2OTEL_OTLP__GRAFANA_CLOUD__TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret.name | quote }}
+                  key: {{ required "existingSecret.otlpTokenKey is required" .Values.existingSecret.otlpTokenKey | quote }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          readinessProbe:
+            exec:
+              command: ["/usr/local/bin/cf2otel", "-config", "/etc/cf2otel/config.yaml", "-healthcheck"]
+            periodSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["/usr/local/bin/cf2otel", "-config", "/etc/cf2otel/config.yaml", "-healthcheck"]
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /etc/cf2otel
+              readOnly: true
+            - name: state
+              mountPath: /var/lib/cf2otel
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "cf2otel.fullname" . }}
+            defaultMode: 0444
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: state
+      spec:
+        accessModes:
+          {{- toYaml .Values.state.accessModes | nindent 10 }}
+        {{- with .Values.state.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.state.size | quote }}

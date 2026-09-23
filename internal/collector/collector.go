@@ -60,6 +60,19 @@ type Deps struct {
 	Emitter     telemetry.Emitter
 	API         cfapi.Client
 	Identity    identity.Index
+	Apps        AppCatalog
+	SelfObs     SnapshotCollector
 	Checkpoints CheckpointStore
 	Registry    *Registry
+}
+
+// AppRecord is the bounded shared view of one Access-protected host.
+type AppRecord struct{ ID, Name, Host, ZoneID string }
+
+// AppCatalog is populated by inventory and read by HTTP/Access collectors.
+// Implementations must support concurrent polling.
+type AppCatalog interface {
+	PutApp(AppRecord)
+	Hosts() []string
+	Lookup(host string) (AppRecord, bool)
 }

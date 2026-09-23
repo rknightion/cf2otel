@@ -93,3 +93,21 @@ func TestZeroLookbackStartsFromDurableNow(t *testing.T) {
 		t.Fatalf("restart window=%v", w.calls)
 	}
 }
+
+func TestWindowCheckpointUsesGraphQLSecondPrecision(t *testing.T) {
+	now := time.Date(2026, 9, 23, 12, 0, 0, 750000000, time.UTC)
+	store, err := NewFileStore(filepath.Join(t.TempDir(), "checkpoints.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &windowFake{}
+	s := NewScheduler(nil, nil, store)
+	s.Now = func() time.Time { return now }
+	entry := Entry{Collector: w, Interval: time.Minute, InitialLookback: time.Minute, MaxWindow: time.Minute}
+	if err := s.RunOnce(context.Background(), entry); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.calls) != 1 || w.calls[0][0].Nanosecond() != 0 || w.calls[0][1].Nanosecond() != 0 {
+		t.Fatalf("GraphQL cannot represent subsecond checkpoint: %v", w.calls)
+	}
+}

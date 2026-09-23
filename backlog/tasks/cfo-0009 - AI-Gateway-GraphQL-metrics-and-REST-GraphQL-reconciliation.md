@@ -1,9 +1,10 @@
 ---
 id: CFO-0009
 title: AI Gateway GraphQL metrics and REST/GraphQL reconciliation
-status: To Do
+status: Parked
 assignee: []
 created_date: '2026-09-23 10:04'
+updated_date: '2026-09-23 12:08'
 labels:
   - 'wave:1'
   - aigw
@@ -30,3 +31,9 @@ aiGatewayRequestsAdaptiveGroups, aiGatewayErrorsAdaptiveGroups, aiGatewayCacheAd
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+W8 read-only reconciliation on 2026-09-23: identical 3h GraphQL Groups window initially returned 0 with 38 REST requests (latest 13.9m old), then later returned 38; other 1h and 3h windows matched 2/2 and 39/39. Unknown upper lag. Dropped GraphQL collector from registration; REST supplies bounded metrics. Corrected doc-0003 trap 7 via Backlog CLI.
+<!-- SECTION:NOTES:END -->

@@ -1,0 +1,11 @@
+# Governing headless Service for the StatefulSet. The poller opens no Pod-facing port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cf2otel.fullname" . }}
+  labels:
+    {{- include "cf2otel.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "cf2otel.selectorLabels" . | nindent 4 }}

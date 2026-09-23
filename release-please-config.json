@@ -7,7 +7,12 @@
       "bump-minor-pre-major": true,
       "initial-version": "0.1.0",
       "changelog-path": "CHANGELOG.md",
-      "package-name": "cf2otel"
+      "package-name": "cf2otel",
+      "extra-files": [
+        {"type":"yaml","path":"charts/cf2otel/Chart.yaml","jsonpath":"$.version"},
+        {"type":"yaml","path":"charts/cf2otel/Chart.yaml","jsonpath":"$.appVersion"},
+        {"type":"generic","path":"charts/cf2otel/README.md"}
+      ]
     }
   },
   "changelog-sections": [

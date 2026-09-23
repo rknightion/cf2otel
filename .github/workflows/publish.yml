@@ -50,6 +50,7 @@ jobs:
     with:
       release-tag: ${{ inputs.release_tag }}
       dockerfile: Dockerfile
+      helm-chart-path: charts/cf2otel
       build-args: |
         COMMIT=${{ needs.metadata.outputs.commit }}
         BUILD_DATE=${{ needs.metadata.outputs.build_date }}

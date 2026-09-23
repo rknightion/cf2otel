@@ -12,6 +12,10 @@ linters:
       - common-false-positives
       - std-error-handling
     rules:
+      # GenAI names containing "tokens" are protocol constants, not credentials.
+      - path: internal/semconv/genai\.go
+        linters: [gosec]
+        text: 'G101:'
       - path: _test\.go
         linters: [bodyclose, errcheck, gosec]
 formatters:

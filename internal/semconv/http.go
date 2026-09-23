@@ -3,7 +3,7 @@ package semconv
 const (
 	EventHTTPRequest         = "cloudflare.http.request"
 	MetricHTTPRequests       = "cloudflare.http.requests"
-	MetricHTTPDuration       = "cloudflare.http.duration"
+	MetricHTTPOriginDuration = "cloudflare.http.origin.duration"
 	AttrHTTPHost             = "cloudflare.http.host"
 	AttrHTTPMethod           = "cloudflare.http.method"
 	AttrHTTPPath             = "cloudflare.http.path"

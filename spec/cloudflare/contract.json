@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "graphql": [
+    {
+      "scope": "account",
+      "dataset": "cf1AccessLoginsRawGroups",
+      "required_fields": ["dimensions_appName", "dimensions_idp", "dimensions_loginType", "dimensions_allowed", "sum_logins"],
+      "minimum_max_duration_seconds": 10800,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "accessLoginRequestsAdaptiveGroups",
+      "required_fields": ["count", "dimensions_appId", "dimensions_identityProvider", "dimensions_serviceTokenId", "dimensions_isSuccessfulLogin"],
+      "minimum_max_duration_seconds": 604800,
+      "minimum_not_older_than_seconds": 7776000
+    },
+    {
+      "scope": "zone",
+      "dataset": "httpRequestsAdaptive",
+      "required_fields": ["datetime", "clientRequestHTTPHost"],
+      "minimum_max_duration_seconds": 2592000,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "zone",
+      "dataset": "httpRequestsAdaptiveGroups",
+      "required_fields": ["count", "dimensions_clientRequestHTTPHost", "dimensions_edgeResponseStatus", "dimensions_cacheStatus", "avg_originResponseDurationMs"],
+      "minimum_max_duration_seconds": 2592000,
+      "minimum_not_older_than_seconds": 2678400
+    }
+  ],
+  "rest": [
+    {"name": "zone-list", "scope": "global", "path": "/zones", "required_fields": ["id", "name", "status"]},
+    {"name": "access-apps", "scope": "account", "path": "/accounts/{account}/access/apps", "required_fields": ["id", "name", "domain"]},
+    {"name": "ai-gateways", "scope": "account", "path": "/accounts/{account}/ai-gateway/gateways", "required_fields": ["id", "collect_logs"]},
+    {"name": "ai-gateway-logs", "scope": "gateway", "path": "/accounts/{account}/ai-gateway/gateways/{gateway}/logs", "required_fields": ["id", "created_at", "provider", "model", "status_code", "usage_metadata", "timings"]}
+  ]
+}

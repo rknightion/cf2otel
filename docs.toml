@@ -1,0 +1,36 @@
+[site]
+name = "cf2otel"
+description = "Cloudflare Access, HTTP request and AI Gateway telemetry over OpenTelemetry"
+author = "Rob Knighton"
+keywords = ["cloudflare", "access", "ai gateway", "opentelemetry", "otlp"]
+
+[[site.nav]]
+Home = "index.md"
+
+[[site.nav]]
+"Getting Started" = "getting-started.md"
+
+[[site.nav]]
+Configuration = "configuration.md"
+
+[[site.nav]]
+Reference = [
+  { Signals = "signals.md" },
+  { "Environment Variables" = "env-vars.md" },
+]
+
+[[site.nav]]
+Operations = [
+  { "Security and PII" = "security.md" },
+  { Troubleshooting = "troubleshooting.md" },
+  { Comparison = "comparison.md" },
+]
+
+[assets]
+social_image = "assets/social-card.png"
+social_image_alt = "cf2otel documentation social preview card"
+
+[[social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/rknightion/cf2otel"
+name = "GitHub Repository"

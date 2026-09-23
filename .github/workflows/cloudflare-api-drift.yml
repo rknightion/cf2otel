@@ -1,0 +1,41 @@
+name: Cloudflare API drift
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-api-drift
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Read schema probe token
+        uses: rknightion/.github/.github/actions/bao-secret@bc58399e49a8d8131a379f530fffe8c9659667f9 # v1.23.0
+        with:
+          role: rknightion-cf2otel
+          path: rknightion/cf2otel
+          tailscale-client-id: ${{ secrets.TS_WIF_CLIENT_ID }}
+          tailscale-audience: ${{ secrets.TS_WIF_AUDIENCE }}
+      - name: Check API contract
+        run: |
+          set -euo pipefail
+          : "${CLOUDFLARE_API_TOKEN:?missing Cloudflare token}"
+          go run ./tools/apidrift -spec spec/cloudflare/contract.json

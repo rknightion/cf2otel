@@ -1,0 +1,22 @@
+# Camden reference deployment. Keep account, gateway and credential values in
+# the host config and root-only .env, never in this public template.
+services:
+  cf2otel:
+    image: ghcr.io/rknightion/cf2otel:${CF2OTEL_VERSION:-0.1.0}
+    restart: unless-stopped
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    labels:
+      com.centurylinklabs.watchtower.scope: fastlane
+    command: ["-config", "/etc/cf2otel/config.yaml"]
+    environment:
+      CF2OTEL_CLOUDFLARE__API_TOKEN: ${CF2OTEL_CLOUDFLARE__API_TOKEN:-}
+      CF2OTEL_OTLP__GRAFANA_CLOUD__INSTANCE_ID: ${CF2OTEL_OTLP__GRAFANA_CLOUD__INSTANCE_ID:-}
+      CF2OTEL_OTLP__GRAFANA_CLOUD__TOKEN: ${CF2OTEL_OTLP__GRAFANA_CLOUD__TOKEN:-}
+    volumes:
+      - /opt/cf2otel/config.yaml:/etc/cf2otel/config.yaml:ro
+      - /opt/cf2otel/state:/var/lib/cf2otel

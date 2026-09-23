@@ -7,9 +7,12 @@ requests (following the OpenTelemetry GenAI semantic conventions), and the wider
 log surface.
 
 It is a single Go binary with a distroless container image, built for Grafana Cloud.
+The first release collects Access, HTTP request, AI Gateway and account inventory signals.
+The AI Gateway GraphQL metrics poller remains disabled while its ingestion lag is measured;
+the REST log poller supplies AI Gateway metrics in the meantime.
 
-> **Status:** pre-release scaffold. The first working release is being built now; nothing below
-> the scaffold is usable yet.
+See the [getting started guide](docs/getting-started.md), [configuration](docs/configuration.md)
+and [signal catalogue](docs/signals.md).
 
 ## Build and check
 

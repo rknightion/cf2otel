@@ -12,11 +12,13 @@ import (
 )
 
 type Scheduler struct {
-	Registry    *Registry
-	Emitter     telemetry.Emitter
-	Checkpoints CheckpointStore
-	Now         func() time.Time
-	Logger      *slog.Logger
+	Registry     *Registry
+	Emitter      telemetry.Emitter
+	Checkpoints  CheckpointStore
+	Now          func() time.Time
+	Logger       *slog.Logger
+	OnPoll       func(context.Context, string, time.Duration, error, time.Time)
+	OnCheckpoint func(string, time.Time)
 }
 
 func NewScheduler(r *Registry, e telemetry.Emitter, store CheckpointStore) *Scheduler {
@@ -51,7 +53,12 @@ func (s *Scheduler) runEntry(ctx context.Context, e Entry) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
-		if err := s.RunOnce(ctx, e); err != nil {
+		started := time.Now()
+		err := s.RunOnce(ctx, e)
+		if s.OnPoll != nil {
+			s.OnPoll(ctx, e.Collector.Name(), time.Since(started), err, s.Now())
+		}
+		if err != nil {
 			s.Logger.Error("collector run failed", "collector", e.Collector.Name(), "error", err)
 		}
 		select {
@@ -79,11 +86,22 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	to := s.Now().UTC().Add(-c.Lag())
+	// GraphQL filters serialize RFC3339 seconds. Persisting a subsecond cursor
+	// would skip the final fractional second of every successful window.
+	to := s.Now().UTC().Add(-c.Lag()).Truncate(time.Second)
 	from, ok := s.Checkpoints.Get(c.Name())
+	if ok {
+		from = from.Truncate(time.Second)
+	}
 	if !ok {
 		if e.InitialLookback == 0 {
-			return s.Checkpoints.Set(c.Name(), to)
+			if err := s.Checkpoints.Set(c.Name(), to); err != nil {
+				return err
+			}
+			if s.OnCheckpoint != nil {
+				s.OnCheckpoint(c.Name(), to)
+			}
+			return nil
 		}
 		from = to.Add(-e.InitialLookback)
 	}
@@ -103,5 +121,11 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 	if mark.After(to) || !mark.After(from) {
 		return fmt.Errorf("collector %s returned invalid high-water mark", c.Name())
 	}
-	return s.Checkpoints.Set(c.Name(), mark)
+	if err := s.Checkpoints.Set(c.Name(), mark); err != nil {
+		return err
+	}
+	if s.OnCheckpoint != nil {
+		s.OnCheckpoint(c.Name(), mark)
+	}
+	return nil
 }
