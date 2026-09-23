@@ -2,14 +2,30 @@ package collector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log/slog"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/rknightion/cf2otel/internal/cfapi"
+	"github.com/rknightion/cf2otel/internal/semconv"
 	"github.com/rknightion/cf2otel/internal/telemetry"
 )
+
+var commitMu sync.Mutex
+
+const commitTimeout = 90 * time.Second // SDK retries for up to one minute per export.
+const commitChunkBytes = 512 * 1024
+const maxSingleSpanBytes = 1024 * 1024 // A capped two-sided AI Gateway span can exceed one normal chunk.
+const commitChunkItems = 512           // Below both SDK processors' default 2048 queue capacity.
+type CommitFlusher interface {
+	BeginCommit() uint64
+	FlushCommit(context.Context, uint64) error
+}
 
 type Scheduler struct {
 	Registry     *Registry
@@ -19,6 +35,8 @@ type Scheduler struct {
 	Logger       *slog.Logger
 	OnPoll       func(context.Context, string, time.Duration, error, time.Time)
 	OnCheckpoint func(string, time.Time)
+	Flusher      CommitFlusher
+	failed400    map[string]int
 }
 
 func NewScheduler(r *Registry, e telemetry.Emitter, store CheckpointStore) *Scheduler {
@@ -111,7 +129,88 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 	if e.MaxWindow > 0 && to.Sub(from) > e.MaxWindow {
 		to = from.Add(e.MaxWindow)
 	}
-	mark, err := c.CollectWindow(ctx, from, to, s.Emitter)
+	buffer := &telemetry.Buffer{}
+	mark, err := c.CollectWindow(ctx, from, to, buffer)
+	if err != nil {
+		var gap *cfapi.RetentionGapError
+		if errors.As(err, &gap) {
+			return s.skipGap(ctx, c, e, from, to, err)
+		}
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if mark.After(to) || !mark.After(from) {
+		return fmt.Errorf("collector %s returned invalid high-water mark", c.Name())
+	}
+	commitMu.Lock()
+	defer commitMu.Unlock()
+	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commitTimeout)
+	defer cancel()
+	key := fmt.Sprintf("%s/%s/%s", c.Name(), from.Format(time.RFC3339), to.Format(time.RFC3339))
+	if err := s.commit(commitCtx, buffer); err != nil {
+		outcome := "retry"
+		if s.failed400 == nil {
+			s.failed400 = map[string]int{}
+		}
+		if payloadRejected(err) {
+			s.failed400[key]++
+			if s.failed400[key] >= 3 {
+				outcome = "dropped"
+			}
+		} else {
+			delete(s.failed400, key)
+		}
+		_ = s.Emitter.Counter(commitCtx, semconv.MetricWindowCommitFailures, 1,
+			telemetry.Attr{Key: semconv.AttrCollector, Value: c.Name()},
+			telemetry.Attr{Key: semconv.AttrExportSignal, Value: telemetry.FailureSignals(err)},
+			telemetry.Attr{Key: semconv.AttrWindowOutcome, Value: outcome})
+		if outcome != "dropped" {
+			return err
+		}
+		delete(s.failed400, key)
+		s.Logger.Error("window dropped after three payload rejections", "collector", c.Name(), "from", from, "to", to, "error", err)
+	} else {
+		delete(s.failed400, key)
+		for _, m := range buffer.Metrics {
+			if err := m.Replay(commitCtx, s.Emitter); err != nil {
+				return err
+			}
+		}
+	}
+	if err := s.Checkpoints.Set(c.Name(), mark); err != nil {
+		return err
+	}
+	if s.OnCheckpoint != nil {
+		s.OnCheckpoint(c.Name(), mark)
+	}
+	return nil
+}
+func payloadRejected(err error) bool {
+	seenPayload := false
+	for _, line := range strings.Split(err.Error(), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || line == "background OTLP export failed" {
+			continue
+		}
+		status := strings.SplitN(line, "(body:", 2)[0]
+		if strings.Contains(status, ": 400 Bad Request ") || strings.Contains(status, "OTLP partial success:") {
+			seenPayload = true
+			continue
+		}
+		return false
+	}
+	return seenPayload
+}
+
+// CollectRange exports an explicit window without changing its durable cursor.
+func (s *Scheduler) CollectRange(ctx context.Context, c WindowCollector, from, to time.Time) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	buffer := &telemetry.Buffer{}
+	mark, err := c.CollectWindow(ctx, from, to, buffer)
 	if err != nil {
 		return err
 	}
@@ -120,6 +219,147 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 	}
 	if mark.After(to) || !mark.After(from) {
 		return fmt.Errorf("collector %s returned invalid high-water mark", c.Name())
+	}
+	commitMu.Lock()
+	defer commitMu.Unlock()
+	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commitTimeout)
+	defer cancel()
+	if err := s.commit(commitCtx, buffer); err != nil {
+		return err
+	}
+	for _, m := range buffer.Metrics {
+		if err := m.Replay(commitCtx, s.Emitter); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (s *Scheduler) commit(ctx context.Context, b *telemetry.Buffer) error {
+	if s.Emitter == nil && len(b.Records) > 0 {
+		return errors.New("window emitter is nil")
+	}
+	var seq uint64
+	if s.Flusher != nil {
+		seq = s.Flusher.BeginCommit()
+	}
+	items, bytes := 0, 0
+	flush := func() error {
+		if s.Flusher == nil {
+			return nil
+		}
+		err := s.Flusher.FlushCommit(ctx, seq)
+		seq = s.Flusher.BeginCommit()
+		return err
+	}
+	for _, r := range b.Records {
+		size := len(r.Event) + len(r.Body) + 64
+		for _, a := range r.Attrs {
+			size += len(a.Key) + len(a.Value)
+		}
+		if r.Span != nil {
+			size += len(r.Span.Name) + 64
+			for _, a := range r.Span.Attrs {
+				size += len(a.Key) + len(a.Value)
+			}
+			for _, ev := range r.Span.Events {
+				size += len(ev.Name) + 64
+				for _, a := range ev.Attrs {
+					size += len(a.Key) + len(a.Value)
+				}
+			}
+			for _, l := range r.Span.Logs {
+				size += len(l.Name) + len(l.Body) + 64
+				for _, a := range l.Attrs {
+					size += len(a.Key) + len(a.Value)
+				}
+			}
+		}
+		if size > commitChunkBytes {
+			if r.Span == nil || size > maxSingleSpanBytes {
+				return fmt.Errorf("window record exceeds %d byte export limit", maxSingleSpanBytes)
+			}
+			if items > 0 {
+				if err := flush(); err != nil {
+					return err
+				}
+			}
+			if err := r.Replay(ctx, s.Emitter); err != nil {
+				return err
+			}
+			if err := flush(); err != nil {
+				return err
+			}
+			items, bytes = 0, 0
+			continue
+		}
+		if items > 0 && (items+1 > commitChunkItems || bytes+size > commitChunkBytes) {
+			if err := flush(); err != nil {
+				return err
+			}
+			items, bytes = 0, 0
+		}
+		if err := r.Replay(ctx, s.Emitter); err != nil {
+			return err
+		}
+		items++
+		bytes += size
+	}
+	return flush()
+}
+func gapFloor(err error) time.Time {
+	var latest time.Time
+	var visit func(error)
+	visit = func(e error) {
+		if e == nil {
+			return
+		}
+		if g, ok := e.(*cfapi.RetentionGapError); ok && g.Floor.After(latest) {
+			latest = g.Floor
+		}
+		if u, ok := e.(interface{ Unwrap() []error }); ok {
+			for _, inner := range u.Unwrap() {
+				visit(inner)
+			}
+		} else if u, ok := e.(interface{ Unwrap() error }); ok {
+			visit(u.Unwrap())
+		}
+	}
+	visit(err)
+	return latest
+}
+func (s *Scheduler) skipGap(ctx context.Context, c WindowCollector, e Entry, from, to time.Time, cause error) error {
+	floor := gapFloor(cause)
+	margin := e.Interval + c.Lag() + time.Minute
+	mark := floor.Add(margin).Add(time.Second - time.Nanosecond).Truncate(time.Second)
+	if mark.After(to) {
+		mark = to
+	}
+	if !mark.After(from) {
+		return cause
+	}
+	commitMu.Lock()
+	defer commitMu.Unlock()
+	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commitTimeout)
+	defer cancel()
+	seconds := mark.Sub(from).Seconds()
+	var seq uint64
+	if s.Flusher != nil {
+		seq = s.Flusher.BeginCommit()
+	}
+	if err := s.Emitter.LogEvent(commitCtx, semconv.EventWindowGap, "retention floor skipped window", s.Now(), 0,
+		telemetry.Attr{Key: semconv.AttrCollector, Value: c.Name()},
+		telemetry.Attr{Key: semconv.AttrWindowFrom, Value: from.Format(time.RFC3339)},
+		telemetry.Attr{Key: semconv.AttrWindowFloor, Value: floor.Format(time.RFC3339)},
+		telemetry.Attr{Key: semconv.AttrWindowGapSeconds, Value: strconv.FormatFloat(seconds, 'f', 0, 64)}); err != nil {
+		return err
+	}
+	if s.Flusher != nil {
+		if err := s.Flusher.FlushCommit(commitCtx, seq); err != nil {
+			return err
+		}
+	}
+	if err := s.Emitter.Counter(commitCtx, semconv.MetricWindowGap, seconds, telemetry.Attr{Key: semconv.AttrCollector, Value: c.Name()}); err != nil {
+		return err
 	}
 	if err := s.Checkpoints.Set(c.Name(), mark); err != nil {
 		return err

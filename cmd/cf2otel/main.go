@@ -163,6 +163,9 @@ func run(args []string) error {
 		}
 	}
 	scheduler := collector.NewScheduler(registry, emitter, store)
+	if providers != nil {
+		scheduler.Flusher = providers
+	}
 	scheduler.OnPoll = func(ctx context.Context, name string, duration time.Duration, err error, at time.Time) {
 		if e := stats.Poll(ctx, name, duration, err, at); e != nil {
 			slog.Error("self-observability emission failed", "error", e)
@@ -205,7 +208,7 @@ func runOnce(ctx context.Context, s *collector.Scheduler, o cli.Options) error {
 			if o.Since.IsZero() || o.Before.IsZero() {
 				return errors.New("-since and -before must be supplied together")
 			}
-			_, err = c.CollectWindow(ctx, o.Since, o.Before, s.Emitter)
+			err = s.CollectRange(ctx, c, o.Since, o.Before)
 		} else {
 			err = s.RunOnce(ctx, entry)
 		}

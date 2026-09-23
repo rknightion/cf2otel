@@ -68,15 +68,25 @@ type loginLog struct {
 	at    time.Time
 	attrs []telemetry.Attr
 }
+type loginMetric struct {
+	name  string
+	value float64
+	attrs []telemetry.Attr
+}
 type loginEmitter struct {
-	logs []loginLog
+	logs    []loginLog
+	metrics []loginMetric
 }
 
 func (*loginEmitter) Gauge(context.Context, string, float64, ...telemetry.Attr) error {
 	panic("unexpected Gauge")
 }
-func (*loginEmitter) Counter(context.Context, string, float64, ...telemetry.Attr) error {
-	panic("REST logins must not emit sampled metrics")
+func (e *loginEmitter) Counter(_ context.Context, name string, value float64, attrs ...telemetry.Attr) error {
+	if name != semconv.MetricAccessIdentityLogins {
+		return fmt.Errorf("counter %s", name)
+	}
+	e.metrics = append(e.metrics, loginMetric{name, value, append([]telemetry.Attr(nil), attrs...)})
+	return nil
 }
 func (*loginEmitter) Histogram(context.Context, string, float64, ...telemetry.Attr) error {
 	panic("unexpected Histogram")
@@ -106,9 +116,9 @@ func attrsMap(attrs []telemetry.Attr) map[string]string {
 func TestLoginsPaginationBoundaryAndRestart(t *testing.T) {
 	t0 := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
 	api := &loginAPI{rows: []loginRow{
-		{RayID: "ray-a", CreatedAt: t0.Add(time.Second), AppDomain: "app.example.com/api/a", AppName: "Example", AppUID: "app-1", AppType: "self_hosted", UserEmail: "a@example.com", UserID: "user-a", IPAddress: "192.0.2.1", Country: "GB", Action: "login", Connection: "google", Allowed: true},
-		{RayID: "ray-b", CreatedAt: t0.Add(2 * time.Second), AppDomain: "https://app.example.com/assets/b.js", AppName: "Example", AppUID: "app-1", AppType: "self_hosted", UserEmail: "b@example.com", UserID: "user-b", IPAddress: "192.0.2.2", Country: "GB", Action: "login", Connection: "google", Allowed: false},
-		{RayID: "ray-c", CreatedAt: t0.Add(3 * time.Second), AppDomain: "app.example.com", AppName: "Example", AppUID: "app-1", AppType: "self_hosted", UserEmail: "c@example.com", UserID: "user-c", IPAddress: "192.0.2.3", Country: "GB", Action: "login", Connection: "google", Allowed: true},
+		{RayID: "ray-a", CreatedAt: t0.Add(time.Second), AppDomain: "app.example.com/api/a", AppName: "Example A", AppUID: "app-1", AppType: "self_hosted", UserEmail: "a@example.com", UserID: "user-a", IPAddress: "192.0.2.1", Country: "GB", Action: "login", Connection: "google", Allowed: true},
+		{RayID: "ray-b", CreatedAt: t0.Add(2 * time.Second), AppDomain: "https://app.example.com/assets/b.js", AppName: "Boundary App", AppUID: "app-2", AppType: "self_hosted", UserEmail: "b@example.com", UserID: "user-b", IPAddress: "192.0.2.2", Country: "GB", Action: "logout", Connection: "okta", Allowed: false},
+		{RayID: "ray-c", CreatedAt: t0.Add(3 * time.Second), AppDomain: "app.example.com", AppName: "Example C", AppUID: "app-3", AppType: "self_hosted", UserEmail: "c@example.com", UserID: "user-c", IPAddress: "192.0.2.3", Country: "GB", Action: "login", Connection: "google", Allowed: true},
 	}}
 	e := &loginEmitter{}
 	i := &loginIndex{}
@@ -124,8 +134,8 @@ func TestLoginsPaginationBoundaryAndRestart(t *testing.T) {
 			t.Fatalf("mark %v want %v", mark, w[1])
 		}
 	}
-	if len(e.logs) != 3 || len(i.logins) != 2 {
-		t.Fatalf("logs=%d identities=%d", len(e.logs), len(i.logins))
+	if len(e.logs) != 3 || len(e.metrics) != 3 || len(i.logins) != 2 {
+		t.Fatalf("logs=%d metrics=%d identities=%d", len(e.logs), len(e.metrics), len(i.logins))
 	}
 	got := []string{}
 	for _, l := range e.logs {
@@ -137,6 +147,25 @@ func TestLoginsPaginationBoundaryAndRestart(t *testing.T) {
 	first := attrsMap(e.logs[0].attrs)
 	if first[semconv.AttrAccessHost] != "app.example.com" || first[semconv.AttrAccessPath] != "/api/a" {
 		t.Fatalf("host/path: %v", first)
+	}
+	wantMetrics := []map[string]string{
+		{semconv.AttrAccessApp: "Example A", semconv.AttrAccessAllowed: "true", semconv.AttrAccessConnection: "google", semconv.AttrAccessAction: "login"},
+		{semconv.AttrAccessApp: "Boundary App", semconv.AttrAccessAllowed: "false", semconv.AttrAccessConnection: "okta", semconv.AttrAccessAction: "logout"},
+		{semconv.AttrAccessApp: "Example C", semconv.AttrAccessAllowed: "true", semconv.AttrAccessConnection: "google", semconv.AttrAccessAction: "login"},
+	}
+	for index, metric := range e.metrics {
+		if metric.name != semconv.MetricAccessIdentityLogins || metric.value != 1 {
+			t.Fatalf("metric %d: name=%q value=%v", index, metric.name, metric.value)
+		}
+		got := attrsMap(metric.attrs)
+		if len(metric.attrs) != 4 || len(got) != 4 || !reflect.DeepEqual(got, wantMetrics[index]) {
+			t.Fatalf("metric %d attributes: got %v want %v", index, got, wantMetrics[index])
+		}
+		for _, forbidden := range []string{semconv.AttrAccessUserEmail, semconv.AttrAccessUserIPAddress, semconv.AttrAccessPath, semconv.AttrAccessRayID, semconv.AttrAccessIdentityLoginRayID} {
+			if _, ok := got[forbidden]; ok {
+				t.Fatalf("metric %d has forbidden attribute %q", index, forbidden)
+			}
+		}
 	}
 	if i.logins[0].Host != "app.example.com" || i.logins[0].ClientIP != "192.0.2.1" {
 		t.Fatalf("index: %+v", i.logins[0])
@@ -169,13 +198,32 @@ func TestLoginsCheckpointSurvivesRestart(t *testing.T) {
 			t.Fatalf("run %d: %v", run, err)
 		}
 	}
-	if len(e.logs) != 2 {
-		t.Fatalf("restart yielded %d logs, want 2", len(e.logs))
+	if len(e.logs) != 2 || len(e.metrics) != 2 {
+		t.Fatalf("restart yielded %d logs and %d metrics, want 2 of each", len(e.logs), len(e.metrics))
 	}
 	if got := attrsMap(e.logs[0].attrs)[semconv.AttrAccessRayID]; got != "ray-a" {
 		t.Fatalf("first ray %s", got)
 	}
 	if got := attrsMap(e.logs[1].attrs)[semconv.AttrAccessRayID]; got != "ray-b" {
 		t.Fatalf("second ray %s", got)
+	}
+}
+
+func TestServiceTokenLogIsNotIdentityMetric(t *testing.T) {
+	t0 := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	api := &loginAPI{rows: []loginRow{
+		{RayID: "ray-service", CreatedAt: t0.Add(time.Second), Connection: "nonidentity", AppName: "Example"},
+		{RayID: "ray-human", CreatedAt: t0.Add(2 * time.Second), Connection: "google", AppName: "Example"},
+	}}
+	cfg := config.Default()
+	cfg.Cloudflare.AccountID = "test-account"
+	cfg.Access.IncludeServiceTokens = true
+	emitter := &loginEmitter{}
+	c := newLogins(collector.Deps{Config: &cfg, API: api})
+	if _, err := c.CollectWindow(context.Background(), t0, t0.Add(time.Minute), emitter); err != nil {
+		t.Fatal(err)
+	}
+	if len(emitter.logs) != 2 || len(emitter.metrics) != 1 {
+		t.Fatalf("logs=%d identity metrics=%d, want 2 and 1", len(emitter.logs), len(emitter.metrics))
 	}
 }

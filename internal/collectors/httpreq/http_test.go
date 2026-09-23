@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
+	"github.com/rknightion/cf2otel/internal/collector"
 	"github.com/rknightion/cf2otel/internal/config"
 	"github.com/rknightion/cf2otel/internal/identity"
 	"github.com/rknightion/cf2otel/internal/semconv"
@@ -18,10 +20,12 @@ import (
 )
 
 type fakeAPI struct {
-	rows      map[string][]map[string]any
-	apps      []accessApp
-	queries   []cfapi.GraphQLRequest
-	loginRows []map[string]any
+	rows        map[string][]map[string]any
+	apps        []accessApp
+	queries     []cfapi.GraphQLRequest
+	loginRows   []map[string]any
+	zones       []cfapi.Zone
+	queryErrors map[string]error
 }
 
 func (f *fakeAPI) Get(_ context.Context, path string, _ url.Values, out any) error {
@@ -34,12 +38,50 @@ func (f *fakeAPI) Get(_ context.Context, path string, _ url.Values, out any) err
 }
 func (f *fakeAPI) Query(_ context.Context, q cfapi.GraphQLRequest, out any) error {
 	f.queries = append(f.queries, q)
+	if err := f.queryErrors[q.ScopeID]; err != nil {
+		return err
+	}
 	*(out.(*[]map[string]any)) = f.rows[q.Dataset]
 	return nil
 }
 func (f *fakeAPI) Accounts(context.Context) ([]cfapi.Account, error) { return nil, nil }
 func (f *fakeAPI) Zones(context.Context) ([]cfapi.Zone, error) {
+	if f.zones != nil {
+		return f.zones, nil
+	}
 	return []cfapi.Zone{{ID: "zone", Name: "example.com"}}, nil
+}
+
+func TestEventsRetentionUsesLatestZoneFloor(t *testing.T) {
+	baseTime := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	f := &fakeAPI{
+		zones: []cfapi.Zone{{ID: "one", Name: "one.example.test"}, {ID: "two", Name: "two.example.test"}},
+		queryErrors: map[string]error{
+			"one": &cfapi.RetentionGapError{Dataset: "httpRequestsAdaptive", Floor: baseTime.Add(time.Minute)},
+			"two": &cfapi.RetentionGapError{Dataset: "httpRequestsAdaptive", Floor: baseTime.Add(12 * time.Minute)},
+		},
+	}
+	cfg := config.Default()
+	cfg.HTTP.Scope = "all"
+	cfg.Identity.Enabled = false
+	store, err := collector.NewFileStore(filepath.Join(t.TempDir(), "checkpoints.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := collector.NewScheduler(nil, &fakeEmitter{}, store)
+	s.Now = func() time.Time { return baseTime.Add(32 * time.Minute) }
+	entry := collector.Entry{Collector: events{base{cfg: &cfg, api: f}}, Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute}
+	if err := s.RunOnce(context.Background(), entry); err != nil {
+		t.Fatal(err)
+	}
+	mark, ok := store.Get("httpreq.events")
+	want := baseTime.Add(20 * time.Minute)
+	if !ok || !mark.Equal(want) {
+		t.Fatalf("checkpoint=%s, want latest zone floor plus margin %s", mark, want)
+	}
+	if len(f.queries) != 2 {
+		t.Fatalf("queries=%d, want both zones", len(f.queries))
+	}
 }
 func (f *fakeAPI) Gateways(context.Context, string) ([]cfapi.Gateway, error) { return nil, nil }
 

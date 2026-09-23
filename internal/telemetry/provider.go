@@ -116,6 +116,24 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 func (p *Providers) SetExportObserver(fn func(context.Context, string, error)) {
 	p.hook.Set(fn)
 }
+
+// BeginCommit captures export failures that can occur before ForceFlush returns.
+func (p *Providers) BeginCommit() uint64 { return p.hook.snapshot() }
+func (p *Providers) FlushCommit(ctx context.Context, since uint64) error {
+	logErr := p.logs.ForceFlush(ctx)
+	traceErr := p.traces.ForceFlush(ctx)
+	var failures []error
+	if logErr != nil {
+		failures = append(failures, &ExportFailure{Signal: "logs", Err: logErr})
+	}
+	if traceErr != nil {
+		failures = append(failures, &ExportFailure{Signal: "traces", Err: traceErr})
+	}
+	if backgroundErr := p.hook.failedSince(since); backgroundErr != nil {
+		failures = append(failures, backgroundErr)
+	}
+	return errors.Join(failures...)
+}
 func (p *Providers) Shutdown(ctx context.Context) error {
 	return errors.Join(p.metrics.Shutdown(ctx), p.logs.Shutdown(ctx), p.traces.Shutdown(ctx))
 }

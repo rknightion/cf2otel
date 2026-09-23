@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -84,6 +85,9 @@ func TestMissingResponseBodyKeepsRequest(t *testing.T) {
 	if len(out.spans[0].Events) != 1 || attr(out.spans[0].Events[0].Attrs, semconv.AttrAIGatewayResponseBodyUnavailable) != "true" {
 		t.Fatal("content event missing unavailable-body marker")
 	}
+	if len(out.spans[0].Logs) != 1 || attr(out.spans[0].Logs[0].Attrs, semconv.AttrAIGatewayContentSide) != "request" {
+		t.Fatal("expected only the available request content log")
+	}
 }
 func (*fakeAPI) Query(context.Context, cfapi.GraphQLRequest, any) error { return errors.New("unused") }
 func (*fakeAPI) Accounts(context.Context) ([]cfapi.Account, error)      { return nil, errors.New("unused") }
@@ -138,6 +142,9 @@ func TestLogsWindowDedupeAndUsage(t *testing.T) {
 		t.Fatalf("mark %s logs %d spans %d", mark, out.logs, len(out.spans))
 	}
 	span := out.spans[0]
+	if len(span.Logs) != 0 {
+		t.Fatal("body logs emitted while capture was disabled")
+	}
 	if !span.Start.Equal(from.Add(-1500*time.Millisecond)) || !span.End.Equal(from) {
 		t.Fatalf("span times %s %s", span.Start, span.End)
 	}
@@ -161,6 +168,109 @@ func TestLogsWindowDedupeAndUsage(t *testing.T) {
 	}
 	if got := metric(out.histograms, semconv.MetricGenAIDuration); got != 1.5 {
 		t.Fatalf("duration %v", got)
+	}
+}
+
+func TestContentLogRecords(t *testing.T) {
+	const requestMessages = `{"messages":[{"role":"user","content":"hello"}]}`
+	const responseMessages = `{"choices":[{"message":{"role":"assistant","content":"world"}}]}`
+	const parsedRequest = `[{"parts":[{"content":"hello","type":"text"}],"role":"user"}]`
+	const parsedResponse = `[{"parts":[{"content":"world","type":"text"}],"role":"assistant"}]`
+	rawRequest := `{"x":"a"}`
+	rawResponse := `{"y":"b"}`
+	cases := []struct {
+		name               string
+		capture            bool
+		max                int64
+		request, response  string
+		missingResponse    bool
+		wantBodies         []string
+		wantTruncated      bool
+		wantEventTruncated bool
+	}{
+		{name: "both parsed bodies", capture: true, max: 1024, request: requestMessages, response: responseMessages, wantBodies: []string{parsedRequest, parsedResponse}},
+		{name: "response unavailable", capture: true, max: 1024, request: requestMessages, missingResponse: true, wantBodies: []string{parsedRequest}},
+		{name: "capture disabled", capture: false, max: 1024, request: requestMessages, response: responseMessages},
+		{name: "at cap", capture: true, max: 9, request: rawRequest, response: rawResponse, wantBodies: []string{rawRequest, rawResponse}},
+		{name: "above cap", capture: true, max: 8, request: rawRequest, response: rawResponse, wantBodies: []string{rawRequest[:8], rawResponse[:8]}, wantTruncated: true, wantEventTruncated: true},
+		{name: "expanded parsed output falls back to source JSON", capture: true, max: int64(len(parsedRequest) - 1), request: requestMessages, missingResponse: true, wantBodies: []string{requestMessages}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			api := &fakeAPI{
+				list:            `{"result":[{"id":"content-id","created_at":"2026-09-23T10:00:00Z","provider":"openai","model":"fixture-model","path":"chat/completions","duration":1}]}`,
+				detail:          `{}`,
+				request:         tc.request,
+				response:        tc.response,
+				missingResponse: tc.missingResponse,
+			}
+			cfg := &config.Config{
+				Cloudflare: config.CloudflareConfig{AccountID: "example"},
+				AIGateway:  config.AIGatewayConfig{Gateways: []string{"gateway"}, CaptureBodies: tc.capture, MaxBodyBytes: tc.max},
+			}
+			out := &fakeEmitter{}
+			end := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+			if _, err := NewLogs(cfg, api).CollectWindow(context.Background(), end, end.Add(time.Minute), out); err != nil {
+				t.Fatal(err)
+			}
+			if len(out.spans) != 1 {
+				t.Fatalf("spans=%d, want 1", len(out.spans))
+			}
+			logs := out.spans[0].Logs
+			if len(logs) != len(tc.wantBodies) {
+				t.Fatalf("content logs=%d, want %d", len(logs), len(tc.wantBodies))
+			}
+			for i, record := range logs {
+				if record.Name != semconv.EventGenAIContent || record.Body != tc.wantBodies[i] {
+					t.Fatalf("record %d name=%q body=%q", i, record.Name, record.Body)
+				}
+				if len(record.Body) > int(tc.max) {
+					t.Fatalf("record %d body length %d exceeds cap %d", i, len(record.Body), tc.max)
+				}
+				if !record.At.Equal(end) || record.Severity != otellog.SeverityInfo {
+					t.Fatalf("record %d timestamp=%s severity=%v", i, record.At, record.Severity)
+				}
+				wantSide := "request"
+				flagKey := semconv.AttrAIGatewayRequestBodyTruncated
+				if i == 1 {
+					wantSide = "response"
+					flagKey = semconv.AttrAIGatewayResponseBodyTruncated
+				}
+				if got := attr(record.Attrs, semconv.AttrAIGatewayName); got != "gateway" {
+					t.Errorf("gateway=%q", got)
+				}
+				if got := attr(record.Attrs, semconv.AttrAIGatewayLogID); got != "content-id" {
+					t.Errorf("log id=%q", got)
+				}
+				if got := attr(record.Attrs, semconv.AttrGenAIOperation); got != "chat" {
+					t.Errorf("operation=%q", got)
+				}
+				if got := attr(record.Attrs, semconv.AttrGenAIModel); got != "fixture-model" {
+					t.Errorf("model=%q", got)
+				}
+				if got := attr(record.Attrs, semconv.AttrGenAIProvider); got != "openai" {
+					t.Errorf("provider=%q", got)
+				}
+				if got := attr(record.Attrs, semconv.AttrAIGatewayContentSide); got != wantSide {
+					t.Errorf("side=%q, want %q", got, wantSide)
+				}
+				if got := attr(record.Attrs, semconv.AttrAIGatewayContentLength); got != strconv.Itoa(len(record.Body)) {
+					t.Errorf("content length=%q, want %d", got, len(record.Body))
+				}
+				if got := attr(record.Attrs, flagKey); got != strconv.FormatBool(tc.wantTruncated) {
+					t.Errorf("%s=%q, want %t", flagKey, got, tc.wantTruncated)
+				}
+			}
+			if tc.missingResponse && attr(out.spans[0].Attrs, semconv.AttrAIGatewayResponseBodyUnavailable) != "true" {
+				t.Fatal("response unavailable marker missing from span")
+			}
+			if tc.capture && len(out.spans[0].Events) > 0 {
+				if got := attr(out.spans[0].Events[0].Attrs, semconv.AttrAIGatewayRequestBodyTruncated); got != strconv.FormatBool(tc.wantEventTruncated) {
+					t.Errorf("span event request truncation=%q, want %t", got, tc.wantEventTruncated)
+				}
+			}
+		})
 	}
 }
 

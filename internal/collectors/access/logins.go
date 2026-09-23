@@ -139,6 +139,16 @@ func (c *logins) emit(ctx context.Context, row loginRow, out telemetry.Emitter) 
 	if err := out.LogEvent(ctx, semconv.EventAccessLogin, "Access login", row.CreatedAt, otellog.SeverityInfo, attrs...); err != nil {
 		return err
 	}
+	if row.Connection != "nonidentity" {
+		if err := out.Counter(ctx, semconv.MetricAccessIdentityLogins, 1,
+			telemetry.Attr{Key: semconv.AttrAccessApp, Value: row.AppName},
+			telemetry.Attr{Key: semconv.AttrAccessAllowed, Value: strconv.FormatBool(row.Allowed)},
+			telemetry.Attr{Key: semconv.AttrAccessConnection, Value: row.Connection},
+			telemetry.Attr{Key: semconv.AttrAccessAction, Value: row.Action},
+		); err != nil {
+			return fmt.Errorf("access login identity counter: %w", err)
+		}
+	}
 	if row.Allowed && row.UserEmail != "" && c.deps.Identity != nil {
 		c.deps.Identity.Observe(identity.Login{ClientIP: row.IPAddress, Host: host, UserEmail: row.UserEmail, RayID: row.RayID, At: row.CreatedAt})
 	}

@@ -10,7 +10,10 @@ All signals carry `service.name=cf2otel`. Cloudflare-specific names begin `cloud
 | `cloudflare.access.scim_update` | Access SCIM update log | Resource type, HTTP method, status and available identifiers. |
 | `cloudflare.http.request` | `httpRequestsAdaptive` | Sampled per-request event. Access user identity, when present, is inferred and flagged. |
 | `cloudflare.ai_gateway.request` | AI Gateway REST logs | Request metadata and outcome. Request and response content is optional and capped. |
-| `gen_ai.client.inference.operation.details` | AI Gateway body content | Opt-in content event, subject to the body cap. |
+| `gen_ai.client.inference.operation.details` | AI Gateway body content | Opt-in span event and correlated OTLP content log per available side, subject to the body cap. |
+| `cloudflare.audit.event` | Account audit log v2 | Actor, action, resource and request details. Email and IP are log attributes only. |
+| `cloudflare.firewall.event` | `firewallEventsAdaptive` | Per-request security action; IP, path, query, user agent and ray stay on logs. |
+| `cf2otel.window.gap` | Retention-gap handling | Collector, skipped window and retention floor when a source cannot backfill. |
 | GenAI client span | AI Gateway REST logs | Request model/provider, outcome, token usage and available timing. |
 | `cf2otel.api.request` | Cloudflare API client | Attempt duration, method and status class; no URL or scope identifier. |
 
@@ -21,11 +24,14 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | Name | Meaning |
 | --- | --- |
 | `cloudflare.access.logins` | Human Access login count from `cf1AccessLoginsRawGroups`. |
+| `cloudflare.access.identity_logins` | Exact REST identity-login count by app, allowed, connection and action; excludes nonidentity service-token rows. |
 | `cloudflare.access.requests` | Access request count from `accessLoginRequestsAdaptiveGroups`; keep `nonidentity` traffic separate. |
 | `cloudflare.access.apps` | Access application inventory gauge. |
 | `cloudflare.access.users` | Access user inventory gauge. |
 | `cloudflare.http.requests` | Request count from sample-corrected `httpRequestsAdaptiveGroups`. |
 | `cloudflare.http.origin.duration` | Average origin response duration per Groups window, in seconds. |
+| `cloudflare.audit.events` | Exact audit event count by resource product, action type and action result. |
+| `cloudflare.firewall.events` | Security event count from a Groups dataset by available zone, action and source dimensions. |
 | `cloudflare.ai_gateway.requests` | AI Gateway request count. |
 | `cloudflare.ai_gateway.errors` | AI Gateway error count. |
 | `cloudflare.ai_gateway.cache_hits` | AI Gateway cache hits. |
@@ -51,6 +57,8 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cf2otel.identity.matched` | HTTP events matched to one Access identity. |
 | `cf2otel.identity.unmatched` | HTTP events without a match. |
 | `cf2otel.identity.ambiguous` | HTTP events with more than one candidate. |
+| `cf2otel.window.gap` | Skipped retention-gap seconds by collector. |
+| `cf2otel.window.commit_failures` | Failed window commits by retry or dropped outcome. |
 
 AI Gateway metrics combine Cloudflare request outcome measurements with GenAI duration and usage conventions.
 
@@ -63,6 +71,10 @@ AI Gateway metrics combine Cloudflare request outcome measurements with GenAI du
 | Access identity | `cloudflare.access.user.email`, `cloudflare.access.user.id`, `cloudflare.access.user.ip_address`, `cloudflare.access.identity.inferred`, `cloudflare.access.identity.login_ray_id`, `cloudflare.access.ray_id` |
 | Access SCIM | `cloudflare.access.scim.resource_type`, `cloudflare.access.scim.method`, `cloudflare.access.scim.status`, `cloudflare.access.scim.idp_id`, `cloudflare.access.scim.resource_id`, `cloudflare.access.scim.user_email` |
 | HTTP | `cloudflare.http.host`, `cloudflare.http.method`, `cloudflare.http.path`, `cloudflare.http.query`, `cloudflare.http.status_code`, `cloudflare.http.origin_status_code`, `cloudflare.http.client_ip`, `cloudflare.http.user_agent`, `cloudflare.http.ray_id`, `cloudflare.http.zone`, `cloudflare.http.cache_status`, `cloudflare.http.security_action`, `cloudflare.http.colo` |
+| AI Gateway content | `cloudflare.ai_gateway.content.side`, `cloudflare.ai_gateway.content.length` |
+| Audit | `cloudflare.audit.*` attributes are listed individually below; actor email and IP are log only. |
+| Firewall | `cloudflare.firewall.*` attributes are listed individually below; IP, path, query, user agent and ray are log only. |
+| Window delivery | `cf2otel.window.*` describes retention gaps and commit outcomes. |
 | Poller | `cf2otel.collector`, `cf2otel.version`, `cf2otel.commit`, `cf2otel.export.signal`, `cf2otel.build.version`, `cf2otel.build.commit` |
 
 Only bounded attributes should be used to group metrics. `cloudflare.access.identity.inferred=true` means a time, host and IP correlation, not a Cloudflare-provided identity on the HTTP event.
@@ -73,9 +85,12 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 
 | Kind | Name |
 | --- | --- |
+| Event | `cf2otel.window.gap` |
 | Event | `cloudflare.access.login` |
 | Event | `cloudflare.access.scim_update` |
 | Event | `cloudflare.ai_gateway.request` |
+| Event | `cloudflare.audit.event` |
+| Event | `cloudflare.firewall.event` |
 | Event | `cloudflare.http.request` |
 | Event | `gen_ai.client.inference.operation.details` |
 | Metric | `cf2otel.api.duration` |
@@ -92,7 +107,10 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cf2otel.scrape.errors` |
 | Metric | `cf2otel.scrape.last_success_timestamp` |
 | Metric | `cf2otel.scrape.success` |
+| Metric | `cf2otel.window.commit_failures` |
+| Metric | `cf2otel.window.gap` |
 | Metric | `cloudflare.access.apps` |
+| Metric | `cloudflare.access.identity_logins` |
 | Metric | `cloudflare.access.logins` |
 | Metric | `cloudflare.access.requests` |
 | Metric | `cloudflare.access.users` |
@@ -100,6 +118,8 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cloudflare.ai_gateway.cost` |
 | Metric | `cloudflare.ai_gateway.errors` |
 | Metric | `cloudflare.ai_gateway.requests` |
+| Metric | `cloudflare.audit.events` |
+| Metric | `cloudflare.firewall.events` |
 | Metric | `cloudflare.http.origin.duration` |
 | Metric | `cloudflare.http.requests` |
 | Metric | `gen_ai.client.inference.operation.input_tokens` |
@@ -109,6 +129,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `gen_ai.client.inference.usage.output_tokens` |
 | Metric | `gen_ai.client.inference.usage.reasoning.output_tokens` |
 | Metric | `gen_ai.client.operation.duration` |
+| Attribute | `cf2otel.api.method` |
 | Attribute | `cf2otel.build.commit` |
 | Attribute | `cf2otel.build.version` |
 | Attribute | `cf2otel.collector` |
@@ -117,6 +138,9 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `cf2otel.export.signal` |
 | Attribute | `cf2otel.status_class` |
 | Attribute | `cf2otel.version` |
+| Attribute | `cf2otel.window.floor` |
+| Attribute | `cf2otel.window.from` |
+| Attribute | `cf2otel.window.gap_seconds` |
 | Attribute | `cloudflare.access.action` |
 | Attribute | `cloudflare.access.allowed` |
 | Attribute | `cloudflare.access.app` |
@@ -144,6 +168,8 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `cloudflare.ai_gateway.authentication.present` |
 | Attribute | `cloudflare.ai_gateway.byok` |
 | Attribute | `cloudflare.ai_gateway.cached` |
+| Attribute | `cloudflare.ai_gateway.content.length` |
+| Attribute | `cloudflare.ai_gateway.content.side` |
 | Attribute | `cloudflare.ai_gateway.cost` |
 | Attribute | `cloudflare.ai_gateway.created_at` |
 | Attribute | `cloudflare.ai_gateway.custom_cost` |
@@ -185,6 +211,46 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `cloudflare.ai_gateway.usage.total_tokens` |
 | Attribute | `cloudflare.ai_gateway.user_agent` |
 | Attribute | `cloudflare.ai_gateway.wholesale` |
+| Attribute | `cloudflare.audit.action.description` |
+| Attribute | `cloudflare.audit.action.result` |
+| Attribute | `cloudflare.audit.action.time` |
+| Attribute | `cloudflare.audit.action.type` |
+| Attribute | `cloudflare.audit.actor.email` |
+| Attribute | `cloudflare.audit.actor.id` |
+| Attribute | `cloudflare.audit.actor.ip` |
+| Attribute | `cloudflare.audit.actor.token.id` |
+| Attribute | `cloudflare.audit.actor.token.name` |
+| Attribute | `cloudflare.audit.actor.type` |
+| Attribute | `cloudflare.audit.id` |
+| Attribute | `cloudflare.audit.raw.method` |
+| Attribute | `cloudflare.audit.raw.ray_id` |
+| Attribute | `cloudflare.audit.raw.status_code` |
+| Attribute | `cloudflare.audit.raw.uri` |
+| Attribute | `cloudflare.audit.raw.user_agent` |
+| Attribute | `cloudflare.audit.resource.id` |
+| Attribute | `cloudflare.audit.resource.product` |
+| Attribute | `cloudflare.audit.resource.type` |
+| Attribute | `cloudflare.firewall.action` |
+| Attribute | `cloudflare.firewall.client.asn` |
+| Attribute | `cloudflare.firewall.client.asn_description` |
+| Attribute | `cloudflare.firewall.client.country` |
+| Attribute | `cloudflare.firewall.client.ip` |
+| Attribute | `cloudflare.firewall.colo` |
+| Attribute | `cloudflare.firewall.edge_status_code` |
+| Attribute | `cloudflare.firewall.host` |
+| Attribute | `cloudflare.firewall.kind` |
+| Attribute | `cloudflare.firewall.method` |
+| Attribute | `cloudflare.firewall.origin_status_code` |
+| Attribute | `cloudflare.firewall.path` |
+| Attribute | `cloudflare.firewall.protocol` |
+| Attribute | `cloudflare.firewall.query` |
+| Attribute | `cloudflare.firewall.ray_id` |
+| Attribute | `cloudflare.firewall.rule_id` |
+| Attribute | `cloudflare.firewall.ruleset_id` |
+| Attribute | `cloudflare.firewall.source` |
+| Attribute | `cloudflare.firewall.user_agent` |
+| Attribute | `cloudflare.firewall.waf_attack_score_class` |
+| Attribute | `cloudflare.firewall.zone` |
 | Attribute | `cloudflare.http.cache_status` |
 | Attribute | `cloudflare.http.client_ip` |
 | Attribute | `cloudflare.http.colo` |
@@ -210,6 +276,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `gen_ai.usage.input_tokens` |
 | Attribute | `gen_ai.usage.output_tokens` |
 | Attribute | `gen_ai.usage.reasoning.output_tokens` |
+| Attribute | `outcome` |
 | Attribute | `service.instance.id` |
 | Attribute | `service.name` |
 | Attribute | `service.version` |

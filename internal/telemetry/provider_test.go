@@ -34,6 +34,16 @@ func TestExportObserverReceivesActualResult(t *testing.T) {
 	}
 }
 
+func TestFailureSignalsTracksAllBackgroundErrors(t *testing.T) {
+	hook := &exportObserver{}
+	start := hook.snapshot()
+	hook.record(context.Background(), "logs", errors.New("400 Bad Request"))
+	hook.record(context.Background(), "traces", errors.New("401 Unauthorized"))
+	if got := FailureSignals(hook.failedSince(start)); got != "logs,traces" {
+		t.Fatalf("failed signals = %q, want logs,traces", got)
+	}
+}
+
 func TestCredentialEndpointRequiresHTTPS(t *testing.T) {
 	_, err := NewProviders(context.Background(), ProviderOptions{Endpoint: "http://example.com/otlp", Protocol: "http", InstanceID: "test", Token: "secret"})
 	if err == nil || !strings.Contains(err.Error(), "https") {

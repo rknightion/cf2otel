@@ -3,6 +3,7 @@ package httpreq
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -216,10 +217,16 @@ func (c events) CollectWindow(ctx context.Context, from, to time.Time, e telemet
 		return from, err
 	}
 	seen := map[string]bool{}
+	var retentionGaps []error
 	for _, zone := range zones {
 		var rows []map[string]any
 		req := cfapi.GraphQLRequest{Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: "httpRequestsAdaptive", WantedFields: eventFields, JoinFields: []string{"rayName", "datetime"}, From: from, To: to, Limit: 10000}
 		if err := c.api.Query(ctx, req, &rows); err != nil {
+			var gap *cfapi.RetentionGapError
+			if errors.As(err, &gap) {
+				retentionGaps = append(retentionGaps, fmt.Errorf("zone HTTP events: %w", err))
+				continue
+			}
 			return from, fmt.Errorf("zone HTTP events: %w", err)
 		}
 		if len(rows) >= req.Limit {
@@ -273,6 +280,9 @@ func (c events) CollectWindow(ctx context.Context, from, to time.Time, e telemet
 			}
 		}
 	}
+	if len(retentionGaps) > 0 {
+		return from, errors.Join(retentionGaps...)
+	}
 	return to, nil
 }
 
@@ -285,10 +295,16 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	if err != nil {
 		return from, err
 	}
+	var retentionGaps []error
 	for _, zone := range zones {
 		var rows []map[string]any
 		req := cfapi.GraphQLRequest{Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: "httpRequestsAdaptiveGroups", WantedFields: groupFields, From: from, To: to, Limit: 10000}
 		if err := c.api.Query(ctx, req, &rows); err != nil {
+			var gap *cfapi.RetentionGapError
+			if errors.As(err, &gap) {
+				retentionGaps = append(retentionGaps, fmt.Errorf("zone HTTP groups: %w", err))
+				continue
+			}
 			return from, fmt.Errorf("zone HTTP groups: %w", err)
 		}
 		if len(rows) >= req.Limit {
@@ -321,6 +337,9 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 				}
 			}
 		}
+	}
+	if len(retentionGaps) > 0 {
+		return from, errors.Join(retentionGaps...)
 	}
 	return to, nil
 }

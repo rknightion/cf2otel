@@ -1,6 +1,25 @@
 package semconv
 
 const (
-	EventAuditEvent   = "cloudflare.audit.event"
-	MetricAuditEvents = "cloudflare.audit.events"
+	EventAuditEvent            = "cloudflare.audit.event"
+	MetricAuditEvents          = "cloudflare.audit.events"
+	AttrAuditID                = "cloudflare.audit.id"
+	AttrAuditActorID           = "cloudflare.audit.actor.id"
+	AttrAuditActorEmail        = "cloudflare.audit.actor.email"
+	AttrAuditActorIP           = "cloudflare.audit.actor.ip"
+	AttrAuditActorTokenID      = "cloudflare.audit.actor.token.id"
+	AttrAuditActorTokenName    = "cloudflare.audit.actor.token.name"
+	AttrAuditActorType         = "cloudflare.audit.actor.type"
+	AttrAuditActionType        = "cloudflare.audit.action.type"
+	AttrAuditActionTime        = "cloudflare.audit.action.time"
+	AttrAuditActionDescription = "cloudflare.audit.action.description"
+	AttrAuditActionResult      = "cloudflare.audit.action.result"
+	AttrAuditResourceType      = "cloudflare.audit.resource.type"
+	AttrAuditResourceID        = "cloudflare.audit.resource.id"
+	AttrAuditResourceProduct   = "cloudflare.audit.resource.product"
+	AttrAuditRayID             = "cloudflare.audit.raw.ray_id"
+	AttrAuditMethod            = "cloudflare.audit.raw.method"
+	AttrAuditStatusCode        = "cloudflare.audit.raw.status_code"
+	AttrAuditURI               = "cloudflare.audit.raw.uri"
+	AttrAuditUserAgent         = "cloudflare.audit.raw.user_agent"
 )

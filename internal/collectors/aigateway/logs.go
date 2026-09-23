@@ -237,6 +237,7 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 	}
 	var links []trace.Link
 	var events []telemetry.SpanEvent
+	var contentLogs []telemetry.LogRecord
 	if c.cfg.AIGateway.CaptureBodies || c.cfg.AIGateway.LinkCallerTraces {
 		path := "/accounts/" + url.PathEscape(c.cfg.Cloudflare.AccountID) + "/ai-gateway/gateways/" + url.PathEscape(gateway) + "/logs/" + url.PathEscape(row.ID)
 		var detail logRow
@@ -279,16 +280,52 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 				}
 				capped, truncated := capBody(body, c.cfg.AIGateway.MaxBodyBytes)
 				contentAttrs = append(contentAttrs, telemetry.Attr{Key: side.truncatedKey, Value: strconv.FormatBool(truncated)})
+				contentBody := ""
+				parsed := false
 				if !truncated {
 					if messages, ok := parseMessages(capped, side.suffix); ok {
 						attr := telemetry.Attr{Key: side.messageKey, Value: messages}
 						attrs = append(attrs, attr)
 						contentAttrs = append(contentAttrs, attr)
-						continue
+						parsed = true
+						if int64(len(messages)) <= c.cfg.AIGateway.MaxBodyBytes {
+							contentBody = messages
+						} else {
+							// A parsed representation can expand beyond the raw body.
+							// Keep the complete capped source JSON instead of cutting
+							// the parsed JSON in the middle of a value.
+							contentBody = string(capped)
+						}
 					}
 				}
-				if len(capped) > 0 {
+				if !parsed && len(capped) > 0 {
+					contentBody = string(capped)
 					contentAttrs = append(contentAttrs, telemetry.Attr{Key: side.bodyKey, Value: string(capped)})
+				}
+				if contentBody != "" {
+					logAttrs := []telemetry.Attr{
+						{Key: semconv.AttrAIGatewayName, Value: gateway},
+						{Key: semconv.AttrAIGatewayLogID, Value: row.ID},
+						{Key: semconv.AttrGenAIOperation, Value: operation},
+					}
+					if row.Model != "" {
+						logAttrs = append(logAttrs, telemetry.Attr{Key: semconv.AttrGenAIModel, Value: row.Model})
+					}
+					if provider != "" {
+						logAttrs = append(logAttrs, telemetry.Attr{Key: semconv.AttrGenAIProvider, Value: provider})
+					}
+					logAttrs = append(logAttrs,
+						telemetry.Attr{Key: semconv.AttrAIGatewayContentSide, Value: side.suffix},
+						telemetry.Attr{Key: semconv.AttrAIGatewayContentLength, Value: strconv.Itoa(len(contentBody))},
+						telemetry.Attr{Key: side.truncatedKey, Value: strconv.FormatBool(truncated)},
+					)
+					contentLogs = append(contentLogs, telemetry.LogRecord{
+						Name:     semconv.EventGenAIContent,
+						Body:     contentBody,
+						At:       end,
+						Severity: otellog.SeverityInfo,
+						Attrs:    logAttrs,
+					})
 				}
 			}
 			events = append(events, telemetry.SpanEvent{Name: semconv.EventGenAIContent, At: end, Attrs: contentAttrs})
@@ -308,7 +345,7 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 	if row.Model != "" {
 		name += " " + row.Model
 	}
-	span := telemetry.SpanSpec{Name: name, Start: start, End: end, Kind: trace.SpanKindClient, Links: links, Events: events, Attrs: attrs}
+	span := telemetry.SpanSpec{Name: name, Start: start, End: end, Kind: trace.SpanKindClient, Links: links, Events: events, Logs: contentLogs, Attrs: attrs}
 	failed := (row.StatusCode != nil && *row.StatusCode >= 400) || (row.Success != nil && !*row.Success)
 	if failed {
 		span.Error = errors.New("AI Gateway request failed")

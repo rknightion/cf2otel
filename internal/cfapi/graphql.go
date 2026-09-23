@@ -18,6 +18,14 @@ type FieldLimitError struct {
 	Dataset       string
 	Wanted, Limit int
 }
+type RetentionGapError struct {
+	Dataset string
+	Floor   time.Time
+}
+
+func (e *RetentionGapError) Error() string {
+	return fmt.Sprintf("dataset %s retention gap: floor %s", e.Dataset, e.Floor.UTC().Format(time.RFC3339))
+}
 
 func (e *FieldLimitError) Error() string {
 	return fmt.Sprintf("dataset %s needs %d fields, limit %d; no stable join key for split selections", e.Dataset, e.Wanted, e.Limit)
@@ -278,7 +286,7 @@ func (c *HTTPClient) queryWithSettings(ctx context.Context, r GraphQLRequest, ou
 	if s.NotOlderThan > 0 {
 		cutoff := time.Now().Add(-time.Duration(s.NotOlderThan) * time.Second)
 		if from.Before(cutoff) {
-			return fmt.Errorf("dataset %s retention gap: requested window begins before notOlderThan", r.Dataset)
+			return &RetentionGapError{Dataset: r.Dataset, Floor: cutoff}
 		}
 	}
 	if !from.Before(r.To) {
