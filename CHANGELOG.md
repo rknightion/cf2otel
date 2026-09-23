@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/rknightion/cf2otel/compare/v0.2.1...v0.2.2) (2026-09-23)
+
+
+### Bug Fixes
+
+* bound AI Gateway catch-up export windows ([a3fa01b](https://github.com/rknightion/cf2otel/commit/a3fa01b2a16c2f8fd56381848437406f44330774))
+
 ## [0.2.1](https://github.com/rknightion/cf2otel/compare/v0.2.0...v0.2.1) (2026-09-23)
 
 
