@@ -428,7 +428,7 @@ func TestRealSDKCredentialStallAndPayloadDrop(t *testing.T) {
 }
 func TestRealSDKExportsMoreThanQueueCapacity(t *testing.T) {
 	var mu sync.Mutex
-	count := 0
+	count, requests := 0, 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/logs" {
 			time.Sleep(25 * time.Millisecond)
@@ -439,6 +439,7 @@ func TestRealSDKExportsMoreThanQueueCapacity(t *testing.T) {
 			}
 			mu.Lock()
 			count += n
+			requests++
 			mu.Unlock()
 		}
 		w.WriteHeader(http.StatusOK)
@@ -465,10 +466,13 @@ func TestRealSDKExportsMoreThanQueueCapacity(t *testing.T) {
 		t.Fatal(err)
 	}
 	mu.Lock()
-	got := count
+	got, gotRequests := count, requests
 	mu.Unlock()
 	if got != 2050 {
 		t.Fatalf("accepted %d logs, want 2050", got)
+	}
+	if gotRequests > 100 {
+		t.Fatalf("accepted %d logs over %d requests, want at most 100", got, gotRequests)
 	}
 	t.Logf("accepted %d logs across chunked exports", got)
 	if _, ok := store.Get("sdk.many"); !ok {

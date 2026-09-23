@@ -68,11 +68,11 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 		if err != nil {
 			return nil, err
 		}
-		lx, err = otlploghttp.New(ctx, otlploghttp.WithEndpointURL(base+"/v1/logs"), otlploghttp.WithHeaders(h))
+		lx, err = otlploghttp.New(ctx, otlploghttp.WithEndpointURL(base+"/v1/logs"), otlploghttp.WithHeaders(h), otlploghttp.WithRetry(otlploghttp.RetryConfig{Enabled: false}))
 		if err != nil {
 			return nil, err
 		}
-		tx, err = otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(base+"/v1/traces"), otlptracehttp.WithHeaders(h))
+		tx, err = otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(base+"/v1/traces"), otlptracehttp.WithHeaders(h), otlptracehttp.WithRetry(otlptracehttp.RetryConfig{Enabled: false}))
 		if err != nil {
 			return nil, err
 		}
@@ -86,11 +86,11 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 		if err != nil {
 			return nil, err
 		}
-		lx, err = otlploggrpc.New(ctx, otlploggrpc.WithEndpoint(endpoint), otlploggrpc.WithHeaders(h))
+		lx, err = otlploggrpc.New(ctx, otlploggrpc.WithEndpoint(endpoint), otlploggrpc.WithHeaders(h), otlploggrpc.WithRetry(otlploggrpc.RetryConfig{Enabled: false}))
 		if err != nil {
 			return nil, err
 		}
-		tx, err = otlptracegrpc.New(ctx, otlptracegrpc.WithEndpoint(endpoint), otlptracegrpc.WithHeaders(h))
+		tx, err = otlptracegrpc.New(ctx, otlptracegrpc.WithEndpoint(endpoint), otlptracegrpc.WithHeaders(h), otlptracegrpc.WithRetry(otlptracegrpc.RetryConfig{Enabled: false}))
 		if err != nil {
 			return nil, err
 		}
@@ -107,11 +107,11 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 	hook := &exportObserver{}
 	mx = observedMetricExporter{Exporter: mx, hook: hook}
 	lx = observedLogExporter{Exporter: lx, hook: hook}
+	lx = newBoundedLogExporter(lx)
 	tx = observedTraceExporter{SpanExporter: tx, hook: hook}
 	mp := sdkmetric.NewMeterProvider(sdkmetric.WithResource(res), sdkmetric.WithReader(sdkmetric.NewPeriodicReader(mx, sdkmetric.WithInterval(o.Interval))))
 	// The log SDK's batch queue drops records on overflow without reporting the
-	// loss through ForceFlush. A window checkpoint therefore needs synchronous
-	// log export. Trace batching can retain backpressure instead of dropping.
+	// loss through ForceFlush. Synchronous bounded export retains backpressure.
 	lp := sdklog.NewLoggerProvider(sdklog.WithResource(res), sdklog.WithProcessor(sdklog.NewSimpleProcessor(lx)))
 	tp := sdktrace.NewTracerProvider(sdktrace.WithResource(res), sdktrace.WithBatcher(tx, sdktrace.WithBlocking()))
 	return &Providers{Emitter: NewEmitter(mp.Meter(semconv.ServiceName), lp.Logger(semconv.ServiceName), tp.Tracer(semconv.ServiceName)), metrics: mp, logs: lp, traces: tp, hook: hook}, nil
