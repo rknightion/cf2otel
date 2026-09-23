@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/rknightion/cf2otel/compare/v0.1.1...v0.1.2) (2026-09-23)
+
+
+### Bug Fixes
+
+* read AI Gateway bodies as raw JSON ([802cbc3](https://github.com/rknightion/cf2otel/commit/802cbc3c4c2d8cd635e5d7fad3938ee5fa757cc1))
+
 ## [0.1.1](https://github.com/rknightion/cf2otel/compare/v0.1.0...v0.1.1) (2026-09-23)
 
 
