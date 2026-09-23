@@ -112,7 +112,7 @@ func TestLogsWindowDedupeAndUsage(t *testing.T) {
 	if len(api.calls) != 1 {
 		t.Fatalf("default fetched detail/body: %v", api.calls)
 	}
-	if len(api.listQueries) != 1 || api.listQueries[0].Get("start_date") != from.Format(time.RFC3339Nano) || api.listQueries[0].Get("end_date") != from.Add(time.Minute).Format(time.RFC3339Nano) {
+	if len(api.listQueries) != 1 || api.listQueries[0].Get("per_page") != "50" || api.listQueries[0].Get("start_date") != from.Format(time.RFC3339Nano) || api.listQueries[0].Get("end_date") != from.Add(time.Minute).Format(time.RFC3339Nano) {
 		t.Fatalf("list window filters: %v", api.listQueries)
 	}
 	if got := metric(out.counters, semconv.MetricGenAIInputTokens); got != 10 {

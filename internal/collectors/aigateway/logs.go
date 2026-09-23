@@ -20,7 +20,8 @@ import (
 	"github.com/rknightion/cf2otel/internal/telemetry"
 )
 
-const logPageSize = 100
+// The live AI Gateway endpoint rejects per_page=100 with code 7001.
+const logPageSize = 50
 
 type logs struct {
 	cfg *config.Config
