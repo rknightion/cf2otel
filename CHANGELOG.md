@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/rknightion/cf2otel/compare/v0.2.2...v0.2.3) (2026-09-23)
+
+
+### Bug Fixes
+
+* fail closed on missing configured firewall zones ([8e66817](https://github.com/rknightion/cf2otel/commit/8e66817bde28c341d244cfe6e7d8ca3d51ed4f9f))
+
 ## [0.2.2](https://github.com/rknightion/cf2otel/compare/v0.2.1...v0.2.2) (2026-09-23)
 
 
