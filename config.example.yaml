@@ -1,0 +1,36 @@
+# Secrets are environment-only: CF2OTEL_CLOUDFLARE__API_TOKEN and
+# CF2OTEL_OTLP__GRAFANA_CLOUD__TOKEN.
+cloudflare:
+  account_id: ""
+  zones: []
+  api_base: https://api.cloudflare.com/client/v4
+  timeout: 30s
+  max_response_bytes: 16777216
+access:
+  include_service_tokens: false
+http:
+  scope: access_protected
+  hosts: []
+  zones: []
+identity:
+  enabled: true
+  match_window: 15m
+  max_candidates: 100000
+ai_gateway:
+  gateways: []
+  capture_bodies: false
+  max_body_bytes: 16384
+  link_caller_traces: true
+otlp:
+  endpoint: https://otlp-gateway-prod-gb-south-1.grafana.net/otlp
+  protocol: http
+  grafana_cloud:
+    instance_id: ""
+  headers: {}
+state:
+  dir: /var/lib/cf2otel
+health:
+  listen: 127.0.0.1:9464
+log:
+  level: info
+  format: json

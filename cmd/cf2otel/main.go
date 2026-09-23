@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+
+	"github.com/rknightion/cf2otel/internal/collector"
 )
 
 var (
@@ -26,6 +28,7 @@ func main() {
 		fmt.Printf("cf2otel %s (commit %s, built %s, %s)\n", version, commit, buildDate, runtime.Version())
 		return
 	}
+	registerCollectors(collector.Deps{Registry: collector.NewRegistry()})
 
 	fmt.Fprintln(os.Stderr, "cf2otel: scaffold build, no collectors are wired yet")
 	os.Exit(2)
