@@ -4,7 +4,7 @@ title: AI Gateway GraphQL metrics and REST/GraphQL reconciliation
 status: Parked
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-23 12:08'
+updated_date: '2026-09-23 15:14'
 labels:
   - 'wave:1'
   - aigw
@@ -21,7 +21,7 @@ aiGatewayRequestsAdaptiveGroups, aiGatewayErrorsAdaptiveGroups, aiGatewayCacheAd
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Root cause of trap 7 is established and recorded in doc-0003 (or the dataset is dropped with the evidence)
+- [x] #1 Root cause of trap 7 is established and recorded in doc-0003 (or the dataset is dropped with the evidence)
 - [ ] #2 If used, GraphQL-derived metrics agree with REST-derived counts within the sampling tolerance over a measured window
 <!-- AC:END -->
 
@@ -36,4 +36,6 @@ aiGatewayRequestsAdaptiveGroups, aiGatewayErrorsAdaptiveGroups, aiGatewayCacheAd
 
 <!-- SECTION:NOTES:BEGIN -->
 W8 read-only reconciliation on 2026-09-23: identical 3h GraphQL Groups window initially returned 0 with 38 REST requests (latest 13.9m old), then later returned 38; other 1h and 3h windows matched 2/2 and 39/39. Unknown upper lag. Dropped GraphQL collector from registration; REST supplies bounded metrics. Corrected doc-0003 trap 7 via Backlog CLI.
+
+Parked: GraphQL AI Gateway Groups changed from zero to matching REST counts for an unchanged 3h window after unbounded ingestion lag. REST metrics are enabled and GraphQL collector disabled. Resume only with measured upper lag and a reconciliation tolerance; AC2 is conditional and not exercised.
 <!-- SECTION:NOTES:END -->
