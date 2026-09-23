@@ -160,6 +160,13 @@ func (c *HTTPClient) Get(ctx context.Context, path string, query url.Values, out
 	}
 	return json.Unmarshal(env.Result, out)
 }
+func (c *HTTPClient) GetRaw(ctx context.Context, path string, query url.Values, out any) error {
+	raw, err := c.do(ctx, http.MethodGet, path, query, nil)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, out)
+}
 
 func (c *HTTPClient) GetPage(ctx context.Context, path string, query url.Values, out any) error {
 	raw, err := c.do(ctx, http.MethodGet, path, query, nil)

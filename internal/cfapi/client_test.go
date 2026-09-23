@@ -46,6 +46,20 @@ func TestRESTErrorDoesNotEchoResponseText(t *testing.T) {
 		t.Fatalf("REST error redaction: %v", err)
 	}
 }
+func TestRawBodyEndpoint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"messages":[{"role":"user","content":"fixture"}]}`))
+	}))
+	defer srv.Close()
+	c := New(config.CloudflareConfig{APIBase: srv.URL, APIToken: "test", Timeout: time.Second, MaxResponseBytes: 1024})
+	var out map[string]json.RawMessage
+	if err := c.GetRaw(context.Background(), "/accounts/example/ai-gateway/gateways/example/logs/example/request", nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out["messages"]) == 0 {
+		t.Fatal("raw messages missing")
+	}
+}
 func TestGraphQLErrorDoesNotEchoResponseText(t *testing.T) {
 	var response graphResponse
 	response.Errors = append(response.Errors, struct {

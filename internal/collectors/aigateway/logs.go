@@ -260,10 +260,14 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 			links = traceLinks(detail.RequestHead)
 		}
 		if c.cfg.AIGateway.CaptureBodies {
+			rawGetter, ok := c.api.(cfapi.RawGetter)
+			if !ok {
+				return errors.New("aigateway API does not support raw body reads")
+			}
 			contentAttrs := make([]telemetry.Attr, 0, 4)
 			for _, side := range []struct{ suffix, bodyKey, messageKey, truncatedKey string }{{"request", semconv.AttrAIGatewayRequestBody, semconv.AttrGenAIInputMessages, semconv.AttrAIGatewayRequestBodyTruncated}, {"response", semconv.AttrAIGatewayResponseBody, semconv.AttrGenAIOutputMessages, semconv.AttrAIGatewayResponseBodyTruncated}} {
 				var body json.RawMessage
-				if err := c.api.Get(ctx, path+"/"+side.suffix, nil, &body); err != nil {
+				if err := rawGetter.GetRaw(ctx, path+"/"+side.suffix, nil, &body); err != nil {
 					return fmt.Errorf("aigateway %s body: %w", side.suffix, err)
 				}
 				capped, truncated := capBody(body, c.cfg.AIGateway.MaxBodyBytes)

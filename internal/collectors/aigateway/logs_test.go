@@ -25,6 +25,9 @@ type fakeAPI struct {
 
 func (f *fakeAPI) Get(_ context.Context, path string, q url.Values, out any) error {
 	f.calls = append(f.calls, path)
+	if strings.HasSuffix(path, "/request") || strings.HasSuffix(path, "/response") {
+		return errors.New("body endpoint has no result envelope")
+	}
 	value := f.detail
 	switch {
 	case strings.HasSuffix(path, "/request"):
@@ -46,6 +49,16 @@ func (f *fakeAPI) Get(_ context.Context, path string, q url.Values, out any) err
 		value = string(envelope.Result)
 	}
 	return json.Unmarshal([]byte(value), out)
+}
+func (f *fakeAPI) GetRaw(_ context.Context, path string, _ url.Values, out any) error {
+	f.calls = append(f.calls, path)
+	if strings.HasSuffix(path, "/request") {
+		return json.Unmarshal([]byte(f.request), out)
+	}
+	if strings.HasSuffix(path, "/response") {
+		return json.Unmarshal([]byte(f.response), out)
+	}
+	return errors.New("unexpected raw path")
 }
 func (*fakeAPI) Query(context.Context, cfapi.GraphQLRequest, any) error { return errors.New("unused") }
 func (*fakeAPI) Accounts(context.Context) ([]cfapi.Account, error)      { return nil, errors.New("unused") }

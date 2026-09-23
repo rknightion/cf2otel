@@ -59,6 +59,12 @@ type Client interface {
 	Gateways(ctx context.Context, accountID string) ([]Gateway, error)
 }
 
+// RawGetter reads JSON endpoints that do not use Cloudflare's result envelope,
+// such as AI Gateway request and response bodies.
+type RawGetter interface {
+	GetRaw(ctx context.Context, path string, query url.Values, out any) error
+}
+
 // PageGetter preserves result_info alongside result for collectors that must
 // follow server-capped REST pages. Get unwraps result and cannot supply it.
 type PageGetter interface {
