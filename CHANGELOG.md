@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/rknightion/cf2otel/compare/v0.1.0...v0.1.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* cap AI Gateway log pages at live API limit ([24fb0cd](https://github.com/rknightion/cf2otel/commit/24fb0cdabb5ab59ddc3ece371904479945c18680))
+
 ## 0.1.0 (2026-09-23)
 
 
