@@ -18,7 +18,7 @@ import (
 
 var rawEventFields = []string{
 	"datetime", "action", "source", "kind", "clientIP", "clientCountryName",
-	"clientAsn", "clientAsnDescription", "clientRequestHTTPHost",
+	"clientAsn", "clientRequestHTTPHost",
 	"clientRequestHTTPMethodName", "clientRequestPath", "clientRequestQuery",
 	"clientRequestHTTPProtocol", "edgeResponseStatus", "originResponseStatus",
 	"wafAttackScoreClass", "ruleId", "rulesetId", "rayName", "coloCode", "userAgent",

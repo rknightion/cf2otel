@@ -71,6 +71,7 @@ const (
 	AttrAIGatewayRequestBodyTruncated    = "cloudflare.ai_gateway.request.body_truncated"
 	AttrAIGatewayResponseBodyTruncated   = "cloudflare.ai_gateway.response.body_truncated"
 	AttrAIGatewayResponseBodyUnavailable = "cloudflare.ai_gateway.response.body_unavailable"
+	AttrAIGatewayRequestBodyUnavailable  = "cloudflare.ai_gateway.request.body_unavailable"
 	AttrAIGatewayContentSide             = "cloudflare.ai_gateway.content.side"
 	AttrAIGatewayContentLength           = "cloudflare.ai_gateway.content.length"
 )

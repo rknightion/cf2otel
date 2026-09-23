@@ -170,6 +170,11 @@ func TestEventsFilterWindowBoundariesAndDeduplicate(t *testing.T) {
 			t.Errorf("raw field superset omitted %q", field)
 		}
 	}
+	for _, requested := range api.queries[0].WantedFields {
+		if requested == "clientAsnDescription" {
+			t.Fatal("live schema rejects clientAsnDescription despite settings advertisement")
+		}
+	}
 }
 
 func TestEventsSplitSaturatedWindowsToOneMinute(t *testing.T) {
@@ -258,6 +263,9 @@ func TestMetricsChooseGroupsDatasetPerZoneAndLimitAttributes(t *testing.T) {
 	if len(api.queries) != 2 || api.queries[0].Dataset != groupsDataset || api.queries[1].Dataset != byTimeGroupsDataset {
 		t.Fatalf("dataset selection = %#v, want Pro Groups and Free ByTimeGroups", []string{api.queries[0].Dataset, api.queries[1].Dataset})
 	}
+	if len(api.queries[1].WantedFields) != 1 || api.queries[1].WantedFields[0] != "count" {
+		t.Fatalf("ByTimeGroups selected %v; live schema supports only count", api.queries[1].WantedFields)
+	}
 	if len(out.Metrics) != 2 {
 		t.Fatalf("metrics = %d, want one per zone", len(out.Metrics))
 	}
@@ -273,8 +281,11 @@ func TestMetricsChooseGroupsDatasetPerZoneAndLimitAttributes(t *testing.T) {
 			}
 		}
 		attrs := attrMap(metric.Attrs)
-		if attrs[semconv.AttrFirewallAction] != "block" || attrs[semconv.AttrFirewallSource] != "firewallRule" {
-			t.Errorf("metric attrs = %#v", attrs)
+		if attrs[semconv.AttrFirewallZone] == "pro.example.test" && (attrs[semconv.AttrFirewallAction] != "block" || attrs[semconv.AttrFirewallSource] != "firewallRule") {
+			t.Errorf("Pro metric attrs = %#v", attrs)
+		}
+		if attrs[semconv.AttrFirewallZone] == "free.example.test" && (attrs[semconv.AttrFirewallAction] != "" || attrs[semconv.AttrFirewallSource] != "") {
+			t.Errorf("Free metric has unsupported dimensions = %#v", attrs)
 		}
 		for _, forbidden := range []string{"ip", "path", "ray"} {
 			for key := range attrs {

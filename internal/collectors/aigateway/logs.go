@@ -270,8 +270,12 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 				var body json.RawMessage
 				if err := rawGetter.GetRaw(ctx, path+"/"+side.suffix, nil, &body); err != nil {
 					var httpErr *cfapi.HTTPError
-					if side.suffix == "response" && errors.As(err, &httpErr) && httpErr.Status == 404 && httpErr.Code == 7002 {
-						missing := telemetry.Attr{Key: semconv.AttrAIGatewayResponseBodyUnavailable, Value: "true"}
+					if errors.As(err, &httpErr) && httpErr.Status == 404 && httpErr.Code == 7002 {
+						key := semconv.AttrAIGatewayRequestBodyUnavailable
+						if side.suffix == "response" {
+							key = semconv.AttrAIGatewayResponseBodyUnavailable
+						}
+						missing := telemetry.Attr{Key: key, Value: "true"}
 						attrs = append(attrs, missing)
 						contentAttrs = append(contentAttrs, missing)
 						continue

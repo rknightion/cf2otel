@@ -55,6 +55,11 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 
 		hasAction := hasAvailableField(settings.AvailableFields, "dimensions.action")
 		hasSource := hasAvailableField(settings.AvailableFields, "dimensions.source")
+		// Live ByTimeGroups settings advertise these fields, but the dataset
+		// rejects both dimensions.action and dimensions.source in a query.
+		if dataset == byTimeGroupsDataset {
+			hasAction, hasSource = false, false
+		}
 		if !hasAvailableField(settings.AvailableFields, "count") {
 			return from, fmt.Errorf("zone firewall Groups dataset %s has no count field", dataset)
 		}
