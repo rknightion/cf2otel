@@ -18,6 +18,8 @@ const (
 	MetricAPIRequests       = "cf2otel.api.requests"
 	MetricAPIDuration       = "cf2otel.api.duration"
 	MetricAPIRetries        = "cf2otel.api.retries"
+	SpanAPIRequest          = "cf2otel.api.request"
+	AttrAPIMethod           = "cf2otel.api.method"
 	MetricIdentityMatched   = "cf2otel.identity.matched"
 	MetricIdentityUnmatched = "cf2otel.identity.unmatched"
 	MetricIdentityAmbiguous = "cf2otel.identity.ambiguous"

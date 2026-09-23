@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rknightion/cf2otel/internal/identity"
 	"github.com/rknightion/cf2otel/internal/semconv"
 	"github.com/rknightion/cf2otel/internal/telemetry"
 )
@@ -17,6 +18,7 @@ type Stats struct {
 	lastSuccess     map[string]time.Time
 	expected        map[string]struct{}
 	checkpoints     map[string]time.Time
+	identityStats   func() identity.Stats
 }
 
 // Collector exposes Stats as the snapshot collector registered by the root-owned
@@ -42,6 +44,12 @@ func (s *Stats) Expect(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.expected[name] = struct{}{}
+}
+
+func (s *Stats) SetIdentityStats(snapshot func() identity.Stats) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.identityStats = snapshot
 }
 
 // Poll records one completed scheduler attempt. The caller supplies completion time.
@@ -100,6 +108,7 @@ func (s *Stats) Collect(ctx context.Context, now time.Time) error {
 	for k, v := range s.checkpoints {
 		points[k] = v
 	}
+	identitySnapshot := s.identityStats
 	s.mu.Unlock()
 	var errs []error
 	for name, at := range last {
@@ -118,6 +127,21 @@ func (s *Stats) Collect(ctx context.Context, now time.Time) error {
 		}
 		if err := s.emitter.Gauge(ctx, semconv.MetricCheckpointAge, age, telemetry.Attr{Key: semconv.AttrCollector, Value: name}); err != nil {
 			errs = append(errs, err)
+		}
+	}
+	if identitySnapshot != nil {
+		outcomes := identitySnapshot()
+		for _, metric := range []struct {
+			name  string
+			value uint64
+		}{
+			{semconv.MetricIdentityMatched, outcomes.Matched},
+			{semconv.MetricIdentityUnmatched, outcomes.Unmatched},
+			{semconv.MetricIdentityAmbiguous, outcomes.Ambiguous},
+		} {
+			if err := s.emitter.Gauge(ctx, metric.name, float64(metric.value)); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 	if err := s.emitter.Gauge(ctx, semconv.MetricBuildInfo, 1, telemetry.Attr{Key: semconv.AttrBuildVersion, Value: s.version}, telemetry.Attr{Key: semconv.AttrBuildCommit, Value: s.commit}); err != nil {

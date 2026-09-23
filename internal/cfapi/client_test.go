@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -56,11 +57,15 @@ func TestGraphQLErrorDoesNotEchoResponseText(t *testing.T) {
 	}
 }
 func TestPageIgnoresTotalCount(t *testing.T) {
+	firstPage, err := os.ReadFile("testdata/zones-page-1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
 	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := calls.Add(1)
 		if n == 1 {
-			w.Write([]byte(`{"success":true,"result":[{"id":"one"}],"result_info":{"page":1,"per_page":1,"total_count":0}}`))
+			_, _ = w.Write(firstPage)
 		} else {
 			w.Write([]byte(`{"success":true,"result":[],"result_info":{"page":2,"per_page":1,"total_count":0}}`))
 		}

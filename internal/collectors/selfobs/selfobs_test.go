@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rknightion/cf2otel/internal/identity"
+	"github.com/rknightion/cf2otel/internal/semconv"
 	"github.com/rknightion/cf2otel/internal/telemetry"
 	otellog "go.opentelemetry.io/otel/log"
 )
@@ -47,6 +49,7 @@ func TestPollAndCollect(t *testing.T) {
 	e := &fakeEmitter{}
 	s := New(e, "0.1.0", "abc")
 	s.Expect("httpreq.events")
+	s.SetIdentityStats(func() identity.Stats { return identity.Stats{Matched: 2, Unmatched: 3, Ambiguous: 1} })
 	now := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
 	if err := s.Poll(context.Background(), "access.logins", 250*time.Millisecond, nil, now); err != nil {
 		t.Fatal(err)
@@ -67,8 +70,15 @@ func TestPollAndCollect(t *testing.T) {
 	if len(e.counters) != 4 || len(e.histograms) != 2 {
 		t.Fatalf("counters=%d histograms=%d", len(e.counters), len(e.histograms))
 	}
-	if len(e.gauges) != 4 {
+	if len(e.gauges) != 7 {
 		t.Fatalf("gauges=%d", len(e.gauges))
+	}
+	identityValues := map[string]float64{}
+	for _, g := range e.gauges {
+		identityValues[g.name] = g.value
+	}
+	if identityValues[semconv.MetricIdentityMatched] != 2 || identityValues[semconv.MetricIdentityUnmatched] != 3 || identityValues[semconv.MetricIdentityAmbiguous] != 1 {
+		t.Fatalf("identity outcome gauges: %+v", identityValues)
 	}
 	missing := false
 	for _, g := range e.gauges {
