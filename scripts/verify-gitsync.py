@@ -65,7 +65,9 @@ def gcx_command(args: argparse.Namespace, *parts: str) -> list[str]:
 def resource_items(document: Any) -> list[dict[str, Any]]:
     if isinstance(document, dict) and isinstance(document.get("items"), list):
         return [item for item in document["items"] if isinstance(item, dict)]
-    raise ValueError("gcx repository output did not contain a resource list")
+    if isinstance(document, dict) and document.get("kind") and isinstance(document.get("metadata"), dict):
+        return [document]
+    raise ValueError("gcx output did not contain a resource")
 
 
 def gcx_json(args: argparse.Namespace, *parts: str) -> Any:
