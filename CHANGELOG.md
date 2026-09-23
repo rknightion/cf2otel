@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.0](https://github.com/rknightion/cf2otel/compare/v0.1.3...v0.2.0) (2026-09-23)
+
+
+### Features
+
+* deliver atomic windows and expand Cloudflare signals ([c1ce41d](https://github.com/rknightion/cf2otel/commit/c1ce41d85756bd5a80b8b871d706c74324b9be4f))
+* freeze wave 2 collector and telemetry seams ([732ea5a](https://github.com/rknightion/cf2otel/commit/732ea5a62406118b1d5311748d298828c429cb8c))
+
+
+### Bug Fixes
+
+* batch logs with backpressure and bound exporter retries ([0527521](https://github.com/rknightion/cf2otel/commit/052752158952c5e0d3a51fc9892f5c358b38dc5d))
+* defer stub scheduling and validate span logs ([215c357](https://github.com/rknightion/cf2otel/commit/215c357f3b138c98592fd7033ccebcbb68803e17))
+* make OTLP delivery lossless and redact exporter errors ([ba9874b](https://github.com/rknightion/cf2otel/commit/ba9874b1afe48ebea214a2b1e131b1f8af487efd))
+* preserve first cursor and bound retry windows ([1cda73d](https://github.com/rknightion/cf2otel/commit/1cda73d144d23cda5ec18a9c7ceb032584e1ca7b))
+* use current attribute string API for batch estimates ([ef4a657](https://github.com/rknightion/cf2otel/commit/ef4a657d7bdfd5dcdc5af6264e04ece416bb6c80))
+
 ## [0.1.3](https://github.com/rknightion/cf2otel/compare/v0.1.2...v0.1.3) (2026-09-23)
 
 
