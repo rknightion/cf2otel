@@ -27,6 +27,11 @@ type CommitFlusher interface {
 	FlushCommit(context.Context, uint64) error
 }
 
+type rejectionState struct {
+	from, to time.Time
+	count    int
+}
+
 type Scheduler struct {
 	Registry     *Registry
 	Emitter      telemetry.Emitter
@@ -36,7 +41,7 @@ type Scheduler struct {
 	OnPoll       func(context.Context, string, time.Duration, error, time.Time)
 	OnCheckpoint func(string, time.Time)
 	Flusher      CommitFlusher
-	failed400    map[string]int
+	failed400    map[string]rejectionState
 }
 
 func NewScheduler(r *Registry, e telemetry.Emitter, store CheckpointStore) *Scheduler {
@@ -122,6 +127,11 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 			return nil
 		}
 		from = to.Add(-e.InitialLookback)
+		// Persist the initial lower cursor before the first fetch. Otherwise a
+		// failed first window moves forward with the clock across retries/restarts.
+		if err := s.Checkpoints.Set(c.Name(), from); err != nil {
+			return err
+		}
 	}
 	if !from.Before(to) {
 		return nil
@@ -129,6 +139,15 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 	if e.MaxWindow > 0 && to.Sub(from) > e.MaxWindow {
 		to = from.Add(e.MaxWindow)
 	}
+	commitMu.Lock()
+	if pending, found := s.failed400[c.Name()]; found {
+		if pending.from.Equal(from) {
+			to = pending.to
+		} else {
+			delete(s.failed400, c.Name())
+		}
+	}
+	commitMu.Unlock()
 	buffer := &telemetry.Buffer{}
 	mark, err := c.CollectWindow(ctx, from, to, buffer)
 	if err != nil {
@@ -148,19 +167,23 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 	defer commitMu.Unlock()
 	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commitTimeout)
 	defer cancel()
-	key := fmt.Sprintf("%s/%s/%s", c.Name(), from.Format(time.RFC3339), to.Format(time.RFC3339))
 	if err := s.commit(commitCtx, buffer); err != nil {
 		outcome := "retry"
 		if s.failed400 == nil {
-			s.failed400 = map[string]int{}
+			s.failed400 = map[string]rejectionState{}
 		}
 		if payloadRejected(err) {
-			s.failed400[key]++
-			if s.failed400[key] >= 3 {
+			pending := s.failed400[c.Name()]
+			if !pending.from.Equal(from) || !pending.to.Equal(to) {
+				pending = rejectionState{from: from, to: to}
+			}
+			pending.count++
+			s.failed400[c.Name()] = pending
+			if pending.count >= 3 {
 				outcome = "dropped"
 			}
 		} else {
-			delete(s.failed400, key)
+			delete(s.failed400, c.Name())
 		}
 		_ = s.Emitter.Counter(commitCtx, semconv.MetricWindowCommitFailures, 1,
 			telemetry.Attr{Key: semconv.AttrCollector, Value: c.Name()},
@@ -169,10 +192,10 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 		if outcome != "dropped" {
 			return err
 		}
-		delete(s.failed400, key)
+		delete(s.failed400, c.Name())
 		s.Logger.Error("window dropped after three payload rejections", "collector", c.Name(), "from", from, "to", to, "error", err)
 	} else {
-		delete(s.failed400, key)
+		delete(s.failed400, c.Name())
 		for _, m := range buffer.Metrics {
 			if err := m.Replay(commitCtx, s.Emitter); err != nil {
 				return err
@@ -313,7 +336,8 @@ func gapFloor(err error) time.Time {
 		if e == nil {
 			return
 		}
-		if g, ok := e.(*cfapi.RetentionGapError); ok && g.Floor.After(latest) {
+		var g *cfapi.RetentionGapError
+		if errors.As(e, &g) && g.Floor.After(latest) {
 			latest = g.Floor
 		}
 		if u, ok := e.(interface{ Unwrap() []error }); ok {
@@ -364,6 +388,7 @@ func (s *Scheduler) skipGap(ctx context.Context, c WindowCollector, e Entry, fro
 	if err := s.Checkpoints.Set(c.Name(), mark); err != nil {
 		return err
 	}
+	delete(s.failed400, c.Name())
 	if s.OnCheckpoint != nil {
 		s.OnCheckpoint(c.Name(), mark)
 	}

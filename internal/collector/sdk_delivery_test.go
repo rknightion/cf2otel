@@ -141,8 +141,8 @@ func TestRealSDK503RecoveryCheckpoint(t *testing.T) {
 	if err := s.RunOnce(context.Background(), entry); err == nil {
 		t.Fatal("503 commit unexpectedly succeeded")
 	}
-	if _, ok := store.Get("sdk.window"); ok {
-		t.Fatal("checkpoint advanced after SDK 503")
+	if mark, ok := store.Get("sdk.window"); !ok || !mark.Equal(time.Date(2026, 9, 23, 11, 59, 0, 0, time.UTC)) {
+		t.Fatalf("checkpoint=%s, want initial lower cursor after SDK 503", mark)
 	}
 	mu.Lock()
 	before := payloadMetric
@@ -314,7 +314,17 @@ func TestRealSDKExportsValidTwoSidedContentSpan(t *testing.T) {
 			spans++
 		}
 		if r.URL.Path == "/v1/logs" {
-			logs++
+			var request colLog.ExportLogsServiceRequest
+			if err := proto.Unmarshal(body, &request); err != nil {
+				mu.Unlock()
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			for _, resource := range request.ResourceLogs {
+				for _, scope := range resource.ScopeLogs {
+					logs += len(scope.LogRecords)
+				}
+			}
 		}
 		mu.Unlock()
 		if len(body) > maxRequestBytes {
@@ -346,7 +356,7 @@ func TestRealSDKExportsValidTwoSidedContentSpan(t *testing.T) {
 	mu.Lock()
 	gotLogs, gotSpans, maxSeen := logs, spans, largest
 	mu.Unlock()
-	if gotLogs != 1 || gotSpans != 1 || maxSeen > maxRequestBytes {
+	if gotLogs != 2 || gotSpans != 1 || maxSeen > maxRequestBytes {
 		t.Fatalf("log batches=%d span batches=%d largest=%d", gotLogs, gotSpans, maxSeen)
 	}
 }
@@ -402,9 +412,13 @@ func TestRealSDKCredentialStallAndPayloadDrop(t *testing.T) {
 					t.Fatalf("third payload rejection did not drop: %v", runErr)
 				}
 			}
-			_, advanced := store.Get("sdk.window")
-			if advanced != tc.drop {
-				t.Fatalf("checkpoint advanced=%v, drop=%v", advanced, tc.drop)
+			mark, present := store.Get("sdk.window")
+			want := time.Date(2026, 9, 23, 11, 59, 0, 0, time.UTC)
+			if tc.drop {
+				want = want.Add(time.Minute)
+			}
+			if !present || !mark.Equal(want) {
+				t.Fatalf("checkpoint=%s present=%v, want %s", mark, present, want)
 			}
 		})
 	}
@@ -507,8 +521,8 @@ func TestRealSDKPartialFailureRetriesWithoutCheckpoint(t *testing.T) {
 	if err := s.RunOnce(context.Background(), entry); err == nil {
 		t.Fatal("partial failure unexpectedly committed")
 	}
-	if _, ok := store.Get("sdk.window"); ok {
-		t.Fatal("checkpoint advanced after partial failure")
+	if mark, ok := store.Get("sdk.window"); !ok || !mark.Equal(time.Date(2026, 9, 23, 11, 59, 0, 0, time.UTC)) {
+		t.Fatalf("checkpoint=%s, want initial lower cursor after partial failure", mark)
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
@@ -580,9 +594,6 @@ func TestRealSDKConcurrentFlushIsolation(t *testing.T) {
 		t.Fatal("second commit escaped blocked export")
 	case <-time.After(30 * time.Millisecond):
 	}
-	if _, ok := store.Get("second"); ok {
-		t.Fatal("second checkpoint advanced during first export")
-	}
 	mu.Lock()
 	requests := logRequests
 	mu.Unlock()
@@ -596,10 +607,10 @@ func TestRealSDKConcurrentFlushIsolation(t *testing.T) {
 	if err := <-secondDone; err == nil {
 		t.Fatal("second commit unexpectedly succeeded")
 	}
-	if _, ok := store.Get("first"); ok {
-		t.Fatal("first checkpoint advanced")
+	if mark, ok := store.Get("first"); !ok || !mark.Equal(time.Date(2026, 9, 23, 11, 59, 0, 0, time.UTC)) {
+		t.Fatalf("first checkpoint=%s, want initial lower cursor", mark)
 	}
-	if _, ok := store.Get("second"); ok {
-		t.Fatal("second checkpoint advanced")
+	if mark, ok := store.Get("second"); !ok || !mark.Equal(time.Date(2026, 9, 23, 11, 59, 0, 0, time.UTC)) {
+		t.Fatalf("second checkpoint=%s, want initial lower cursor", mark)
 	}
 }

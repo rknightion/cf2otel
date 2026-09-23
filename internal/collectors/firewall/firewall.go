@@ -44,7 +44,7 @@ func zones(ctx context.Context, cfg *config.Config, api cfapi.Client) ([]cfapi.Z
 func datasetSettings(ctx context.Context, api cfapi.Client, zoneID, dataset string) (cfapi.DatasetSettings, error) {
 	reader, ok := api.(datasetSettingsReader)
 	if !ok {
-		return cfapi.DatasetSettings{}, fmt.Errorf("Cloudflare client does not expose dataset settings")
+		return cfapi.DatasetSettings{}, fmt.Errorf("cloudflare client does not expose dataset settings")
 	}
 	settings, err := reader.DatasetSettings(ctx, cfapi.ZoneScope, zoneID, dataset)
 	if err != nil {

@@ -99,8 +99,10 @@ func TestPartialFetchDiscardsCollectorWindow(t *testing.T) {
 			if emitter.logs != 0 || emitter.spans != 0 || emitter.counters != 0 {
 				t.Fatalf("partial output leaked: logs=%d spans=%d counters=%d", emitter.logs, emitter.spans, emitter.counters)
 			}
-			if _, ok := store.Get(window.Name()); ok {
-				t.Fatal("checkpoint advanced")
+			mark, ok := store.Get(window.Name())
+			want := s.Now().Add(-window.Lag()).Truncate(time.Second).Add(-entry.InitialLookback)
+			if !ok || !mark.Equal(want) {
+				t.Fatalf("checkpoint=%s, want initial lower cursor %s", mark, want)
 			}
 		})
 	}

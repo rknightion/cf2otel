@@ -150,10 +150,12 @@ func TestCommitFailureAndPayloadDrop(t *testing.T) {
 			f := &stubFlusher{err: tc.failure}
 			s := NewScheduler(nil, e, store)
 			s.Flusher = f
-			s.Now = func() time.Time { return time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC) }
+			now := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
+			s.Now = func() time.Time { return now }
 			w := &emitWindow{name: "test." + tc.name, n: 1}
 			entry := Entry{Collector: w, Interval: time.Minute, InitialLookback: time.Minute}
 			for i := 0; i < 3; i++ {
+				now = now.Add(time.Minute)
 				runErr := s.RunOnce(context.Background(), entry)
 				if i < 2 || !tc.drop {
 					if runErr == nil {
@@ -163,9 +165,13 @@ func TestCommitFailureAndPayloadDrop(t *testing.T) {
 					t.Fatal(runErr)
 				}
 			}
-			_, advanced := store.Get(w.Name())
-			if advanced != tc.drop {
-				t.Fatalf("advanced=%v drop=%v", advanced, tc.drop)
+			mark, present := store.Get(w.Name())
+			want := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
+			if tc.drop {
+				want = want.Add(time.Minute)
+			}
+			if !present || !mark.Equal(want) {
+				t.Fatalf("checkpoint=%s present=%v, want %s", mark, present, want)
 			}
 			if e.metrics != 3 {
 				t.Fatalf("applied payload metric or missing failure metric: %d", e.metrics)
@@ -204,9 +210,6 @@ func TestConcurrentCommitIsolation(t *testing.T) {
 		t.Fatal("second commit escaped first flush")
 	case <-time.After(20 * time.Millisecond):
 	}
-	if _, ok := store.Get("b"); ok {
-		t.Fatal("second checkpoint advanced during failed flush")
-	}
 	close(f.release)
 	if err := <-first; err == nil {
 		t.Fatal("first flush unexpectedly succeeded")
@@ -214,8 +217,8 @@ func TestConcurrentCommitIsolation(t *testing.T) {
 	if err := <-second; err == nil {
 		t.Fatal("second flush unexpectedly succeeded")
 	}
-	if _, ok := store.Get("b"); ok {
-		t.Fatal("second checkpoint advanced after its own failed flush")
+	if mark, ok := store.Get("b"); !ok || !mark.Equal(time.Date(2026, 9, 23, 11, 59, 0, 0, time.UTC)) {
+		t.Fatalf("second checkpoint=%s, want initial lower cursor", mark)
 	}
 }
 
@@ -344,8 +347,8 @@ func TestWindowRestartBoundary(t *testing.T) {
 	if err := s.RunOnce(context.Background(), entry); err == nil {
 		t.Fatal("expected failure")
 	}
-	if _, ok := store.Get(w.Name()); ok {
-		t.Fatal("checkpoint advanced on failed collection")
+	if mark, ok := store.Get(w.Name()); !ok || !mark.Equal(now.Add(-10*time.Minute)) {
+		t.Fatalf("checkpoint=%s, want initial lower cursor", mark)
 	}
 	w.fail = false
 	if err := s.RunOnce(context.Background(), entry); err != nil {

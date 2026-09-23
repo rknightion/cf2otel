@@ -61,6 +61,7 @@ func (c *logins) CollectWindow(ctx context.Context, from, to time.Time, out tele
 	}
 	path := "/accounts/" + url.PathEscape(c.deps.Config.Cloudflare.AccountID) + "/access/logs/access_requests"
 	seen := make(map[string]struct{})
+	var accepted []loginRow
 	for pageNum := 1; pageNum <= 10000; pageNum++ {
 		if err := ctx.Err(); err != nil {
 			return time.Time{}, err
@@ -99,9 +100,7 @@ func (c *logins) CollectWindow(ctx context.Context, from, to time.Time, out tele
 			if !c.deps.Config.Access.IncludeServiceTokens && row.Connection == "nonidentity" {
 				continue
 			}
-			if err := c.emit(ctx, row, out); err != nil {
-				return time.Time{}, err
-			}
+			accepted = append(accepted, row)
 		}
 		// total_count is observed as zero with nonempty results. The page's
 		// actual length, rather than total_count, determines continuation.
@@ -110,6 +109,11 @@ func (c *logins) CollectWindow(ctx context.Context, from, to time.Time, out tele
 			perPage = loginPageSize
 		}
 		if len(page.Result) < perPage {
+			for _, row := range accepted {
+				if err := c.emit(ctx, row, out); err != nil {
+					return time.Time{}, err
+				}
+			}
 			return to, nil
 		}
 		if fresh == 0 {

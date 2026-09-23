@@ -45,7 +45,8 @@ func FailureSignals(err error) string {
 		if e == nil {
 			return
 		}
-		if failure, ok := e.(*ExportFailure); ok {
+		var failure *ExportFailure
+		if errors.As(e, &failure) {
 			set[failure.Signal] = true
 		}
 		if joined, ok := e.(interface{ Unwrap() []error }); ok {

@@ -21,8 +21,9 @@ import (
 )
 
 type loginAPI struct {
-	rows    []loginRow
-	queries []url.Values
+	rows     []loginRow
+	queries  []url.Values
+	failPage int
 }
 
 func (a *loginAPI) Get(_ context.Context, path string, q url.Values, out any) error {
@@ -36,6 +37,9 @@ func (a *loginAPI) Get(_ context.Context, path string, q url.Values, out any) er
 	}
 	if page < 1 {
 		return fmt.Errorf("page %d", page)
+	}
+	if page == a.failPage {
+		return fmt.Errorf("synthetic page failure")
 	}
 	// Two rows per page, with a duplicate at the page boundary. The reported
 	// total_count is zero even while the result contains rows.
@@ -56,6 +60,23 @@ func (a *loginAPI) Get(_ context.Context, path string, q url.Values, out any) er
 		return err
 	}
 	return json.Unmarshal(b, out)
+}
+
+func TestPaginationFailureDoesNotObserveOrEmit(t *testing.T) {
+	start := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	api := &loginAPI{failPage: 2, rows: []loginRow{
+		{RayID: "a", CreatedAt: start.Add(time.Second), AppDomain: "app.example.test", UserEmail: "a@example.test", Allowed: true},
+		{RayID: "b", CreatedAt: start.Add(2 * time.Second), AppDomain: "app.example.test", UserEmail: "b@example.test", Allowed: true},
+		{RayID: "c", CreatedAt: start.Add(3 * time.Second), AppDomain: "app.example.test", UserEmail: "c@example.test", Allowed: true},
+	}}
+	cfg := config.Default()
+	cfg.Cloudflare.AccountID = "test-account"
+	out := &loginEmitter{}
+	index := &loginIndex{}
+	_, err := newLogins(collector.Deps{Config: &cfg, API: api, Identity: index}).CollectWindow(context.Background(), start, start.Add(time.Minute), out)
+	if err == nil || len(out.logs) != 0 || len(out.metrics) != 0 || len(index.logins) != 0 {
+		t.Fatalf("err=%v logs=%d metrics=%d identities=%d, want failure and no side effects", err, len(out.logs), len(out.metrics), len(index.logins))
+	}
 }
 func (*loginAPI) Query(context.Context, cfapi.GraphQLRequest, any) error { panic("unexpected Query") }
 func (*loginAPI) Accounts(context.Context) ([]cfapi.Account, error)      { panic("unexpected Accounts") }
