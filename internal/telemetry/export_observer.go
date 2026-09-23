@@ -3,6 +3,8 @@ package telemetry
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -114,8 +116,34 @@ type observedMetricExporter struct {
 	hook *exportObserver
 }
 
+// Exporters may include the server's response body in their errors. That body
+// can echo a captured request, so only a known HTTP status or failure class
+// may cross into SDK handlers, diagnostics, and scheduler errors.
+func safeExportError(err error) error {
+	if err == nil {
+		return nil
+	}
+	statusLine := strings.SplitN(err.Error(), "(body:", 2)[0]
+	for code := 100; code <= 599; code++ {
+		name := http.StatusText(code)
+		if name != "" && strings.Contains(statusLine, fmt.Sprintf(": %d %s", code, name)) {
+			return fmt.Errorf("OTLP export: %d %s (response omitted)", code, name)
+		}
+	}
+	if strings.Contains(statusLine, "OTLP partial success:") {
+		return errors.New("OTLP partial success: rejected records (message omitted)")
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return context.DeadlineExceeded
+	}
+	if errors.Is(err, context.Canceled) {
+		return context.Canceled
+	}
+	return errors.New("OTLP export failed (details omitted)")
+}
+
 func (e observedMetricExporter) Export(ctx context.Context, data *metricdata.ResourceMetrics) error {
-	err := e.Exporter.Export(ctx, data)
+	err := safeExportError(e.Exporter.Export(ctx, data))
 	e.hook.record(ctx, "metrics", err)
 	return err
 }
@@ -126,7 +154,7 @@ type observedLogExporter struct {
 }
 
 func (e observedLogExporter) Export(ctx context.Context, records []sdklog.Record) error {
-	err := e.Exporter.Export(ctx, records)
+	err := safeExportError(e.Exporter.Export(ctx, records))
 	e.hook.record(ctx, "logs", err)
 	return err
 }
@@ -137,7 +165,7 @@ type observedTraceExporter struct {
 }
 
 func (e observedTraceExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
-	err := e.SpanExporter.ExportSpans(ctx, spans)
+	err := safeExportError(e.SpanExporter.ExportSpans(ctx, spans))
 	e.hook.record(ctx, "traces", err)
 	return err
 }

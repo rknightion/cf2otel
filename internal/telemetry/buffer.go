@@ -68,6 +68,9 @@ func (b *Buffer) Span(_ context.Context, s SpanSpec) error {
 		s.Logs[i].Attrs = copied(s.Logs[i].Attrs)
 	}
 	s.Links = append(s.Links[:0:0], s.Links...)
+	for i := range s.Links {
+		s.Links[i].Attributes = append(s.Links[i].Attributes[:0:0], s.Links[i].Attributes...)
+	}
 	b.Records = append(b.Records, BufferedRecord{Span: &s})
 	return nil
 }

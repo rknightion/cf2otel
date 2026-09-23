@@ -379,7 +379,7 @@ func TestRealSDKCredentialStallAndPayloadDrop(t *testing.T) {
 					}
 					w.WriteHeader(status)
 					if status == http.StatusUnauthorized {
-						_, _ = w.Write([]byte("fake 400 Bad Request in response body"))
+						_, _ = w.Write([]byte("secret-prompt-sentinel fake 400 Bad Request in response body"))
 					}
 					return
 				}
@@ -405,6 +405,9 @@ func TestRealSDKCredentialStallAndPayloadDrop(t *testing.T) {
 			entry := collector.Entry{Collector: sdkWindow{}, Interval: time.Minute, InitialLookback: time.Minute}
 			for i := 0; i < 3; i++ {
 				runErr := s.RunOnce(context.Background(), entry)
+				if runErr != nil && strings.Contains(runErr.Error(), "secret-prompt-sentinel") {
+					t.Fatal("OTLP response body leaked into scheduler error")
+				}
 				if runErr == nil && (i < 2 || !tc.drop) {
 					t.Fatalf("commit %d unexpectedly succeeded", i+1)
 				}

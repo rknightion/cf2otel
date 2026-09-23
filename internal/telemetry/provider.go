@@ -109,8 +109,11 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 	lx = observedLogExporter{Exporter: lx, hook: hook}
 	tx = observedTraceExporter{SpanExporter: tx, hook: hook}
 	mp := sdkmetric.NewMeterProvider(sdkmetric.WithResource(res), sdkmetric.WithReader(sdkmetric.NewPeriodicReader(mx, sdkmetric.WithInterval(o.Interval))))
-	lp := sdklog.NewLoggerProvider(sdklog.WithResource(res), sdklog.WithProcessor(sdklog.NewBatchProcessor(lx)))
-	tp := sdktrace.NewTracerProvider(sdktrace.WithResource(res), sdktrace.WithBatcher(tx))
+	// The log SDK's batch queue drops records on overflow without reporting the
+	// loss through ForceFlush. A window checkpoint therefore needs synchronous
+	// log export. Trace batching can retain backpressure instead of dropping.
+	lp := sdklog.NewLoggerProvider(sdklog.WithResource(res), sdklog.WithProcessor(sdklog.NewSimpleProcessor(lx)))
+	tp := sdktrace.NewTracerProvider(sdktrace.WithResource(res), sdktrace.WithBatcher(tx, sdktrace.WithBlocking()))
 	return &Providers{Emitter: NewEmitter(mp.Meter(semconv.ServiceName), lp.Logger(semconv.ServiceName), tp.Tracer(semconv.ServiceName)), metrics: mp, logs: lp, traces: tp, hook: hook}, nil
 }
 func (p *Providers) SetExportObserver(fn func(context.Context, string, error)) {

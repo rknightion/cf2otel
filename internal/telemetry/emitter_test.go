@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type recordExporter struct{ records []sdklog.Record }
@@ -63,5 +65,19 @@ func TestSpanRejectsInvalidLogBeforeExport(t *testing.T) {
 	err := emitter.Span(context.Background(), SpanSpec{Name: "request", Start: end.Add(-time.Second), End: end, Logs: []LogRecord{{Name: "content"}}})
 	if !errors.Is(err, ErrMissingTimestamp) || len(spans.spans) != 0 || len(logs.records) != 0 {
 		t.Fatalf("invalid log emitted %d spans and %d logs: %v", len(spans.spans), len(logs.records), err)
+	}
+}
+
+func TestBufferCopiesLinkAttributes(t *testing.T) {
+	links := []trace.Link{{Attributes: []attribute.KeyValue{attribute.String("source", "before")}}}
+	start := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	buffer := &Buffer{}
+	if err := buffer.Span(context.Background(), SpanSpec{Name: "request", Start: start, End: start.Add(time.Second), Links: links}); err != nil {
+		t.Fatal(err)
+	}
+	links[0].Attributes[0] = attribute.String("source", "after")
+	got := buffer.Records[0].Span.Links[0].Attributes[0].Value.AsString()
+	if got != "before" {
+		t.Fatalf("buffered link attribute=%q, want before", got)
 	}
 }
