@@ -47,6 +47,8 @@ Tracker traps:
 - The Access REST log reaches back only about a day. A long outage loses data; nothing can backfill it.
 - Loki receives OTLP log attributes as structured metadata, not stream labels. Only `service_name`
   is a stream label, so query `{service_name="cf2otel"} | event_name="..."`.
+- Grafana Cloud Tempo on the m7kni stack stores span attribute values truncated at 2048 characters.
+  An attribute key present in Tempo proves nothing about its content length.
 
 <!-- BACKLOG.MD GUIDELINES START -->
 <!-- backlog.md-instructions-version: 1.50.1 -->
