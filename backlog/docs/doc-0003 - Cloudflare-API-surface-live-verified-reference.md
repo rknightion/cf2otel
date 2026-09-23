@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-09-23 12:12'
+updated_date: '2026-09-23 14:31'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -67,9 +67,9 @@ Retention / max window, as `notOlderThan` / `maxDuration`.
 | Surface | Notes |
 |---|---|
 | REST `GET /accounts/{a}/ai-gateway/gateways` | gateway list incl. `collect_logs`, log retention cap (`log_management`, e.g. 100000) and strategy (`DELETE_OLDEST`) |
-| REST `GET .../gateways/{g}/logs` | page-based (`page`, `per_page`, `result_info.total_count`), `order_by=created_at`, `order_by_direction=asc|desc`. Row fields: `id` (ULID), `created_at`, `event_id`, `provider`, `model`, `model_type`, `path`, `duration`, `request_type`, `status_code`, `success`, `cached`, `tokens_in`, `tokens_out`, `usage_metadata{input_tokens,output_tokens,total_tokens,output_reasoning_tokens,input_cached_tokens}`, `timings{total,latency}`, `location{region,colo}`, `cost`, `custom_cost`, `metadata`, `step`, `feedback`, `score`, `prompts`, `guardrails`, `authentication`, `wholesale`, `byok`, `user_agent`, `dlp_action`, `dlp_profiles`. `request`/`response` are **empty strings in the list** |
+| REST `GET .../gateways/{g}/logs` | page-based (`page`, `per_page`, `result_info.total_count`), `order_by=created_at`, `order_by_direction=asc\|desc`, `start_date`/`end_date` RFC3339. The live endpoint accepts `per_page=50` and rejects `per_page=100` with HTTP 400 code 7001 (2026-09-23). Row fields: `id` (ULID), `created_at`, `event_id`, `provider`, `model`, `model_type`, `path`, `duration`, `request_type`, `status_code`, `success`, `cached`, `tokens_in`, `tokens_out`, `usage_metadata{input_tokens,output_tokens,total_tokens,output_reasoning_tokens,input_cached_tokens}`, `timings{total,latency}`, `location{region,colo}`, `cost`, `custom_cost`, `metadata`, `step`, `feedback`, `score`, `prompts`, `guardrails`, `authentication`, `wholesale`, `byok`, `user_agent`, `dlp_action`, `dlp_profiles`. `request`/`response` are **empty strings in the list** |
 | REST `GET .../logs/{id}` | adds `request_head`, `response_head`, `*_head_complete`, `request_size`, `response_size`, `request_content_type` |
-| REST `GET .../logs/{id}/request`, `/response` | the full raw bodies (prompt / completion JSON). One extra call per body |
+| REST `GET .../logs/{id}/request`, `/response` | the full raw bodies (prompt / completion JSON), returned as raw JSON without the usual `result` envelope. One extra call per body |
 | GraphQL `aiGatewayRequestsAdaptiveGroups` | 62d / 32d. Dims `cached cost date datetime* durationMs error gateway model provider rateLimited statusCode tokensIn tokensOut userAgent wholesale metadata* prompts* ...`, `sum { cost tokensIn tokensOut }`. See trap 7 |
 | GraphQL `aiGatewayErrorsAdaptiveGroups`, `aiGatewayCacheAdaptiveGroups`, `aiGatewaySizeAdaptiveGroups` | 32d |
 

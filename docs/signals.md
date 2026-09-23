@@ -172,6 +172,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `cloudflare.ai_gateway.request.type` |
 | Attribute | `cloudflare.ai_gateway.response.body` |
 | Attribute | `cloudflare.ai_gateway.response.body_truncated` |
+| Attribute | `cloudflare.ai_gateway.response.body_unavailable` |
 | Attribute | `cloudflare.ai_gateway.response.head` |
 | Attribute | `cloudflare.ai_gateway.response.head_complete` |
 | Attribute | `cloudflare.ai_gateway.response.size` |

@@ -21,6 +21,7 @@ type fakeAPI struct {
 	calls                           []string
 	listQueries                     []url.Values
 	list, detail, request, response string
+	missingResponse                 bool
 }
 
 func (f *fakeAPI) Get(_ context.Context, path string, q url.Values, out any) error {
@@ -56,9 +57,33 @@ func (f *fakeAPI) GetRaw(_ context.Context, path string, _ url.Values, out any) 
 		return json.Unmarshal([]byte(f.request), out)
 	}
 	if strings.HasSuffix(path, "/response") {
+		if f.missingResponse {
+			return &cfapi.HTTPError{Status: 404, Code: 7002}
+		}
 		return json.Unmarshal([]byte(f.response), out)
 	}
 	return errors.New("unexpected raw path")
+}
+
+func TestMissingResponseBodyKeepsRequest(t *testing.T) {
+	api := &fakeAPI{
+		list:            `{"result":[{"id":"A","created_at":"2026-09-23T10:00:00Z","path":"chat/completions","duration":1}]}`,
+		detail:          `{}`,
+		request:         `{"messages":[{"role":"user","content":"fixture"}]}`,
+		missingResponse: true,
+	}
+	cfg := &config.Config{Cloudflare: config.CloudflareConfig{AccountID: "example"}, AIGateway: config.AIGatewayConfig{Gateways: []string{"gateway"}, CaptureBodies: true, MaxBodyBytes: 1024}}
+	out := &fakeEmitter{}
+	from := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	if _, err := NewLogs(cfg, api).CollectWindow(context.Background(), from, from.Add(time.Minute), out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.spans) != 1 || attr(out.spans[0].Attrs, semconv.AttrGenAIInputMessages) == "" || attr(out.spans[0].Attrs, semconv.AttrAIGatewayResponseBodyUnavailable) != "true" {
+		t.Fatal("request span or missing-body marker absent")
+	}
+	if len(out.spans[0].Events) != 1 || attr(out.spans[0].Events[0].Attrs, semconv.AttrAIGatewayResponseBodyUnavailable) != "true" {
+		t.Fatal("content event missing unavailable-body marker")
+	}
 }
 func (*fakeAPI) Query(context.Context, cfapi.GraphQLRequest, any) error { return errors.New("unused") }
 func (*fakeAPI) Accounts(context.Context) ([]cfapi.Account, error)      { return nil, errors.New("unused") }

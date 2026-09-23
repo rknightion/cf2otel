@@ -45,6 +45,10 @@ func TestRESTErrorDoesNotEchoResponseText(t *testing.T) {
 	if err == nil || strings.Contains(err.Error(), "token-private") || strings.Contains(err.Error(), "user-private") || !strings.Contains(err.Error(), "10000") {
 		t.Fatalf("REST error redaction: %v", err)
 	}
+	var httpErr *HTTPError
+	if !errors.As(err, &httpErr) || httpErr.Status != 403 || httpErr.Code != 10000 {
+		t.Fatalf("REST error type: %v", err)
+	}
 }
 func TestRawBodyEndpoint(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

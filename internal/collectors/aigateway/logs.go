@@ -268,6 +268,13 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 			for _, side := range []struct{ suffix, bodyKey, messageKey, truncatedKey string }{{"request", semconv.AttrAIGatewayRequestBody, semconv.AttrGenAIInputMessages, semconv.AttrAIGatewayRequestBodyTruncated}, {"response", semconv.AttrAIGatewayResponseBody, semconv.AttrGenAIOutputMessages, semconv.AttrAIGatewayResponseBodyTruncated}} {
 				var body json.RawMessage
 				if err := rawGetter.GetRaw(ctx, path+"/"+side.suffix, nil, &body); err != nil {
+					var httpErr *cfapi.HTTPError
+					if side.suffix == "response" && errors.As(err, &httpErr) && httpErr.Status == 404 && httpErr.Code == 7002 {
+						missing := telemetry.Attr{Key: semconv.AttrAIGatewayResponseBodyUnavailable, Value: "true"}
+						attrs = append(attrs, missing)
+						contentAttrs = append(contentAttrs, missing)
+						continue
+					}
 					return fmt.Errorf("aigateway %s body: %w", side.suffix, err)
 				}
 				capped, truncated := capBody(body, c.cfg.AIGateway.MaxBodyBytes)

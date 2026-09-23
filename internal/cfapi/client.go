@@ -23,6 +23,17 @@ var identifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 // Observer receives one event per HTTP attempt. Implementations must use bounded labels.
 type Observer func(method, route string, status int, duration time.Duration, retry bool)
 
+// HTTPError retains only the response status and numeric Cloudflare error code.
+// Response messages may contain private request data and are never included.
+type HTTPError struct{ Status, Code int }
+
+func (e *HTTPError) Error() string {
+	if e.Code != 0 {
+		return fmt.Sprintf("cloudflare HTTP %d: code %d", e.Status, e.Code)
+	}
+	return fmt.Sprintf("cloudflare HTTP %d: request failed", e.Status)
+}
+
 type HTTPClient struct {
 	base     string
 	token    string
@@ -122,22 +133,28 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, query url.Valu
 			continue
 		}
 		if status < 200 || status >= 300 {
-			return nil, fmt.Errorf("cloudflare HTTP %d: %s", status, safeError(raw))
+			return nil, &HTTPError{Status: status, Code: errorCode(raw)}
 		}
 		return raw, nil
 	}
 	return nil, errors.New("cloudflare retries exhausted")
 }
 func safeError(raw []byte) string {
+	if code := errorCode(raw); code != 0 {
+		return fmt.Sprintf("code %d", code)
+	}
+	return "request failed"
+}
+func errorCode(raw []byte) int {
 	var v struct {
 		Errors []struct {
 			Code int `json:"code"`
 		} `json:"errors"`
 	}
 	if json.Unmarshal(raw, &v) == nil && len(v.Errors) > 0 {
-		return fmt.Sprintf("code %d", v.Errors[0].Code)
+		return v.Errors[0].Code
 	}
-	return "request failed"
+	return 0
 }
 func (c *HTTPClient) Get(ctx context.Context, path string, query url.Values, out any) error {
 	raw, err := c.do(ctx, http.MethodGet, path, query, nil)
