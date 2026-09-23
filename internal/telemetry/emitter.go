@@ -26,12 +26,20 @@ type SpanEvent struct {
 	At    time.Time
 	Attrs []Attr
 }
+type LogRecord struct {
+	Name     string
+	Body     string
+	At       time.Time
+	Severity otellog.Severity
+	Attrs    []Attr
+}
 type SpanSpec struct {
 	Name       string
 	Start, End time.Time
 	Kind       trace.SpanKind
 	Links      []trace.Link
 	Events     []SpanEvent
+	Logs       []LogRecord
 	Attrs      []Attr
 	Error      error
 }
@@ -141,7 +149,7 @@ func (e *otelEmitter) Span(ctx context.Context, s SpanSpec) error {
 		return errors.New("span end before start")
 	}
 	opts := []trace.SpanStartOption{trace.WithTimestamp(s.Start), trace.WithSpanKind(s.Kind), trace.WithAttributes(attrs(s.Attrs)...), trace.WithLinks(s.Links...)}
-	_, sp := e.tracer.Start(ctx, s.Name, opts...)
+	spanCtx, sp := e.tracer.Start(ctx, s.Name, opts...)
 	for _, ev := range s.Events {
 		if ev.At.IsZero() {
 			ev.At = s.Start
@@ -153,5 +161,10 @@ func (e *otelEmitter) Span(ctx context.Context, s SpanSpec) error {
 		sp.SetStatus(codes.Error, s.Error.Error())
 	}
 	sp.End(trace.WithTimestamp(s.End))
+	for _, record := range s.Logs {
+		if err := e.LogEvent(spanCtx, record.Name, record.Body, record.At, record.Severity, record.Attrs...); err != nil {
+			return err
+		}
+	}
 	return nil
 }

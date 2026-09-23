@@ -4,6 +4,7 @@ const (
 	EventAccessLogin             = "cloudflare.access.login"
 	EventAccessSCIM              = "cloudflare.access.scim_update"
 	MetricAccessLogins           = "cloudflare.access.logins"
+	MetricAccessIdentityLogins   = "cloudflare.access.identity_logins"
 	MetricAccessRequests         = "cloudflare.access.requests"
 	MetricAccessApps             = "cloudflare.access.apps"
 	MetricAccessUsers            = "cloudflare.access.users"
