@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-09-23 14:31'
+updated_date: '2026-09-23 19:54'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -24,10 +24,12 @@ per zone (`viewer.zones[].settings.<dataset>`) exposing:
 | `maxDuration` | widest single query window in seconds |
 | `maxPageSize` | largest `limit` |
 | `maxNumberOfFields` | most leaf fields one query may select (30 account-level, 70 zone-level observed) |
-| `availableFields` | the exact field paths this account/zone is entitled to |
+| `availableFields` | advertised field paths for the account/zone; verify disputed fields against the live query schema |
 
-**cf2otel must build every GraphQL selection from `availableFields` intersected with the fields it
-wants**, per zone. Entitlement is per field and per plan: the same query failed on the Pro zone
+**cf2otel builds GraphQL selections from `availableFields` intersected with the fields it
+wants**, per zone. On 2026-09-23 the firewall datasets advertised fields that their live query
+schema rejected, so the intersection is a necessary entitlement check but not sufficient proof of
+query validity. Entitlement is per field and per plan: the same query failed on the Pro zone
 (`does not have access to the field 'wafattackscoreclass'`) and on a Free zone (`... field 'ja4'`),
 and one unentitled field fails the **whole** query, not just that column.
 
@@ -58,8 +60,9 @@ Retention / max window, as `notOlderThan` / `maxDuration`.
 | `httpRequestsAdaptiveGroups` | 31d / 30d | aggregates for metrics |
 | `httpRequests1hGroups` | 7d Pro, 3d Free | rollup |
 | `httpRequests1mGroups` | Pro only, 1d | |
-| `firewallEventsAdaptive` | 31d / 30d, Free and Pro | raw security events (wave 2) |
-| `firewallEventsAdaptiveGroups` | Pro only, 3d | |
+| `firewallEventsAdaptive` | 31d / 30d, Free and Pro | raw security events (wave 2); `clientAsnDescription` is advertised in settings but rejected by the live query schema |
+| `firewallEventsAdaptiveGroups` | Pro only, 3d | `count` with `dimensions.action` and `dimensions.source` accepted in a live query |
+| `firewallEventsAdaptiveByTimeGroups` | Free fallback | `count` accepted; `dimensions.action` and `dimensions.source` rejected despite settings advertisement |
 | `dnsAnalyticsAdaptive` | 31d | raw DNS queries (wave 2) |
 
 ### AI Gateway (account)
@@ -69,7 +72,7 @@ Retention / max window, as `notOlderThan` / `maxDuration`.
 | REST `GET /accounts/{a}/ai-gateway/gateways` | gateway list incl. `collect_logs`, log retention cap (`log_management`, e.g. 100000) and strategy (`DELETE_OLDEST`) |
 | REST `GET .../gateways/{g}/logs` | page-based (`page`, `per_page`, `result_info.total_count`), `order_by=created_at`, `order_by_direction=asc\|desc`, `start_date`/`end_date` RFC3339. The live endpoint accepts `per_page=50` and rejects `per_page=100` with HTTP 400 code 7001 (2026-09-23). Row fields: `id` (ULID), `created_at`, `event_id`, `provider`, `model`, `model_type`, `path`, `duration`, `request_type`, `status_code`, `success`, `cached`, `tokens_in`, `tokens_out`, `usage_metadata{input_tokens,output_tokens,total_tokens,output_reasoning_tokens,input_cached_tokens}`, `timings{total,latency}`, `location{region,colo}`, `cost`, `custom_cost`, `metadata`, `step`, `feedback`, `score`, `prompts`, `guardrails`, `authentication`, `wholesale`, `byok`, `user_agent`, `dlp_action`, `dlp_profiles`. `request`/`response` are **empty strings in the list** |
 | REST `GET .../logs/{id}` | adds `request_head`, `response_head`, `*_head_complete`, `request_size`, `response_size`, `request_content_type` |
-| REST `GET .../logs/{id}/request`, `/response` | the full raw bodies (prompt / completion JSON), returned as raw JSON without the usual `result` envelope. One extra call per body |
+| REST `GET .../logs/{id}/request`, `/response` | the full raw bodies (prompt / completion JSON), returned as raw JSON without the usual `result` envelope. One extra call per body. Either body endpoint can return HTTP 404 code 7002 for a listed log; preserve the log and mark that side unavailable |
 | GraphQL `aiGatewayRequestsAdaptiveGroups` | 62d / 32d. Dims `cached cost date datetime* durationMs error gateway model provider rateLimited statusCode tokensIn tokensOut userAgent wholesale metadata* prompts* ...`, `sum { cost tokensIn tokensOut }`. See trap 7 |
 | GraphQL `aiGatewayErrorsAdaptiveGroups`, `aiGatewayCacheAdaptiveGroups`, `aiGatewaySizeAdaptiveGroups` | 32d |
 

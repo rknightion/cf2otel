@@ -31,7 +31,7 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cloudflare.http.requests` | Request count from sample-corrected `httpRequestsAdaptiveGroups`. |
 | `cloudflare.http.origin.duration` | Average origin response duration per Groups window, in seconds. |
 | `cloudflare.audit.events` | Exact audit event count by resource product, action type and action result. |
-| `cloudflare.firewall.events` | Security event count from a Groups dataset by available zone, action and source dimensions. |
+| `cloudflare.firewall.events` | Security event count from a Groups dataset by zone. Pro Groups provides action and source dimensions; Free ByTimeGroups rejects them despite `settings.availableFields` advertising them. |
 | `cloudflare.ai_gateway.requests` | AI Gateway request count. |
 | `cloudflare.ai_gateway.errors` | AI Gateway error count. |
 | `cloudflare.ai_gateway.cache_hits` | AI Gateway cache hits. |
@@ -191,6 +191,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `cloudflare.ai_gateway.provider` |
 | Attribute | `cloudflare.ai_gateway.request.body` |
 | Attribute | `cloudflare.ai_gateway.request.body_truncated` |
+| Attribute | `cloudflare.ai_gateway.request.body_unavailable` |
 | Attribute | `cloudflare.ai_gateway.request.content_type` |
 | Attribute | `cloudflare.ai_gateway.request.head` |
 | Attribute | `cloudflare.ai_gateway.request.head_complete` |

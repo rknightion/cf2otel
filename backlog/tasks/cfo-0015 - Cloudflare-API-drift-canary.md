@@ -4,7 +4,7 @@ title: Cloudflare API drift canary
 status: Parked
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-23 15:14'
+updated_date: '2026-09-23 20:20'
 labels:
   - 'wave:1'
   - ci
@@ -23,7 +23,7 @@ Scheduled workflow reading KV secret/rknightion/cf2otel (role rknightion-cf2otel
 <!-- AC:BEGIN -->
 - [ ] #1 Workflow runs green on main on schedule and on dispatch
 - [x] #2 A deliberate contract edit makes it fail with a readable diff
-- [ ] #3 The token never appears in logs or artefacts
+- [x] #3 The token never appears in logs or artefacts
 <!-- AC:END -->
 
 ## Definition of Done
@@ -37,4 +37,6 @@ Scheduled workflow reading KV secret/rknightion/cf2otel (role rknightion-cf2otel
 
 <!-- SECTION:NOTES:BEGIN -->
 Parked AC1/3: dispatch run 35867543195 succeeded and drift unit test detects changed contract, but no scheduled invocation has occurred. Credential absence from every log/artefact was not established as an exhaustive proof. Resume at first scheduled run and inspect redacted logs/artifacts.
+
+Wave 2 exhaustive download check: runs 35863371244, 35865194472, 35865604985, 35867543195 and 35893111445 each published zero artifacts; each downloaded log has zero occurrences of both schema-probe and runtime token bytes. AC1 still awaits first scheduled run at 06:17 UTC.
 <!-- SECTION:NOTES:END -->

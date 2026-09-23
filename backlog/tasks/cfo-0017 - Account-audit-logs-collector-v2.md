@@ -1,9 +1,10 @@
 ---
 id: CFO-0017
 title: Account audit logs collector (v2)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-23 10:04'
+updated_date: '2026-09-23 21:14'
 labels:
   - 'wave:2'
   - audit
@@ -21,12 +22,28 @@ ordinal: 17000
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 Parity with doc-0004 audit section
-- [ ] #2 Live verification on the m7kni stack
+- [x] #2 Live verification on the m7kni stack
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
-- [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
-- [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
+- [x] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
+- [x] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
+- [x] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 2: implement cursor-paginated audit v2 collector and verify records live.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Audit v2 cursor pagination and boundary dedupe verified by focused tests, just check and just ci at a3fa01b. Live audit event and metric observations are being reconciled for AC2.
+
+Live discrepancy at v0.2.2: audit.logs checkpoint reached 17:36:09Z. A fresh read-only source census for 2026-09-23 10:00-17:59Z found 293,241,261,112,16,87,205,256 IDs per hour; matching Loki rows were 147,0,261,0,0,0,0,0. A 15:08:55Z source ID is absent from a 30h Loki query despite the checkpoint passing its window; a collector-equivalent 14:36:08-15:36:09Z source query now returns that ID among 26 rows. Cause may be late provider availability or a collector query/flush issue; not established. AC1 parity and AC2 live completeness remain open. No checkpoint rewind is authorised by goal section 5.
+
+Correction after validating Loki structured-metadata filtering: the earlier event_name-only query undercounted. With {service_name="cf2otel"} | event_name="cloudflare.audit.event" | cloudflare_audit_id=~".+", 2026-09-23 10-17 UTC source/Loki hourly counts are 293/293, 241/241, 261/261, 112/0, 16/8, 87/0, 205/69, 256/0. An exact 15:08:55 UTC source ID remains absent from a wide Loki search despite a checkpoint past its window. Live m7kni stack observation is 538 audit log rows in a six-hour query and 31 cloudflare_audit_events_total series over ten hours. AC2 confirms signal presence only; AC1 parity stays open. No checkpoint rewind was authorised.
+<!-- SECTION:NOTES:END -->

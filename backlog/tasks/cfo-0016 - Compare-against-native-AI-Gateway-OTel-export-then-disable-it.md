@@ -4,7 +4,7 @@ title: 'Compare against native AI Gateway OTel export, then disable it'
 status: Parked
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-23 15:14'
+updated_date: '2026-09-23 21:21'
 labels:
   - 'wave:1'
   - aigw
@@ -37,4 +37,10 @@ Decision 2026-09-23 (Rob): after the first deployment, compare cf2otel's GenAI o
 
 <!-- SECTION:NOTES:BEGIN -->
 Parked AC2/3: 62 matched native/cf2otel requests carried all eight native attribute keys; model suffix and numeric cost agree. The native gateway still has one OTel export entry. Cutover was withheld because prior partial AI Gateway windows produced duplicates and W16 no-duplicate acceptance failed. No Cloudflare write was made; fix delivery atomicity and reverify before disabling.
+
+Wave 2 P7 at v0.2.3, 2026-09-23 17:00-19:15 UTC: native 17 spans, cf2otel 14, 14 strict pairs with all eight native keys present. New-cutover gate needs 20 pairs plus P1/P2; P1 currently has only 13/16 exact-ID Tempo spans. Gateway OTel export remains enabled and no Cloudflare write was made.
+
+Correction: the P1 three-span gap was a Tempo TraceQL search false negative. Direct trace readback finds 16/16 exact source-ID spans. The P7 search table still has only 14 strict pairs and the P2 gate is pending, so cutover remains withheld.
+
+P7 direct-trace correction: Tempo search missed four correlated cf2otel traces. Adding their exact Loki content-log trace IDs and verifying each through direct Tempo trace readback gives 17 native, 18 cf2otel spans and 17 strict pairs in 17:00-19:15 UTC, with all eight native keys present on all 17 pairs. Still below the 20-pair cutover threshold; no gateway write.
 <!-- SECTION:NOTES:END -->
