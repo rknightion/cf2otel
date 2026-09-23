@@ -123,7 +123,14 @@ func Default() Config {
 	c.Collectors["aigateway.metrics"] = metrics
 	audit := c.Collectors["audit.logs"]
 	audit.InitialLookback = 24 * time.Hour
+	// Registration lands with the audit lane; keep the stub unscheduled until then.
+	audit.Enabled = false
 	c.Collectors["audit.logs"] = audit
+	for _, name := range []string{"firewall.events", "firewall.metrics"} {
+		stub := c.Collectors[name]
+		stub.Enabled = false
+		c.Collectors[name] = stub
+	}
 	return c
 }
 func (c Config) Collector(name string) CollectorConfig { return c.Collectors[name] }

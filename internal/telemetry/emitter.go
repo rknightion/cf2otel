@@ -148,6 +148,11 @@ func (e *otelEmitter) Span(ctx context.Context, s SpanSpec) error {
 	if s.End.Before(s.Start) {
 		return errors.New("span end before start")
 	}
+	for _, record := range s.Logs {
+		if record.At.IsZero() {
+			return ErrMissingTimestamp
+		}
+	}
 	opts := []trace.SpanStartOption{trace.WithTimestamp(s.Start), trace.WithSpanKind(s.Kind), trace.WithAttributes(attrs(s.Attrs)...), trace.WithLinks(s.Links...)}
 	spanCtx, sp := e.tracer.Start(ctx, s.Name, opts...)
 	for _, ev := range s.Events {

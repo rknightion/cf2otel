@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -48,5 +49,19 @@ func TestSpanLogRecordSharesSpanContext(t *testing.T) {
 	spanContext := spans.spans[0].SpanContext()
 	if logs.records[0].TraceID() != spanContext.TraceID() || logs.records[0].SpanID() != spanContext.SpanID() {
 		t.Fatal("content log lost its parent span context")
+	}
+}
+
+func TestSpanRejectsInvalidLogBeforeExport(t *testing.T) {
+	logs := &recordExporter{}
+	spans := &spanExporter{}
+	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(logs)))
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(sdktrace.NewSimpleSpanProcessor(spans)))
+	t.Cleanup(func() { _ = lp.Shutdown(context.Background()); _ = tp.Shutdown(context.Background()) })
+	emitter := NewEmitter(nil, lp.Logger("test"), tp.Tracer("test"))
+	end := time.Now()
+	err := emitter.Span(context.Background(), SpanSpec{Name: "request", Start: end.Add(-time.Second), End: end, Logs: []LogRecord{{Name: "content"}}})
+	if !errors.Is(err, ErrMissingTimestamp) || len(spans.spans) != 0 || len(logs.records) != 0 {
+		t.Fatalf("invalid log emitted %d spans and %d logs: %v", len(spans.spans), len(logs.records), err)
 	}
 }
