@@ -119,10 +119,9 @@ func validFields(fields []string) bool {
 // formats scope IDs, response values, tokens or Cloudflare error bodies.
 func probe(ctx context.Context, api probeAPI, c contract) []string {
 	var diffs []string
-	accounts, err := api.Accounts(ctx)
-	if err != nil {
-		return []string{"account discovery failed"}
-	}
+	// Schema-only tokens may read zones but be denied account listing. A zone's
+	// account.id supplies the same scope identifier without widening token access.
+	accounts, _ := api.Accounts(ctx)
 	zones, err := api.Zones(ctx)
 	if err != nil {
 		return []string{"zone discovery failed"}

@@ -65,8 +65,9 @@ jobs:
       - name: Copy the generated dashboard into place
         run: |
           set -euo pipefail
-          mkdir -p gitsync/cf2otel
-          cp dashboards/cf2otel.json gitsync/cf2otel/cf2otel.json
+          mkdir -p gitsync/grafana/cf2otel
+          cp dashboards/cf2otel.json gitsync/grafana/cf2otel/cf2otel.json
+          cp grafana/cf2otel-folder.json gitsync/grafana/cf2otel/_folder.json
 
       - name: Commit and push
         id: push
@@ -77,13 +78,18 @@ jobs:
           set -euo pipefail
           trap 'git remote set-url origin https://github.com/m7kni/gc-gitsync-m7kni.git' EXIT
           git remote set-url origin "https://x-access-token:${GITSYNC_TOKEN}@github.com/m7kni/gc-gitsync-m7kni.git"
-          git add cf2otel/cf2otel.json
+          git add -- grafana/cf2otel/cf2otel.json grafana/cf2otel/_folder.json
+          paths=(grafana/cf2otel/cf2otel.json grafana/cf2otel/_folder.json)
+          if [ -f cf2otel/cf2otel.json ] && cmp -s cf2otel/cf2otel.json grafana/cf2otel/cf2otel.json; then
+            git rm -- cf2otel/cf2otel.json
+            paths+=(cf2otel/cf2otel.json)
+          fi
           if git diff --cached --quiet; then
             echo "dashboard already matches the stack source"
           else
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git commit -m "Sync cf2otel dashboard from ${GITHUB_REPOSITORY}@${GITHUB_SHA}"
+            git commit -m "Sync cf2otel dashboard from ${GITHUB_REPOSITORY}@${GITHUB_SHA}" -- "${paths[@]}"
             for attempt in 1 2 3; do
               if git push; then
                 break
@@ -97,7 +103,7 @@ jobs:
             done
           fi
           echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "blob=$(git rev-parse HEAD:cf2otel/cf2otel.json)" >> "$GITHUB_OUTPUT"
+          echo "blob=$(git rev-parse HEAD:grafana/cf2otel/cf2otel.json)" >> "$GITHUB_OUTPUT"
 
       - name: Install gcx
         run: |
@@ -139,9 +145,10 @@ jobs:
           GITSYNC_FOLDER_TITLE: cf2otel
         run: |
           set -euo pipefail
+          for attempt in {1..12}; do
           gcx resources get repositories folders \
             --context "$GRAFANA_CONTEXT" --limit 0 -o json > gitsync-resources.json
-          python3 - <<'PY'
+          if python3 - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -177,7 +184,15 @@ jobs:
               print(f"manager_id={manager_id}", file=output)
               print(f"folder_uid={folder_uid}", file=output)
           PY
+          then
+            rm -f gitsync-resources.json
+            exit 0
+          fi
+          echo "waiting for the GitSync folder (attempt ${attempt}/12)"
+          sleep 5
+          done
           rm -f gitsync-resources.json
+          exit 1
 
       - name: Verify Grafana applied the dashboard
         env:

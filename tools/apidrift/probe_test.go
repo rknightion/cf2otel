@@ -19,6 +19,9 @@ func (f fakeAPI) Accounts(context.Context) ([]cfapi.Account, error) {
 	if f.broken == "empty-accounts" {
 		return nil, nil
 	}
+	if f.broken == "account-error" {
+		return nil, errors.New("account listing not permitted")
+	}
 	return []cfapi.Account{{ID: "secret-account-id"}}, nil
 }
 func (f fakeAPI) Zones(context.Context) ([]cfapi.Zone, error) {
@@ -84,6 +87,9 @@ func TestProbeMatchesAndReportsSanitizedDrift(t *testing.T) {
 	}
 	if diffs := probe(context.Background(), fakeAPI{contract: c, broken: "empty-accounts"}, c); len(diffs) != 0 {
 		t.Fatalf("zone-derived account failed: %v", diffs)
+	}
+	if diffs := probe(context.Background(), fakeAPI{contract: c, broken: "account-error"}, c); len(diffs) != 0 {
+		t.Fatalf("zone-derived account after listing error failed: %v", diffs)
 	}
 }
 
