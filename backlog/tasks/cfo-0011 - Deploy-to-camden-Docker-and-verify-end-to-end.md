@@ -4,7 +4,7 @@ title: Deploy to camden (Docker) and verify end to end
 status: Parked
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-23 21:23'
+updated_date: '2026-09-23 22:51'
 labels:
   - 'wave:1'
   - deploy
@@ -39,4 +39,6 @@ deploy/docker-compose.yaml reference plus the live deployment: compose project u
 Parked AC2/3: v0.1.3 on Camden is healthy with six checkpoints and live HTTP/AI Gateway/Mimir/Tempo signals, but Access login and SCIM source rows were absent in the live window. Earlier failed AI Gateway windows produced 153 duplicate Loki rows; no gap/no-duplicate restart proof exists. Native export remains on.
 
 Wave 2 v0.2.3 restart proof: AI Gateway REST source 16 IDs in 18:08:34-19:08:35 UTC; Loki has each exactly once and direct Tempo trace readback finds one matching span for each. Fifty cloudflare.http.request Loki rows in that window have zero populated cloudflare.http.ray_id attributes because rayName was unavailable in the selected GraphQL source fields. The required HTTP duplicate-ray check has no inputs, so AC3 stays open. Access SCIM source rows were zero; AC2 stays open by contract.
+
+Additional P6 source check after v0.2.3 deploy: Access SCIM updates REST query for 2026-09-23 21:40-21:45 UTC returned zero source rows. CFO-0011 AC2 remains open by the wave 2 contract; this is absent input, not proof of delivery.
 <!-- SECTION:NOTES:END -->

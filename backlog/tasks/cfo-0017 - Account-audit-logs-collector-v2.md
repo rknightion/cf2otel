@@ -1,10 +1,10 @@
 ---
 id: CFO-0017
 title: Account audit logs collector (v2)
-status: In Progress
+status: Parked
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-23 21:14'
+updated_date: '2026-09-23 22:53'
 labels:
   - 'wave:2'
   - audit
@@ -46,4 +46,8 @@ Audit v2 cursor pagination and boundary dedupe verified by focused tests, just c
 Live discrepancy at v0.2.2: audit.logs checkpoint reached 17:36:09Z. A fresh read-only source census for 2026-09-23 10:00-17:59Z found 293,241,261,112,16,87,205,256 IDs per hour; matching Loki rows were 147,0,261,0,0,0,0,0. A 15:08:55Z source ID is absent from a 30h Loki query despite the checkpoint passing its window; a collector-equivalent 14:36:08-15:36:09Z source query now returns that ID among 26 rows. Cause may be late provider availability or a collector query/flush issue; not established. AC1 parity and AC2 live completeness remain open. No checkpoint rewind is authorised by goal section 5.
 
 Correction after validating Loki structured-metadata filtering: the earlier event_name-only query undercounted. With {service_name="cf2otel"} | event_name="cloudflare.audit.event" | cloudflare_audit_id=~".+", 2026-09-23 10-17 UTC source/Loki hourly counts are 293/293, 241/241, 261/261, 112/0, 16/8, 87/0, 205/69, 256/0. An exact 15:08:55 UTC source ID remains absent from a wide Loki search despite a checkpoint past its window. Live m7kni stack observation is 538 audit log rows in a six-hour query and 31 cloudflare_audit_events_total series over ten hours. AC2 confirms signal presence only; AC1 parity stays open. No checkpoint rewind was authorised.
+
+Read-only gap probe on 2026-09-23: the missing 15:08:55 UTC source event is now returned by both a 15:00-16:00 UTC query and a narrow 15:04:59-15:10:00 UTC query (one matching ID in one page for each). This rules out a present-day narrow-window filter mismatch for that ID, but does not establish when it first became available. The collector checkpoint had already passed it and Loki still lacked it; possible delayed source visibility remains unproven. Do not rewind the live checkpoint under wave 2 authority. AC1 remains open pending a safe replay and source-lag investigation.
+
+Wave 2 park boundary: source/Loki hourly parity was 293/293, 241/241, 261/261, 112/0, 16/8, 87/0, 205/69, 256/0 for 10:00-18:00 UTC on 2026-09-23. One exact source event at 15:08:55 UTC is absent in Loki after the checkpoint passed it. Resume by investigating source visibility lag and implementing a safe overlap/replay strategy with dedupe, then prove parity in a fresh live window. Current checkpoint must not be rewound ad hoc.
 <!-- SECTION:NOTES:END -->
