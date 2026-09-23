@@ -1,0 +1,24 @@
+name: Release assets
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing release tag to rebuild, e.g. v0.1.0"
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  binaries:
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write # attaches binaries and SBOMs to the release
+      id-token: write # obtains keyless signing credentials
+      packages: write # supports reusable release tooling package access
+      attestations: write # publishes provenance attestations
+    uses: rknightion/.github/.github/workflows/binaries.yml@4d749e93fb2ba8ae3d213c21686bc7ac204bb928 # v1.23.0
+    with:
+      release-tag: ${{ inputs.release_tag }}
+      install-cosign: true
+      goreleaser-args: "release --clean --skip=docker"
+      pre-cmd: "go install github.com/anchore/syft/cmd/syft@v1.42.3"

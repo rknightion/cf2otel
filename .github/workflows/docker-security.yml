@@ -1,0 +1,74 @@
+name: Docker Security
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '33 5 * * 2'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: docker-security-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  hadolint:
+    name: hadolint
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read # required by the hardening action
+      contents: read # scans the repository Dockerfiles
+      security-events: write # uploads hadolint SARIF
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          recursive: true
+          format: sarif
+          output-file: hadolint.sarif
+          no-fail: true
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hadolint-sarif
+          path: hadolint.sarif
+          retention-days: 5
+      - if: always()
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: hadolint.sarif
+          category: hadolint
+  trivy:
+    name: trivy filesystem scan
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read # required by the hardening action
+      contents: read # scans the repository filesystem
+      security-events: write # uploads Trivy SARIF
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scanners: vuln,misconfig,secret
+          format: sarif
+          output: trivy.sarif
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-sarif
+          path: trivy.sarif
+          retention-days: 5
+      - if: always()
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-fs

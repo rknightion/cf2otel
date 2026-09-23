@@ -1,0 +1,80 @@
+# Automatic release candidates. On every push to main that passes CI, cut
+# vX.Y.Z-rc.N against the version release-please is already staging in its open
+# release PR, then publish the image, chart and binaries for it.
+#
+# The stable release path (release-please.yml) is untouched: it still opens and
+# maintains the release PR, and a stable release still requires an explicit
+# merge. The RC path never writes to the changelog or the release PR.
+name: auto-rc
+
+# Fires off CI's completion rather than the push itself. The old `push:` trigger
+# started this workflow immediately and then burned a runner slot in
+# `rc / wait-for-ci` polling for a CI run still queued behind it — 20.6
+# runner-hours of pure polling fleet-wide, and 5 of 17 in-flight jobs at one
+# sample. workflow_run fires only once CI has a verdict.
+#
+# `workflows:` matches the workflow's `name:` field, NOT its filename. If that
+# name changes this silently stops firing and RCs stop being cut, with no error.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never cancel a half-published RC; serialize instead.
+  group: auto-rc
+  cancel-in-progress: false
+
+jobs:
+  rc:
+    # workflow_run fires for FAILED and cancelled runs too, so the conclusion
+    # check is what actually gates the RC on green CI.
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: write      # create the RC tag and the GitHub prerelease
+      pull-requests: read  # find the open release-please PR
+      checks: read         # poll ci-success for this commit
+    uses: rknightion/.github/.github/workflows/auto-rc.yml@4d749e93fb2ba8ae3d213c21686bc7ac204bb928 # v1.23.0
+    with:
+      # Under workflow_run, github.sha is the DEFAULT BRANCH HEAD, not the
+      # commit CI ran on — it races ahead on rapid pushes. head_sha is the
+      # commit the triggering run actually tested.
+      sha: ${{ github.event.workflow_run.head_sha }}
+      image-ref: ghcr.io/rknightion/cf2otel
+
+  # Same image + chart path a stable release takes, just with an RC tag.
+  # container-publish suppresses `latest` for any tag containing '-', so an RC
+  # can never steal Latest from a stable release.
+  publish:
+    needs: rc
+    if: needs.rc.outputs.tag != ''
+    permissions:
+      contents: write        # attach SBOMs + notices to the RC release
+      packages: write        # push the image and chart to GHCR
+      id-token: write        # cosign keyless signing
+      attestations: write    # SLSA build provenance
+      security-events: write # Trivy SARIF upload
+    uses: ./.github/workflows/publish.yml
+    with:
+      release_tag: ${{ needs.rc.outputs.tag }}
+
+  # goreleaser-args and pre-cmd are copied verbatim from this repo's own
+  # release-please.yml binaries job.
+  binaries:
+    needs: rc
+    if: needs.rc.outputs.tag != ''
+    permissions:
+      contents: write     # upload binaries + checksums to the RC release
+      id-token: write     # cosign keyless signing
+      packages: write     # goreleaser reads the registry for existing artifacts
+      attestations: write # SLSA build provenance on the archives
+    uses: rknightion/.github/.github/workflows/binaries.yml@4d749e93fb2ba8ae3d213c21686bc7ac204bb928 # v1.23.0
+    with:
+      release-tag: ${{ needs.rc.outputs.tag }}
+      install-cosign: true
+      goreleaser-args: "release --clean --skip=docker"
+      pre-cmd: "go install github.com/anchore/syft/cmd/syft@v1.42.3"

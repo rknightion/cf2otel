@@ -1,0 +1,11 @@
+name: Dependency review
+on:
+  pull_request:
+    branches: [main]
+permissions: {}
+jobs:
+  dependency-review:
+    permissions:
+      contents: read # compares dependency changes in the pull request
+      pull-requests: write # posts the dependency review summary
+    uses: rknightion/.github/.github/workflows/dependency-review.yml@4d749e93fb2ba8ae3d213c21686bc7ac204bb928 # v1.23.0

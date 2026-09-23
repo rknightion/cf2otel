@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Product-specific additions to the central CodeRabbit defaults.
+# Keep inheritance enabled; shared review policy lives in the owner/coderabbit repository.
+inheritance: true
+reviews:
+  path_filters:
+  - '!dashboards/**'
+  - '!alerts/**'
+  - '!spec/**/*.json'
+  path_instructions:
+  - path: internal/**/*.go
+    instructions: >-
+      cf2otel is a read-only poller of the Cloudflare REST and GraphQL APIs. Flag any
+      non-GET REST call other than the GraphQL POST, any cursor that can skip or
+      double-count a window, any GraphQL query that could exceed the dataset's
+      maxDuration, maxPageSize or maxNumberOfFields, and any attribute that turns a
+      high-cardinality value (IP, email, path, ray ID) into a metric attribute.
+      Secrets (Cloudflare token, OTLP token) must never reach a log line, a span
+      attribute or the effective-config dump.
+knowledge_base:
+  linked_repositories:
+  - repository: m7kni/m7kni-net-site
+    instructions: >-
+      Documentation hub. This repository dispatches documentation changes to the hub,
+      which builds m7kni.io/cf2otel.

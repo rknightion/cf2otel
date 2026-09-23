@@ -1,0 +1,72 @@
+name: Release
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+jobs:
+  release-please:
+    name: prepare or publish release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # updates release branches, tags and GitHub releases
+      pull-requests: write # opens and maintains the release pull request
+      id-token: write # exchanges OIDC for the scoped release token
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - id: bao
+        uses: rknightion/.github/.github/actions/broker-token@bc58399e49a8d8131a379f530fffe8c9659667f9 # role input + token-mask hardening
+        with:
+          permission-set: release-please-cf2otel
+          role: release-please-cf2otel
+          tailscale-client-id: ${{ secrets.TS_WIF_CLIENT_ID }}
+          tailscale-audience: ${{ secrets.TS_WIF_AUDIENCE }}
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+        with:
+          token: ${{ steps.bao.outputs.token }}
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/publish.yml
+    permissions:
+      actions: read # permits reusable workflow metadata access
+      contents: write # publishes release metadata
+      packages: write # pushes the release image and chart
+      id-token: write # obtains keyless signing credentials
+      attestations: write # publishes provenance attestations
+      security-events: write # uploads container scan results
+    with:
+      release_tag: ${{ needs.release-please.outputs.tag_name }}
+  edge:
+    needs: release-please
+    if: needs.release-please.outputs.release_created != 'true'
+    uses: ./.github/workflows/publish.yml
+    permissions:
+      actions: read # permits reusable workflow metadata access
+      contents: write # publishes edge metadata
+      packages: write # pushes the edge image and chart
+      id-token: write # obtains keyless signing credentials
+      attestations: write # publishes provenance attestations
+      security-events: write # uploads container scan results
+    with:
+      release_tag: ""
+  binaries:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: write # attaches binaries and SBOMs to the release
+      id-token: write # obtains keyless signing credentials
+      packages: write # supports reusable release tooling package access
+      attestations: write # publishes provenance attestations
+    uses: rknightion/.github/.github/workflows/binaries.yml@4d749e93fb2ba8ae3d213c21686bc7ac204bb928 # v1.23.0
+    with:
+      release-tag: ${{ needs.release-please.outputs.tag_name }}
+      install-cosign: true
+      goreleaser-args: "release --clean --skip=docker"
+      pre-cmd: "go install github.com/anchore/syft/cmd/syft@v1.42.3"
