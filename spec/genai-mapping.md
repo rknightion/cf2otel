@@ -1,0 +1,72 @@
+# AI Gateway to OpenTelemetry GenAI mapping
+
+Frozen for CFO-0007 on 2026-09-23. Source: [OpenTelemetry GenAI semantic conventions, commit `8ffdf568e1b4391a99adb081db16e8102e36918e`](https://github.com/open-telemetry/semantic-conventions-genai/tree/8ffdf568e1b4391a99adb081db16e8102e36918e), specifically [inference spans](https://github.com/open-telemetry/semantic-conventions-genai/blob/8ffdf568e1b4391a99adb081db16e8102e36918e/docs/gen-ai/gen-ai-spans.md), [events](https://github.com/open-telemetry/semantic-conventions-genai/blob/8ffdf568e1b4391a99adb081db16e8102e36918e/docs/gen-ai/gen-ai-events.md), [duration metric](https://github.com/open-telemetry/semantic-conventions-genai/blob/8ffdf568e1b4391a99adb081db16e8102e36918e/docs/gen-ai/gen-ai-metrics.md), [inference token metrics](https://github.com/open-telemetry/semantic-conventions-genai/blob/8ffdf568e1b4391a99adb081db16e8102e36918e/docs/gen-ai/gen-ai-token-metrics.md), and [attribute registry](https://github.com/open-telemetry/semantic-conventions-genai/blob/8ffdf568e1b4391a99adb081db16e8102e36918e/docs/registry/attributes/gen-ai.md). The dedicated GenAI repository had no published release or tag when checked, so the exact commit is the version. These conventions are Development status. The upstream base referenced by those pages is core semantic conventions `v1.44.0`.
+
+## Signal contract
+
+One Cloudflare AI Gateway REST log row yields one OTLP log and one synthetic historical inference span. Timestamp the log at `created_at`, and set span end to `created_at` and start to `end - duration` (duration is milliseconds; reject invalid or negative values). This placement is an inference because the REST contract does not define whether `created_at` is request start or completion. Use span kind `CLIENT`, name `{gen_ai.operation.name} {gen_ai.request.model}` when the model is present, otherwise just the operation. The Cloudflare gateway is a proxy for the client's provider call; `gen_ai.provider.name` describes the provider known from the row, while `cloudflare.ai_gateway.gateway.name` identifies the gateway. `service.name=cf2otel` is a resource attribute.
+
+Operation mapping: path ending `/chat/completions` -> `chat`; `/completions` -> `text_completion`; `/embeddings` -> `embeddings`; `/responses` -> `generate_content` only when it actually generates content; known multimodal generate-content paths -> `generate_content`. Unknown paths -> `cloudflare.ai_gateway.operation` with a bounded `other` value and `gen_ai.operation.name=other`; retain the raw path only on the log/span. Never infer an operation from `model_type` alone. Provider slugs use upstream values where known: `openai`, `anthropic`, `cohere`, `deepseek`, `groq`, `perplexity`, `aws.bedrock`, `azure.ai.openai`, `gcp.gemini`, `gcp.vertex_ai`, `mistral_ai`, `x_ai`. Map Cloudflare `google-ai-studio` to `gcp.gemini`, `google-vertex-ai` to `gcp.vertex_ai`, `azure-openai` to `azure.ai.openai`, `aws-bedrock` to `aws.bedrock`, `mistral` to `mistral_ai`, `xai` to `x_ai`. Unknown slugs remain the lowercased slug as a custom provider value; do not claim Cloudflare itself is the model provider. Preserve original slug in `cloudflare.ai_gateway.provider`.
+
+`gen_ai.usage.input_tokens` includes cached input tokens; `gen_ai.usage.output_tokens` includes reasoning output tokens. `usage_metadata.input_cached_tokens` maps to `gen_ai.usage.cache_read.input_tokens`; `usage_metadata.output_reasoning_tokens` maps to `gen_ai.usage.reasoning.output_tokens`. A Gateway cache hit (`cached`) is distinct from provider-managed input token caching. Do not infer a token cache count from that boolean. Use `usage_metadata` totals preferentially and fall back to `tokens_in`/`tokens_out`; never add both or add cached/reasoning subsets to totals. `usage_metadata.total_tokens` is a consistency check, retained as a Cloudflare attribute if present.
+
+Cost is Gateway-reported and has no cost attribute in the frozen upstream GenAI registry. Emit `cloudflare.ai_gateway.cost` and `cloudflare.ai_gateway.custom_cost` as reported, with a documented currency/unit only after verifying Cloudflare's API contract. Also emit the observed native `gen_ai.usage.cost` as a **legacy compatibility attribute** from `cost` so the replacement span remains a strict superset; do not describe it as current upstream semconv. Never sum `cost` and `custom_cost` without proving their relationship.
+
+### REST field inventory
+
+Every field below is from doc-0003 §2. "Log" means an OTLP log attribute; span means the same named attribute on the GenAI span. High-cardinality and opaque values are never metric dimensions. Null or absent source values produce no attribute.
+
+| REST field | Disposition |
+| --- | --- |
+| `id` (ULID) | `cloudflare.ai_gateway.log.id` on log/span; dedupe key, never a metric dimension. |
+| `created_at` | Log timestamp and inferred span end; `cloudflare.ai_gateway.created_at` on log for audit. |
+| `event_id` | `cloudflare.ai_gateway.event.id` on log/span when present; do not assume it is a trace or conversation ID. |
+| `provider` | `gen_ai.provider.name` after mapping; raw slug in `cloudflare.ai_gateway.provider`. |
+| `model` | `gen_ai.request.model` and metric model dimension, if present. Do not invent `gen_ai.response.model`. |
+| `model_type` | `cloudflare.ai_gateway.model.type` on log/span; bounded metric dimension only after proving enum values. |
+| `path` | `cloudflare.ai_gateway.path` on log/span, operation mapping input; never a metric dimension. |
+| `duration` | Span duration and `gen_ai.client.operation.duration` histogram, converted ms to seconds; `cloudflare.ai_gateway.duration_ms` on log. |
+| `request_type` | `cloudflare.ai_gateway.request.type` on log/span; bounded metric dimension after enum verification. |
+| `status_code` | `cloudflare.ai_gateway.status_code` on log/span; `error.type` as status code string for an error; only status *class* as metric dimension. |
+| `success` | `cloudflare.ai_gateway.success` on log/span; controls error counter, never overrides explicit error status evidence. |
+| `cached` | `cloudflare.ai_gateway.cached` on log/span and cache-hit counter; not provider token cache usage. |
+| `tokens_in`, `tokens_out` | Fallback for `gen_ai.usage.input_tokens` and `.output_tokens`; token metrics as below. |
+| `usage_metadata.input_tokens`, `.output_tokens` | Preferred `gen_ai.usage.input_tokens` and `.output_tokens`; token metrics as below. |
+| `usage_metadata.total_tokens` | `cloudflare.ai_gateway.usage.total_tokens` on log/span; consistency check, not an extra token metric. |
+| `usage_metadata.output_reasoning_tokens` | `gen_ai.usage.reasoning.output_tokens`; reasoning subset counter when present. |
+| `usage_metadata.input_cached_tokens` | `gen_ai.usage.cache_read.input_tokens`; cache-read subset counter when present. |
+| `timings.total`, `timings.latency` | `cloudflare.ai_gateway.timings.total_ms`, `.latency_ms` on log/span; do not assume either is first-token latency. |
+| `location.region`, `.colo` | `cloudflare.ai_gateway.location.region`, `.colo` on log/span; bounded region/colo may be metric dimensions after normalization. |
+| `cost`, `custom_cost` | `cloudflare.ai_gateway.cost`, `.custom_cost`; cost metric as below; `cost` also legacy native `gen_ai.usage.cost`. |
+| `metadata` | `cloudflare.ai_gateway.metadata` on log/span only after redaction and size cap; never metric dimensions. Treat user-supplied keys and values as potentially sensitive. |
+| `step` | `cloudflare.ai_gateway.step` on log/span; retry/step interpretation unverified, so no retry metric inferred. |
+| `feedback`, `score` | `cloudflare.ai_gateway.feedback`, `.score` on log/span if scalar and safe; opaque objects are redacted and capped, not metric dimensions. |
+| `prompts` | `cloudflare.ai_gateway.prompts` on log/span only under body-content opt-in and cap; never a metric dimension. Do not equate this field with the request body without shape proof. |
+| `guardrails` | `cloudflare.ai_gateway.guardrails` on log/span after redaction and cap; no standard GenAI field asserted. |
+| `authentication` | Deliberately drop the value: may contain credential material. Log `cloudflare.ai_gateway.authentication.present` boolean only. |
+| `wholesale`, `byok` | `cloudflare.ai_gateway.wholesale`, `.byok` booleans on log/span; bounded metric dimensions if needed. Never emit a BYOK key. |
+| `user_agent` | `cloudflare.ai_gateway.user_agent` on log/span only, size capped; never a metric dimension. |
+| `dlp_action`, `dlp_profiles` | `cloudflare.ai_gateway.dlp.action` and `.profiles` on log/span; profiles redacted/capped and never metric dimensions. |
+| `request`, `response` in list | Deliberately ignore empty strings; they are not evidence of absent content. |
+| `request_head`, `response_head` in detail | `cloudflare.ai_gateway.request.head`, `.response.head` only under content opt-in and cap; parse `traceparent` from request head for a **link** to caller context, never overwrite historical span parent. Do not export auth/cookie headers. |
+| `request_head_complete`, `response_head_complete` | `cloudflare.ai_gateway.request.head_complete`, `.response.head_complete` booleans on log/span. |
+| `request_size`, `response_size` | `cloudflare.ai_gateway.request.size`, `.response.size` on log/span; no body fetch implied. |
+| `request_content_type` | `cloudflare.ai_gateway.request.content_type` on log/span; use to decide whether a body can be parsed as structured GenAI messages. |
+| `/logs/{id}/request`, `/response` bodies | Opt-in `gen_ai.input.messages` and `gen_ai.output.messages` only when successfully parsed into upstream message schema; otherwise keep truncated raw content in `cloudflare.ai_gateway.request.body` / `.response.body` on the content event, with explicit truncation flag. Never emit body bytes to cf2otel's own logger. |
+| Gateway list `collect_logs`, `log_management` retention cap/strategy | Gateway inventory/configuration log under `cloudflare.ai_gateway.*`, not per-request span/metric dimensions; they do not describe a model call. |
+
+### Metrics
+
+Emit `gen_ai.client.operation.duration` histogram in seconds per completed row. The frozen upstream GenAI repository defines **cumulative** `gen_ai.client.inference.usage.input_tokens`, `.output_tokens`, `.cache_read.input_tokens`, `.reasoning.output_tokens` counters (unit `{token}`), and per-operation token histograms `gen_ai.client.inference.operation.input_tokens` and `.output_tokens`; emit counters for observed nonnegative counts, and histograms when per-call distribution is useful. The wave goal also names `gen_ai.client.token.usage`; retain this older semconv histogram as a compatibility instrument only if W7 can keep its `gen_ai.token.type=input|output` and unit `{token}` contract, and document its legacy status. Never add cached/reasoning subsets to total token series. Emit `cloudflare.ai_gateway.requests` counter, `.errors` counter, `.cache_hits` counter, and `.cost` additive counter from the verified row values; `custom_cost` gets its own series if used. The cost unit must be verified before labeling a currency. Record each REST row once so window retries do not double count.
+
+Metric dimensions are limited to `gen_ai.operation.name`, mapped `gen_ai.provider.name`, configured gateway name, requested model, status class, and bounded booleans/enums. No ID, path, user agent, metadata, prompt, IP, or content in metric dimensions. `error.type` is a bounded status code string on the duration metric for failed operations.
+
+### Content, events, and native coverage
+
+`ai_gateway.capture_bodies=false` by default. When true, fetch detail/bodies only with the `AI Gateway Read` permission, cap each body at `max_body_bytes` **before** parsing or export, and mark `cloudflare.ai_gateway.request.body_truncated` / `.response.body_truncated`. Reject or redact secrets in request/response headers and sensitive metadata. Convert recognized request/response JSON to upstream ordered message arrays (`role`, `parts`, typed `text`/tool parts) and emit the opt-in `gen_ai.client.inference.operation.details` event with `gen_ai.input.messages` and `gen_ai.output.messages` in structured form. If event transport cannot carry structured values, span attributes may carry JSON encoded upstream message arrays, as the upstream span convention permits. Unknown body shapes stay Cloudflare-prefixed on the opt-in event; they must not be mislabeled as valid GenAI messages. The content event should carry trace context of the generated span. No content in metrics, normal diagnostic logs, or stdout.
+
+Native `cf.aig.request` attributes from doc-0003 §4 and replacement: `gen_ai.operation.name` (derived path), `gen_ai.request.model` (row model), `gen_ai.provider.name` (mapped provider), `gen_ai.usage.input_tokens` / `.output_tokens` (preferred metadata or fallback counters), `gen_ai.input.messages` / `.output.messages` (opt-in parsed bodies), `gen_ai.usage.cost` (legacy compatibility copy of row `cost`). The native span has no parent; cf2otel may add a caller **link** from a valid `traceparent`. Opt-in content must be enabled during the native comparison or this strict-superset claim is not proven. If Cloudflare's native raw JSON cannot be represented in upstream message shape, record a coverage gap before disabling native export.
+
+## Unverified assumptions for W7 and the live comparison
+
+The REST response does not yet establish `created_at` timestamp semantics, cost currency or whether `custom_cost` supersedes `cost`; retain raw values and verify before claiming these semantics. `timings` units and `step` meaning need live shape checks. Provider aliases beyond the explicit table need observed slugs. The SDK/event path must prove structured content and links in exported OTLP, not just compile. W7 owns implementation and `internal/semconv/genai.go`; this document declares the mapping, not code constants.

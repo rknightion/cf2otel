@@ -1,9 +1,11 @@
 ---
 id: CFO-0007
 title: Research and freeze current OTel GenAI semantic conventions for AI Gateway
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@codex'
 created_date: '2026-09-23 10:04'
+updated_date: '2026-09-23 11:40'
 labels:
   - 'wave:1'
   - aigw
@@ -32,3 +34,15 @@ Use the otel-semantic-conventions skill and live upstream sources (not memory): 
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Pin current upstream GenAI semantic conventions to an exact commit, map every doc-0003 AI Gateway field and native span attribute, then commit the reviewed mapping after W0.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+W1 general subagent returned spec/genai-mapping.md. Field inventory: 48 Cloudflare fields and all 8 native attributes mapped; upstream commit 8ffdf568e1b4391a99adb081db16e8102e36918e. Pending commit and W7 implementation validation.
+<!-- SECTION:NOTES:END -->
