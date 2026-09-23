@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/rknightion/cf2otel/compare/v0.1.2...v0.1.3) (2026-09-23)
+
+
+### Bug Fixes
+
+* retain AI Gateway spans when response body is absent ([10a1758](https://github.com/rknightion/cf2otel/commit/10a1758aca6858d2a7ef8c0afa943868e9c81724))
+
 ## [0.1.2](https://github.com/rknightion/cf2otel/compare/v0.1.1...v0.1.2) (2026-09-23)
 
 
