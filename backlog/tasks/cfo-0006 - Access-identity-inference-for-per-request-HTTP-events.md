@@ -4,7 +4,7 @@ title: Access identity inference for per-request HTTP events
 status: Done
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-23 15:12'
+updated_date: '2026-09-23 22:11'
 labels:
   - 'wave:1'
   - http
@@ -38,6 +38,8 @@ Join HTTP events to Access identity logins on client IP + host + time window. De
 
 <!-- SECTION:NOTES:BEGIN -->
 Join ambiguity, expiry and disabled-mode tests passed in exact CI 35875578089. Live Mimir has matched, unmatched and ambiguous identity metric families.
+
+Wave 2 P4 live inference after v0.2.3 restore: 21:40-21:45 UTC Access source had 34 identity rays and matching Loki login rows; 129 cloudflare.http.request Loki rows carried cloudflare.access.identity.inferred=true. Inference remains explicitly flagged.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

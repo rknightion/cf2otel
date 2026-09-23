@@ -4,7 +4,7 @@ title: Atomic window delivery with flush-gated checkpoints
 status: In Progress
 assignee: []
 created_date: '2026-09-23 16:15'
-updated_date: '2026-09-23 21:22'
+updated_date: '2026-09-23 22:09'
 labels:
   - 'wave:2'
   - collector
@@ -50,4 +50,6 @@ Wave 2 implementation verified at a3fa01b: buffered collector windows, flush-gat
 Wave 2 P1 at v0.2.3, 18:08:34-19:08:35 UTC restart window: source 16 IDs, Loki 16 rows, each ID once and no extras; exact-ID Tempo search finds 13 spans and misses three 19:00-19:01 UTC requests. HTTP request rows exist but their Loki metadata lacks ray IDs, so the duplicate-ray check has no inputs. AC4 remains open; P2 fault window began 21:09:23 UTC with pre-state captured and a bounded restore script.
 
 Correction: direct trace readback through correlated Loki content trace IDs proves all 16/16 P1 source IDs have exactly one Tempo span; the earlier 13/16 was a Tempo search false negative. The 16/16 Loki count remains. P1 HTTP ray-ID duplicate check is unproven because 50 HTTP rows carried no ray ID metadata in this window. P2 remains in progress; AC4 stays open pending its result.
+
+P2 live fault window 2026-09-23 21:09:23-22:08:52 UTC on v0.2.3: one AI Gateway source log ID arrived. Container stayed running, aigateway.logs emitted retryable OTLP export failure logs, and its checkpoint stayed at 19:29:29Z. Original config restored byte-identically (sha256 72e4676eecaca2a001f4254d42022b8f6aa7c78f8d3cca8fa0a9fe8c8a912f70, mode/owner 600 65532:65532), restarted healthy. Post-restore checkpoint catch-up and exactly-once Loki/Tempo proof are pending; AC4 remains open until those counts and the HTTP ray-ID boundary are resolved.
 <!-- SECTION:NOTES:END -->
