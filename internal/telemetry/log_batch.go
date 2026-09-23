@@ -52,9 +52,9 @@ func (b *boundedLogExporter) run() {
 }
 
 func estimatedLogBytes(r *sdklog.Record) int {
-	n := len(r.Body().Emit()) + 256
+	n := len(r.Body().String()) + 256
 	r.WalkAttributes(func(a attribute.KeyValue) bool {
-		n += len(a.Key) + len(a.Value.Emit())
+		n += len(a.Key) + len(a.Value.String())
 		return true
 	})
 	return n
