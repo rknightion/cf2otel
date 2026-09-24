@@ -247,8 +247,8 @@ func TestGraphQLFieldChunksJoinByKey(t *testing.T) {
 }
 
 func TestAvailableFieldsFlattenedNames(t *testing.T) {
-	got := intersect([]string{"dimensions.allowed", "sum.logins", "datetime"}, []string{"dimensions_allowed", "sum_logins"})
-	if len(got) != 2 || got[0] != "dimensions.allowed" || got[1] != "sum.logins" {
+	got := intersect([]string{"dimensions.allowed", "sum.logins", "quantiles.largestContentfulPaintP75", "datetime"}, []string{"dimensions_allowed", "sum_logins", "quantiles_largestContentfulPaintP75"})
+	if len(got) != 3 || got[0] != "dimensions.allowed" || got[1] != "sum.logins" || got[2] != "quantiles.largestContentfulPaintP75" {
 		t.Fatalf("got %v", got)
 	}
 }
@@ -301,8 +301,8 @@ func TestCursorPagination(t *testing.T) {
 }
 
 func TestEmptyWantedUsesAvailableFields(t *testing.T) {
-	got := intersect(nil, []string{"dimensions_allowed", "sum_logins", "count"})
-	if len(got) != 3 || got[0] != "dimensions.allowed" || got[1] != "sum.logins" {
+	got := intersect(nil, []string{"dimensions_allowed", "sum_logins", "quantiles_largestContentfulPaintP75", "count"})
+	if len(got) != 4 || got[0] != "dimensions.allowed" || got[1] != "sum.logins" || got[2] != "quantiles.largestContentfulPaintP75" {
 		t.Fatalf("got %v", got)
 	}
 }

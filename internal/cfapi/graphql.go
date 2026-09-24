@@ -163,7 +163,7 @@ func intersect(wanted, available []string) []string {
 	set := map[string]bool{}
 	for _, f := range available {
 		set[strings.ToLower(f)] = true
-		for _, prefix := range []string{"dimensions_", "sum_", "avg_", "uniq_"} {
+		for _, prefix := range []string{"dimensions_", "sum_", "avg_", "uniq_", "quantiles_"} {
 			if strings.HasPrefix(f, prefix) {
 				set[strings.ToLower(strings.TrimSuffix(prefix, "_")+"."+strings.TrimPrefix(f, prefix))] = true
 			}
@@ -497,7 +497,7 @@ func mergeJSON(left, right json.RawMessage) (json.RawMessage, error) {
 }
 
 func normalField(field string) string {
-	for _, prefix := range []string{"dimensions_", "sum_", "avg_", "uniq_"} {
+	for _, prefix := range []string{"dimensions_", "sum_", "avg_", "uniq_", "quantiles_"} {
 		if strings.HasPrefix(field, prefix) {
 			return strings.TrimSuffix(prefix, "_") + "." + strings.TrimPrefix(field, prefix)
 		}
