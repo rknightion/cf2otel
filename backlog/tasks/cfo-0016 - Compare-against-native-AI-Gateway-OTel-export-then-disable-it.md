@@ -4,7 +4,7 @@ title: 'Compare against native AI Gateway OTel export, then disable it'
 status: Parked
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-23 23:01'
+updated_date: '2026-09-24 07:24'
 labels:
   - 'wave:1'
   - aigw
@@ -47,4 +47,6 @@ P7 direct-trace correction: Tempo search missed four correlated cf2otel traces. 
 Wave 2 expanded P7 on v0.2.3 after checkpoint 21:14:29Z: Tempo native query {resource.service.name="ai-gateway" && name="cf.aig.request"} and cf2otel query {resource.service.name="cf2otel" && span.gen_ai.operation.name="chat"}, 2026-09-23 17:00-21:00 UTC. Direct trace readback added correlated traces missed by search. Native 22 spans, cf2otel 25 spans, 21 strict pairs matched by end time within 2 s, model suffix and exact input/output token counts; all eight native attribute keys present on all 21. Cutover count gate passes. P1 HTTP ray-ID duplicate proof remains unproven because observed rows carry no ray ID, and P2 exporter-failure replay is pending; therefore AC2/3 remain parked and no Cloudflare write occurred.
 
 Wave 2 final cutover gate: P2 full-exporter-outage replay passed at checkpoint 22:14:29Z with one source ID, one Loki request row and one exact Tempo span; P7 has 21 strict native/cf2otel pairs. P1 AI Gateway restart proof passed 16/16, but the required HTTP duplicate-ray check has no input because all 50 observed HTTP rows lack populated cloudflare.http.ray_id. Thus P1 is partial, the P8 gate is not met, and no gateway PUT was attempted. Fresh read-only gateway GET still found one native OTel export entry. Resume after a restart window with populated HTTP ray IDs proves no duplicates; then recapture gateway and Workers destination pre-states before a single scoped cutover.
+
+Loop 3 P1h passed the composite-key HTTP restart proof and released cutover. Fresh Gateway pre-state and Workers destinations were captured privately. The scoped request removing the sole native OTel entry returned HTTP 400; the prepared rollback request also returned HTTP 400. Fresh GET exactly matched pre-state with one native entry, so no Gateway configuration changed; Workers destinations remained the same apart from independent job-status timestamps. AC2/3 stay parked. Resume requires a newly authorized corrected request body after inspecting the captured error response, with fresh pre-state and destination readback. No further PUT was sent under this run budget.
 <!-- SECTION:NOTES:END -->

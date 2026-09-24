@@ -1,11 +1,11 @@
 ---
 id: CFO-0021
 title: 'Zero Trust Gateway DNS, HTTP and network activity'
-status: In Progress
+status: Parked
 assignee:
   - '@rob'
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-24 07:09'
+updated_date: '2026-09-24 08:23'
 labels:
   - 'wave:2'
   - gateway
@@ -22,14 +22,14 @@ cf1GatewayDns/Http/Network*RawGroups and rollups, gatewayResolver*, gatewayL4/L7
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Check-then-branch: record whether the account has Gateway traffic before building
+- [x] #1 Check-then-branch: record whether the account has Gateway traffic before building
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
+- [x] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
-- [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
+- [x] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -42,4 +42,6 @@ Use the live Gateway DNS Groups branch; negotiate advertised fields, emit bounde
 
 <!-- SECTION:NOTES:BEGIN -->
 Prebuild source check: Gateway DNS Groups had traffic in both a recent two-hour window and an 89-day window. Gateway HTTP and network Groups returned zero rows in both windows. Queries used advertised sum fields and succeeded; no account identifiers or row payloads were retained in the tracker.
+
+Loop 3 check-then-branch: recent and 89-day Gateway DNS Groups had nonzero source rows; Gateway HTTP and network Groups had zero rows in both bounded windows. Implemented bounded DNS sum collector at 20e9981 and verified with exact-SHA just check, independent REV and CodeRabbit. Source is pushed but not in Camden v0.3.1, so no live m7kni Gateway DNS signal is claimed. HTTP/network branches remain unbuilt pending natural source traffic. Resume by releasing/deploying the pushed source, waiting for gateway.dns checkpoint, and querying m7kni for cloudflare_gateway_dns_queries_total; only then close the DNS branch. Recheck HTTP/network source activity before those collectors.
 <!-- SECTION:NOTES:END -->
