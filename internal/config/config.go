@@ -124,8 +124,8 @@ func Default() Config {
 	audit := c.Collectors["audit.logs"]
 	audit.InitialLookback = 24 * time.Hour
 	c.Collectors["audit.logs"] = audit
-	// Wave 3 seams are registered before their collector implementations land.
-	for _, name := range []string{"dns.events", "dns.metrics", "rum.pageloads", "rum.web_vitals"} {
+	// The RUM seam is registered before its collector implementation lands.
+	for _, name := range []string{"rum.pageloads", "rum.web_vitals"} {
 		entry := c.Collectors[name]
 		entry.Enabled = false
 		c.Collectors[name] = entry
