@@ -146,6 +146,35 @@ func TestDNSGroupsSumUsesHalfOpenRequestAndBoundedAttributes(t *testing.T) {
 	}
 }
 
+func TestGatewayDNSResolverDecisionValues(t *testing.T) {
+	cases := map[string]string{
+		"allowedOnNoRule":        "allow",
+		"allowedOnNoLocation":    "allow",
+		"allowedOnNoPolicyMatch": "allow",
+		"allowedRule":            "allow",
+		"4":                      "allow",
+		"5":                      "allow",
+		"10":                     "allow",
+		"blockedByCategory":      "block",
+		"blockedAlwaysCategory":  "block",
+		"blockedRule":            "block",
+		"3":                      "block",
+		"6":                      "block",
+		"9":                      "block",
+		"overrideRule":           "override",
+		"overrideApplied":        "override",
+		"8":                      "override",
+		"overrideForSafeSearch":  "safe_search",
+		"7":                      "safe_search",
+		"unrecognized":           gatewayDNSOther,
+	}
+	for input, want := range cases {
+		if got := boundedGatewayDNSDecision(input); got != want {
+			t.Errorf("decision %q mapped to %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestDNSGroupsSelectOnlyAdvertisedOptionalDimension(t *testing.T) {
 	from := time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC)
 	to := from.Add(time.Minute)

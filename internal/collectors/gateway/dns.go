@@ -283,17 +283,17 @@ func boundedGatewayDNSQueryType(value string) string {
 
 func boundedGatewayDNSDecision(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "allow", "allowed", "resolve", "resolved", "permit", "permitted":
+	case "allow", "allowed", "resolve", "resolved", "permit", "permitted", "allowedonnorule", "allowedonnolocation", "allowedonnopolicymatch", "allowedrule", "4", "5", "10":
 		return "allow"
-	case "block", "blocked", "deny", "denied":
+	case "block", "blocked", "deny", "denied", "blockedbycategory", "blockedalwayscategory", "blockedrule", "3", "6", "9":
 		return "block"
-	case "override", "overridden":
+	case "override", "overridden", "overriderule", "overrideapplied", "8":
 		return "override"
 	case "bypass", "bypassed":
 		return "bypass"
 	case "sinkhole", "sinkholed":
 		return "sinkhole"
-	case "safe_search", "safesearch":
+	case "safe_search", "safesearch", "overrideforsafesearch", "7":
 		return "safe_search"
 	case "isolate", "isolated":
 		return "isolate"
