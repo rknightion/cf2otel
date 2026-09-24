@@ -34,6 +34,7 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cloudflare.audit.events` | Exact audit event count by resource product, action type and action result. |
 | `cloudflare.firewall.events` | Security event count from a Groups dataset by zone. Pro Groups provides action and source dimensions; Free ByTimeGroups rejects them despite `settings.availableFields` advertising them. |
 | `cloudflare.dns.queries` | DNS query count from `dnsAnalyticsAdaptiveGroups` by zone and available bounded dimensions. |
+| `cloudflare.gateway.dns.queries` | Gateway DNS query sum from account-level `cf1GatewayDnsRawGroups`, by bounded query type, resolver decision and country. |
 | `cloudflare.rum.page_views` | Page views from `rumPageloadEventsAdaptiveGroups` by country and device. |
 | `cloudflare.rum.sessions` | Visit sum from `rumPageloadEventsAdaptiveGroups` by country and device. |
 | `cloudflare.rum.lcp.p75` | Rolling p75 largest contentful paint gauge, milliseconds inferred from GraphQL timing values. |
@@ -86,6 +87,7 @@ AI Gateway metrics combine Cloudflare request outcome measurements with GenAI du
 | Audit | `cloudflare.audit.*` attributes are listed individually below; actor email and IP are log only. |
 | Firewall | `cloudflare.firewall.*` attributes are listed individually below; IP, path, query, user agent and ray are log only. |
 | DNS | `cloudflare.dns.*` attributes are listed individually below; query name and IPs are log only. |
+| Gateway DNS | `cloudflare.gateway.dns.query.type`, `cloudflare.gateway.dns.decision`, `cloudflare.gateway.dns.country`; only bounded metric dimensions. |
 | RUM | `cloudflare.rum.country`, `cloudflare.rum.device_type`, `cloudflare.rum.site_tag`; gauges use device and optional site tag. |
 | Window delivery | `cf2otel.window.*` describes retention gaps and commit outcomes. |
 | Poller | `cf2otel.collector`, `cf2otel.version`, `cf2otel.commit`, `cf2otel.export.signal`, `cf2otel.build.version`, `cf2otel.build.commit` |
@@ -135,6 +137,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cloudflare.ai_gateway.requests` |
 | Metric | `cloudflare.audit.events` |
 | Metric | `cloudflare.dns.queries` |
+| Metric | `cloudflare.gateway.dns.queries` |
 | Metric | `cloudflare.firewall.events` |
 | Metric | `cloudflare.http.origin.duration` |
 | Metric | `cloudflare.http.requests` |
@@ -304,6 +307,9 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `cloudflare.http.status_code` |
 | Attribute | `cloudflare.http.user_agent` |
 | Attribute | `cloudflare.http.zone` |
+| Attribute | `cloudflare.gateway.dns.query.type` |
+| Attribute | `cloudflare.gateway.dns.decision` |
+| Attribute | `cloudflare.gateway.dns.country` |
 | Attribute | `cloudflare.rum.site_tag` |
 | Attribute | `cloudflare.rum.device_type` |
 | Attribute | `cloudflare.rum.country` |

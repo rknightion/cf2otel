@@ -124,9 +124,6 @@ func Default() Config {
 	metrics := c.Collectors["aigateway.metrics"]
 	metrics.Enabled = false
 	c.Collectors["aigateway.metrics"] = metrics
-	gatewayDNS := c.Collectors["gateway.dns"]
-	gatewayDNS.Enabled = false
-	c.Collectors["gateway.dns"] = gatewayDNS
 	audit := c.Collectors["audit.logs"]
 	audit.InitialLookback = 24 * time.Hour
 	c.Collectors["audit.logs"] = audit

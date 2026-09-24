@@ -2,5 +2,9 @@ package gateway
 
 import "github.com/rknightion/cf2otel/internal/collector"
 
-// Register is populated by the Gateway DNS collector after the seam lands.
-func Register(collector.Deps) {}
+// Register installs the Gateway DNS Groups collector when enabled.
+func Register(deps collector.Deps) {
+	if c := deps.Config.Collector("gateway.dns"); c.Enabled {
+		deps.Registry.RegisterWindow(NewDNSMetrics(deps.Config, deps.API), c.Interval, c.InitialLookback, c.MaxWindow)
+	}
+}
