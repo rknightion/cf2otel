@@ -143,9 +143,13 @@ func (c *dnsMetrics) CollectWindow(ctx context.Context, from, to time.Time, out 
 			}
 			for _, dimension := range selectedDimensions {
 				field := strings.TrimPrefix(dimension.field, "dimensions.")
-				value, ok := gatewayDNSDimension(dimensions[field])
+				raw, present := dimensions[field]
+				if !present {
+					return from, fmt.Errorf("gateway DNS Groups row is missing selected field %s", dimension.field)
+				}
+				value, ok := gatewayDNSDimension(raw)
 				if !ok {
-					return from, fmt.Errorf("gateway DNS Groups row has a missing or malformed selected field %s", dimension.field)
+					return from, fmt.Errorf("gateway DNS Groups row has a malformed selected field %s", dimension.field)
 				}
 				attrs = append(attrs, telemetry.Attr{Key: dimension.attribute, Value: dimension.bound(value)})
 			}
@@ -206,7 +210,7 @@ func gatewayDNSCount(value any) (float64, bool) {
 
 func gatewayDNSDimension(value any) (string, bool) {
 	if value == nil {
-		return "", false
+		return "", true
 	}
 	var text string
 	switch dimension := value.(type) {
@@ -235,7 +239,7 @@ func gatewayDNSDimension(value any) (string, bool) {
 		return "", false
 	}
 	text = strings.TrimSpace(text)
-	return text, text != ""
+	return text, true
 }
 
 func boundedGatewayDNSQueryType(value string) string {

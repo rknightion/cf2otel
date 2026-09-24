@@ -276,6 +276,32 @@ func TestDNSGroupsFailClosedOnMissingAccountSettingsOrRowFields(t *testing.T) {
 	}
 }
 
+func TestDNSGroupsPresentEmptyDimensionsUseBoundedFallbacks(t *testing.T) {
+	from := time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Minute)
+	row := gatewayRow(7, "A", "allow", "GB")
+	dimensions := row["dimensions"].(map[string]any)
+	dimensions["queryType"] = nil
+	dimensions["resolverDecision"] = "  "
+	dimensions["country"] = ""
+	api := &gatewayFakeAPI{settings: gatewaySettings(), rows: []map[string]any{row}}
+	out := &telemetry.Buffer{}
+	mark, err := NewDNSMetrics(gatewayConfig("synthetic-account"), api).CollectWindow(context.Background(), from, to, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !mark.Equal(to) || len(out.Metrics) != 1 || out.Metrics[0].Value != 7 {
+		t.Fatal("present empty dimensions lost the complete query sum")
+	}
+	attrs := map[string]string{}
+	for _, attr := range out.Metrics[0].Attrs {
+		attrs[attr.Key] = attr.Value
+	}
+	if attrs[semconv.AttrGatewayDNSQueryType] != gatewayDNSOther || attrs[semconv.AttrGatewayDNSDecision] != gatewayDNSOther || attrs[semconv.AttrGatewayDNSCountry] != gatewayDNSUnknownCountry {
+		t.Fatal("present empty dimensions were not normalized to bounded fallback labels")
+	}
+}
+
 func TestDNSGroupsBoundUnexpectedDimensionValuesAndIgnoreOtherFields(t *testing.T) {
 	from := time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC)
 	to := from.Add(time.Minute)
