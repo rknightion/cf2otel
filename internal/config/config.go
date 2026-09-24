@@ -124,6 +124,12 @@ func Default() Config {
 	audit := c.Collectors["audit.logs"]
 	audit.InitialLookback = 24 * time.Hour
 	c.Collectors["audit.logs"] = audit
+	// The DNS seam is registered before its collector implementation lands.
+	for _, name := range []string{"dns.events", "dns.metrics"} {
+		dns := c.Collectors[name]
+		dns.Enabled = false
+		c.Collectors[name] = dns
+	}
 	return c
 }
 func (c Config) Collector(name string) CollectorConfig { return c.Collectors[name] }
