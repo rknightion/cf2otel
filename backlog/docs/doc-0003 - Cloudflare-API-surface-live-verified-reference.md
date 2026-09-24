@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-09-23 19:54'
+updated_date: '2026-09-24 08:25'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -142,3 +142,9 @@ Cloudflare's own AI Gateway OTLP export sends one span per request, name `cf.aig
 It carries no cache, status, colo, latency breakdown, reasoning or cached-token split, metadata, DLP,
 guardrail, BYOK or retry (`step`) data, and cannot backfill. cf2otel's GenAI output must be a strict
 superset of it.
+
+## 7. Additional live observations on 2026-09-24
+
+- Gateway DNS: `cf1GatewayDnsRawGroups` and `cf1GatewayDns1dGroups` returned nonzero query sums; Gateway HTTP and network Groups returned zero rows in both a recent two-hour window and an 89-day window. The DNS Groups count is `sum.queries`; advertised optional dimensions include `queryType`, `resolverDecision` and `country`. The live account returned resolver decisions `allowedOnNoRule` and `overrideRule`; retain bounded handling for these observed values even though Cloudflare's published resolver-decision table uses a different set of names.
+- HTTP metrics: `httpRequestsAdaptiveGroups` was enabled with required count/host/status/cache fields on all 23 zones visible to the configured account. An optional `avg.originResponseDurationMs` value of `-1` occurred in live Groups rows. It is excluded from the origin-duration gauge while the row's request count is retained. Filter `/zones` results by the configured account before querying all-zone or explicitly selected metrics zones, since token-visible zone inventory can span accounts.
+- Audit v2: 369 fresh source events were first observed 167-450 seconds after their event time (median 289 seconds, p95 402 seconds). A two-minute collector holdback was therefore shorter than observed visibility lag. A ten-minute forward holdback is deployed without backfill or checkpoint rewind; the first complete post-fix UTC hour had 248 source IDs and 248 matching Loki IDs, with the second hour still pending.
