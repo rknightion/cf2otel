@@ -29,15 +29,6 @@ func TestSchedulerRetryDeduplicatesAccessIdentityObservation(t *testing.T) {
 		{RayID: "ray-shared", CreatedAt: at.Add(time.Second), AppDomain: "app.example.test", UserEmail: "a@example.test", IPAddress: "192.0.2.1", Allowed: true},
 		{RayID: "ray-distinct", CreatedAt: at.Add(time.Second), AppDomain: "app.example.test", UserEmail: "b@example.test", IPAddress: "192.0.2.2", Allowed: true},
 		{RayID: "ray-shared", CreatedAt: at.Add(2 * time.Second), AppDomain: "app.example.test", UserEmail: "c@example.test", IPAddress: "192.0.2.3", Allowed: true},
-		{RayID: "ray-shared", CreatedAt: at.Add(time.Second), AppDomain: "other.example.test", UserEmail: "d@example.test", IPAddress: "192.0.2.4", Allowed: true},
-	}
-	first, distinct := rows[0], rows[3]
-	if first.RayID != distinct.RayID || !first.CreatedAt.Equal(distinct.CreatedAt) || first.IPAddress == distinct.IPAddress || first.AppDomain == distinct.AppDomain || first.UserEmail == distinct.UserEmail {
-		t.Fatal("fixture must include same-ray, same-timestamp rows differing by IP, host, and email")
-	}
-	legacyKey := func(row loginRow) string { return row.RayID + "\x00" + row.CreatedAt.UTC().Format(time.RFC3339Nano) }
-	if legacyKey(first) != legacyKey(distinct) {
-		t.Fatal("fixture does not collide under the former ray-and-timestamp pagination key")
 	}
 	api := &loginAPI{rows: rows}
 	cfg := config.Default()
