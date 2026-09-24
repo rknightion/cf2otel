@@ -6,6 +6,7 @@ import (
 	"errors"
 	"math"
 	"net/url"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -277,6 +278,62 @@ func TestWebVitalsClearStaleSeriesBeforeEmittingCurrentValues(t *testing.T) {
 		if out.Metrics[i].Value != want || !hasRUMAttr(out.Metrics[i].Attrs, semconv.AttrRUMDeviceType, "mobile") {
 			t.Fatalf("current metric[%d] = %+v, want mobile value after stale clears", i, out.Metrics[i])
 		}
+	}
+}
+
+type vitalsFailSecondFlush struct{ calls int }
+
+func (f *vitalsFailSecondFlush) BeginCommit() uint64 { return uint64(f.calls) }
+func (f *vitalsFailSecondFlush) FlushCommit(context.Context, uint64) error {
+	f.calls++
+	if f.calls == 2 {
+		return errors.New("synthetic OTLP failure")
+	}
+	return nil
+}
+
+func TestWebVitalsRetryRepeatsStaleZeroAfterFailedFlush(t *testing.T) {
+	from := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	settings := rumSettings(30,
+		"dimensions_deviceType", "quantiles_largestContentfulPaintP75", "quantiles_interactionToNextPaintP75",
+		"quantiles_firstInputDelayP75", "quantiles_firstContentfulPaintP75", "quantiles_timeToFirstByteP75",
+		"quantiles_cumulativeLayoutShiftP75")
+	key := testAccountID + "/rumWebVitalsEventsAdaptiveGroups"
+	api := &fakeAPI{settings: map[string]cfapi.DatasetSettings{key: settings}, rows: map[string][]map[string]any{key: {vitalsRow("desktop", 1, 0.1)}}}
+	store, err := collector.NewFileStore(filepath.Join(t.TempDir(), "checkpoints.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	window := 5 * time.Minute
+	now := from.Add(window + rumLag)
+	out := &telemetry.Buffer{}
+	c := NewWebVitals(testConfig(), api)
+	entry := collector.Entry{Collector: c, Interval: window, InitialLookback: window, MaxWindow: window}
+	scheduler := collector.NewScheduler(collector.NewRegistry(), out, store)
+	scheduler.Now = func() time.Time { return now }
+	scheduler.Flusher = &vitalsFailSecondFlush{}
+	if err := scheduler.RunOnce(context.Background(), entry); err != nil {
+		t.Fatalf("initial desktop commit: %v", err)
+	}
+	now = now.Add(window)
+	api.rows[key] = []map[string]any{vitalsRow("mobile", 2, 0.2)}
+	if err := scheduler.RunOnce(context.Background(), entry); err == nil || err.Error() != "synthetic OTLP failure" {
+		t.Fatalf("second flush = %v, want synthetic failure", err)
+	}
+	if mark, _ := store.Get(c.Name()); !mark.Equal(from.Add(window)) {
+		t.Fatalf("checkpoint after failed flush = %s, want %s", mark, from.Add(window))
+	}
+	if err := scheduler.RunOnce(context.Background(), entry); err != nil {
+		t.Fatalf("retry flush: %v", err)
+	}
+	staleZeros := 0
+	for _, metric := range out.Metrics {
+		if metric.Kind == "gauge" && metric.Value == 0 && hasRUMAttr(metric.Attrs, semconv.AttrRUMDeviceType, "desktop") {
+			staleZeros++
+		}
+	}
+	if staleZeros != 6 {
+		t.Fatalf("desktop stale zeros after failed export and retry = %d, want 6", staleZeros)
 	}
 }
 

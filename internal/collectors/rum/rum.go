@@ -67,8 +67,10 @@ type pageloads struct{ base }
 
 type webVitals struct {
 	base
-	mu       sync.Mutex
-	previous map[vitalSeries]struct{}
+	mu        sync.Mutex
+	previous  map[vitalSeries]struct{}
+	pending   map[vitalSeries]struct{}
+	pendingTo time.Time
 }
 
 type pageloadSample struct {
@@ -259,15 +261,22 @@ func (c *webVitals) CollectWindow(ctx context.Context, from, to time.Time, out t
 		}
 	}
 
-	if err := c.emitReplacing(ctx, out, current); err != nil {
+	if err := c.emitReplacing(ctx, out, from, to, current); err != nil {
 		return from, err
 	}
 	return to, nil
 }
 
-func (c *webVitals) emitReplacing(ctx context.Context, out telemetry.Emitter, current map[vitalSeries]float64) error {
+func (c *webVitals) emitReplacing(ctx context.Context, out telemetry.Emitter, from, to time.Time, current map[vitalSeries]float64) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	// A later window is only scheduled after the preceding buffer was flushed
+	// and checkpointed. A retry of the same window must repeat stale zeros.
+	if !c.pendingTo.IsZero() && !from.Before(c.pendingTo) {
+		c.previous = c.pending
+		c.pending = nil
+		c.pendingTo = time.Time{}
+	}
 
 	stale := make([]vitalSeries, 0)
 	for series := range c.previous {
@@ -295,7 +304,8 @@ func (c *webVitals) emitReplacing(ctx context.Context, out telemetry.Emitter, cu
 	for series := range current {
 		updated[series] = struct{}{}
 	}
-	c.previous = updated
+	c.pending = updated
+	c.pendingTo = to
 	return nil
 }
 
