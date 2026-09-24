@@ -94,3 +94,77 @@ func TestPruneExpiresQuietIndex(t *testing.T) {
 		t.Fatal("quiet index retained expired identity")
 	}
 }
+
+func TestObserveDeduplicatesCompleteRowIdentity(t *testing.T) {
+	at := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name   string
+		mutate func(*Login)
+	}{
+		{"different IP", func(login *Login) { login.ClientIP = "192.0.2.2" }},
+		{"different host", func(login *Login) { login.Host = "other.example.com" }},
+		{"different email", func(login *Login) { login.UserEmail = "b@example.com" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			idx, err := New(10*time.Minute, 10)
+			if err != nil {
+				t.Fatal(err)
+			}
+			first := Login{ClientIP: "192.0.2.1", Host: "example.com", UserEmail: "a@example.com", RayID: "same-ray", At: at}
+			distinct := first
+			tc.mutate(&distinct)
+			idx.Observe(first)
+			idx.Observe(first)
+			idx.Observe(distinct)
+			if got := idx.Len(); got != 2 {
+				t.Fatalf("candidate count = %d, want duplicate collapsed and distinct row retained", got)
+			}
+			firstMatch := idx.Lookup(first.ClientIP, first.Host, at)
+			distinctMatch := idx.Lookup(distinct.ClientIP, distinct.Host, at)
+			if tc.name == "different email" {
+				if firstMatch != (Match{Ambiguous: true}) || distinctMatch != (Match{Ambiguous: true}) {
+					t.Fatalf("same-key distinct identities: first=%+v distinct=%+v, want both ambiguous", firstMatch, distinctMatch)
+				}
+				return
+			}
+			want := Match{UserEmail: "a@example.com", LoginRayID: "same-ray", Inferred: true}
+			if firstMatch != want || distinctMatch != want {
+				t.Fatalf("first=%+v distinct=%+v, want independently matchable rows %+v", firstMatch, distinctMatch, want)
+			}
+		})
+	}
+}
+
+func TestCapacityEvictionRetainsOnlyReplayMetadata(t *testing.T) {
+	idx, err := NewWithRetention(10*time.Minute, time.Hour, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
+	evicted := Login{ClientIP: "192.0.2.1", Host: "example.com", UserEmail: "a@example.com", RayID: "ray-a", At: at}
+	retained := Login{ClientIP: "192.0.2.2", Host: "example.com", UserEmail: "b@example.com", RayID: "ray-b", At: at.Add(time.Minute)}
+	idx.Observe(evicted)
+	idx.Observe(retained)
+	if idx.Len() != 1 {
+		t.Fatalf("candidate count after cap = %d, want 1", idx.Len())
+	}
+	for _, seen := range idx.seenOldest {
+		if _, retainsCandidate := any(seen).(*candidate); retainsCandidate {
+			t.Fatal("replay expiry heap retains a full candidate after capacity eviction")
+		}
+	}
+	idx.Observe(evicted)
+	if idx.Len() != 1 {
+		t.Fatalf("replaying an evicted row changed candidate count to %d, want 1", idx.Len())
+	}
+	if got := idx.Lookup(evicted.ClientIP, evicted.Host, retained.At); got != (Match{}) {
+		t.Fatalf("capacity-evicted row was reinserted: %+v", got)
+	}
+	if got := idx.Lookup(retained.ClientIP, retained.Host, retained.At); got != (Match{UserEmail: retained.UserEmail, LoginRayID: retained.RayID, Inferred: true}) {
+		t.Fatalf("retained row lookup = %+v", got)
+	}
+	idx.Prune(retained.At.Add(time.Hour + time.Second))
+	if len(idx.seenRows) != 0 || idx.seenOldest.Len() != 0 {
+		t.Fatalf("expired replay metadata retained %d row keys and %d expiry entries", len(idx.seenRows), idx.seenOldest.Len())
+	}
+}

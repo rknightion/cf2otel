@@ -60,7 +60,7 @@ func (c *logins) CollectWindow(ctx context.Context, from, to time.Time, out tele
 		return time.Time{}, fmt.Errorf("access logins: missing dependencies")
 	}
 	path := "/accounts/" + url.PathEscape(c.deps.Config.Cloudflare.AccountID) + "/access/logs/access_requests"
-	seen := make(map[string]struct{})
+	seen := make(map[loginRow]struct{})
 	var accepted []loginRow
 	for pageNum := 1; pageNum <= 10000; pageNum++ {
 		if err := ctx.Err(); err != nil {
@@ -88,11 +88,13 @@ func (c *logins) CollectWindow(ctx context.Context, from, to time.Time, out tele
 			if row.RayID == "" {
 				return time.Time{}, fmt.Errorf("access logins page %d: missing ray_id", pageNum)
 			}
-			key := row.RayID + "\x00" + row.CreatedAt.UTC().Format(time.RFC3339Nano)
-			if _, ok := seen[key]; ok {
+			// A ray can identify more than one row at the same timestamp.
+			// Compare the complete response row while paging, after normalizing time.
+			row.CreatedAt = row.CreatedAt.Round(0).UTC()
+			if _, ok := seen[row]; ok {
 				continue
 			}
-			seen[key] = struct{}{}
+			seen[row] = struct{}{}
 			fresh++
 			if row.CreatedAt.Before(from) || !row.CreatedAt.Before(to) {
 				continue
