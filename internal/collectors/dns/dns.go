@@ -296,6 +296,9 @@ func (b base) zones(ctx context.Context) ([]cfapi.Zone, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list DNS zones: %w", err)
 	}
+	if len(all) == 0 {
+		return nil, errors.New("DNS zone discovery returned no zones")
+	}
 	wanted := b.cfg.Cloudflare.Zones
 	if len(wanted) == 0 {
 		return all, nil

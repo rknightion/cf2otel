@@ -243,6 +243,30 @@ func TestMissingRequiredFieldsFailClosed(t *testing.T) {
 	}
 }
 
+func TestEmptyZoneDiscoveryDoesNotAdvanceDNS(t *testing.T) {
+	from := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Minute)
+	for _, tc := range []struct {
+		name    string
+		collect func(*config.Config, cfapi.Client) (time.Time, error)
+	}{
+		{"events", func(cfg *config.Config, api cfapi.Client) (time.Time, error) {
+			return NewEvents(cfg, api).CollectWindow(context.Background(), from, to, &telemetry.Buffer{})
+		}},
+		{"metrics", func(cfg *config.Config, api cfapi.Client) (time.Time, error) {
+			return NewMetrics(cfg, api).CollectWindow(context.Background(), from, to, &telemetry.Buffer{})
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := &fakeAPI{}
+			mark, err := tc.collect(&config.Config{}, api)
+			if err == nil || !mark.Equal(from) || len(api.queries) != 0 {
+				t.Fatalf("empty discovery: mark=%s error=%v queries=%d, want no checkpoint progress", mark, err, len(api.queries))
+			}
+		})
+	}
+}
+
 func hasDNSAttr(attrs []telemetry.Attr, key, value string) bool {
 	for _, attr := range attrs {
 		if attr.Key == key && attr.Value == value {
