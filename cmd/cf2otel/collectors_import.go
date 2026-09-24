@@ -5,6 +5,7 @@ import (
 	"github.com/rknightion/cf2otel/internal/collectors/access"
 	"github.com/rknightion/cf2otel/internal/collectors/aigateway"
 	"github.com/rknightion/cf2otel/internal/collectors/audit"
+	"github.com/rknightion/cf2otel/internal/collectors/dns"
 	"github.com/rknightion/cf2otel/internal/collectors/firewall"
 	"github.com/rknightion/cf2otel/internal/collectors/httpreq"
 	"github.com/rknightion/cf2otel/internal/collectors/inventory"
@@ -20,5 +21,6 @@ func registerCollectors(deps collector.Deps) {
 	aigateway.Register(deps)
 	audit.Register(deps)
 	firewall.Register(deps)
+	dns.Register(deps)
 	selfobs.Register(deps)
 }

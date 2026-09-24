@@ -109,7 +109,7 @@ type LogConfig struct {
 	Format string `yaml:"format" json:"format"`
 }
 
-var collectorNames = []string{"access.logins", "access.login_metrics", "access.scim", "inventory.access", "httpreq.events", "httpreq.metrics", "aigateway.logs", "aigateway.metrics", "audit.logs", "firewall.events", "firewall.metrics", "selfobs"}
+var collectorNames = []string{"access.logins", "access.login_metrics", "access.scim", "inventory.access", "httpreq.events", "httpreq.metrics", "aigateway.logs", "aigateway.metrics", "audit.logs", "firewall.events", "firewall.metrics", "dns.events", "dns.metrics", "selfobs"}
 
 func Default() Config {
 	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{Scope: "access_protected"}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
