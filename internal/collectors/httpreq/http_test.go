@@ -279,7 +279,6 @@ func TestMetricsAllScopeBroadensOnlyMetricsAndKeepsEventsScoped(t *testing.T) {
 	c.Cloudflare.Zones = []string{"one"}
 	c.Identity.Enabled = false
 	c.HTTP.MetricsScope = "all"
-	c.Cloudflare.AccountID = "account-fixture"
 	e := &fakeEmitter{}
 	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 	to := from.Add(2 * time.Hour)
@@ -322,7 +321,6 @@ func TestMetricsAllScopeLimitsDiscoveredZonesToConfiguredAccount(t *testing.T) {
 	c := config.Default()
 	c.Cloudflare.AccountID = "account-fixture"
 	c.HTTP.MetricsScope = "all"
-	c.Cloudflare.AccountID = "account-fixture"
 	e := &fakeEmitter{}
 	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 	if _, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e); err != nil {
