@@ -337,12 +337,17 @@ func TestWebVitalsRetryRepeatsStaleZeroAfterFailedFlush(t *testing.T) {
 	}
 }
 
-func TestRegisterHonorsDisabledDefaultsAndRegistersBothWindowsWhenEnabled(t *testing.T) {
+func TestRegisterHonorsExplicitDisableAndRegistersBothWindowsWhenEnabled(t *testing.T) {
 	cfg := config.Default()
+	for _, name := range []string{"rum.pageloads", "rum.web_vitals"} {
+		entry := cfg.Collectors[name]
+		entry.Enabled = false
+		cfg.Collectors[name] = entry
+	}
 	registry := collector.NewRegistry()
 	Register(collector.Deps{Config: &cfg, API: &fakeAPI{}, Registry: registry})
 	if entries := registry.Entries(); len(entries) != 0 {
-		t.Fatalf("default RUM entries = %d, want disabled", len(entries))
+		t.Fatalf("explicitly disabled RUM entries = %d, want zero", len(entries))
 	}
 	cfg.Collectors["rum.pageloads"] = config.CollectorConfig{Enabled: true, Interval: 2 * time.Minute, InitialLookback: time.Hour, MaxWindow: 3 * time.Hour}
 	cfg.Collectors["rum.web_vitals"] = config.CollectorConfig{Enabled: true, Interval: 3 * time.Minute, InitialLookback: time.Hour, MaxWindow: 3 * time.Hour}

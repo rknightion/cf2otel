@@ -13,6 +13,7 @@ All signals carry `service.name=cf2otel`. Cloudflare-specific names begin `cloud
 | `gen_ai.client.inference.operation.details` | AI Gateway body content | Opt-in span event and correlated OTLP content log per available side, subject to the body cap. |
 | `cloudflare.audit.event` | Account audit log v2 | Actor, action, resource and request details. Email and IP are log attributes only. |
 | `cloudflare.firewall.event` | `firewallEventsAdaptive` | Per-request security action; IP, path, query, user agent and ray stay on logs. |
+| `cloudflare.dns.query` | `dnsAnalyticsAdaptive` | Per-query DNS event with available query, response and network fields. Names and IPs stay on logs. |
 | `cf2otel.window.gap` | Retention-gap handling | Collector, skipped window and retention floor when a source cannot backfill. |
 | GenAI client span | AI Gateway REST logs | Request model/provider, outcome, token usage and available timing. |
 | `cf2otel.api.request` | Cloudflare API client | Attempt duration, method and status class; no URL or scope identifier. |
@@ -32,6 +33,15 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cloudflare.http.origin.duration` | Average origin response duration per Groups window, in seconds. |
 | `cloudflare.audit.events` | Exact audit event count by resource product, action type and action result. |
 | `cloudflare.firewall.events` | Security event count from a Groups dataset by zone. Pro Groups provides action and source dimensions; Free ByTimeGroups rejects them despite `settings.availableFields` advertising them. |
+| `cloudflare.dns.queries` | DNS query count from `dnsAnalyticsAdaptiveGroups` by zone and available bounded dimensions. |
+| `cloudflare.rum.page_views` | Page views from `rumPageloadEventsAdaptiveGroups` by country and device. |
+| `cloudflare.rum.sessions` | Visit sum from `rumPageloadEventsAdaptiveGroups` by country and device. |
+| `cloudflare.rum.lcp.p75` | Rolling p75 largest contentful paint gauge, milliseconds inferred from GraphQL timing values. |
+| `cloudflare.rum.inp.p75` | Rolling p75 interaction to next paint gauge, milliseconds inferred from GraphQL timing values. |
+| `cloudflare.rum.fid.p75` | Rolling p75 first input delay gauge, milliseconds inferred from GraphQL timing values. |
+| `cloudflare.rum.fcp.p75` | Rolling p75 first contentful paint gauge, milliseconds inferred from GraphQL timing values. |
+| `cloudflare.rum.ttfb.p75` | Rolling p75 time to first byte gauge, milliseconds inferred from GraphQL timing values. |
+| `cloudflare.rum.cls.p75` | Rolling p75 cumulative layout shift score gauge. |
 | `cloudflare.ai_gateway.requests` | AI Gateway request count. |
 | `cloudflare.ai_gateway.errors` | AI Gateway error count. |
 | `cloudflare.ai_gateway.cache_hits` | AI Gateway cache hits. |
@@ -59,6 +69,7 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cf2otel.identity.ambiguous` | HTTP events with more than one candidate. |
 | `cf2otel.window.gap` | Skipped retention-gap seconds by collector. |
 | `cf2otel.window.commit_failures` | Failed window commits by retry or dropped outcome. |
+| `cf2otel.window.catchup_windows` | Additional bounded collector windows committed in one scheduler tick. |
 
 AI Gateway metrics combine Cloudflare request outcome measurements with GenAI duration and usage conventions.
 
@@ -74,6 +85,8 @@ AI Gateway metrics combine Cloudflare request outcome measurements with GenAI du
 | AI Gateway content | `cloudflare.ai_gateway.content.side`, `cloudflare.ai_gateway.content.length` |
 | Audit | `cloudflare.audit.*` attributes are listed individually below; actor email and IP are log only. |
 | Firewall | `cloudflare.firewall.*` attributes are listed individually below; IP, path, query, user agent and ray are log only. |
+| DNS | `cloudflare.dns.*` attributes are listed individually below; query name and IPs are log only. |
+| RUM | `cloudflare.rum.country`, `cloudflare.rum.device_type`, `cloudflare.rum.site_tag`; gauges use device and optional site tag. |
 | Window delivery | `cf2otel.window.*` describes retention gaps and commit outcomes. |
 | Poller | `cf2otel.collector`, `cf2otel.version`, `cf2otel.commit`, `cf2otel.export.signal`, `cf2otel.build.version`, `cf2otel.build.commit` |
 
@@ -90,6 +103,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Event | `cloudflare.access.scim_update` |
 | Event | `cloudflare.ai_gateway.request` |
 | Event | `cloudflare.audit.event` |
+| Event | `cloudflare.dns.query` |
 | Event | `cloudflare.firewall.event` |
 | Event | `cloudflare.http.request` |
 | Event | `gen_ai.client.inference.operation.details` |
@@ -108,6 +122,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cf2otel.scrape.last_success_timestamp` |
 | Metric | `cf2otel.scrape.success` |
 | Metric | `cf2otel.window.commit_failures` |
+| Metric | `cf2otel.window.catchup_windows` |
 | Metric | `cf2otel.window.gap` |
 | Metric | `cloudflare.access.apps` |
 | Metric | `cloudflare.access.identity_logins` |
@@ -119,9 +134,18 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cloudflare.ai_gateway.errors` |
 | Metric | `cloudflare.ai_gateway.requests` |
 | Metric | `cloudflare.audit.events` |
+| Metric | `cloudflare.dns.queries` |
 | Metric | `cloudflare.firewall.events` |
 | Metric | `cloudflare.http.origin.duration` |
 | Metric | `cloudflare.http.requests` |
+| Metric | `cloudflare.rum.page_views` |
+| Metric | `cloudflare.rum.sessions` |
+| Metric | `cloudflare.rum.lcp.p75` |
+| Metric | `cloudflare.rum.inp.p75` |
+| Metric | `cloudflare.rum.fid.p75` |
+| Metric | `cloudflare.rum.fcp.p75` |
+| Metric | `cloudflare.rum.ttfb.p75` |
+| Metric | `cloudflare.rum.cls.p75` |
 | Metric | `gen_ai.client.inference.operation.input_tokens` |
 | Metric | `gen_ai.client.inference.operation.output_tokens` |
 | Metric | `gen_ai.client.inference.usage.cache_read.input_tokens` |
@@ -231,6 +255,21 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `cloudflare.audit.resource.id` |
 | Attribute | `cloudflare.audit.resource.product` |
 | Attribute | `cloudflare.audit.resource.type` |
+| Attribute | `cloudflare.dns.zone` |
+| Attribute | `cloudflare.dns.query.name` |
+| Attribute | `cloudflare.dns.query.type` |
+| Attribute | `cloudflare.dns.response.code` |
+| Attribute | `cloudflare.dns.response.cached` |
+| Attribute | `cloudflare.dns.response.stale` |
+| Attribute | `cloudflare.dns.protocol` |
+| Attribute | `cloudflare.dns.colo` |
+| Attribute | `cloudflare.dns.source.ip` |
+| Attribute | `cloudflare.dns.destination.ip` |
+| Attribute | `cloudflare.dns.upstream.ip` |
+| Attribute | `cloudflare.dns.ip.version` |
+| Attribute | `cloudflare.dns.sample.interval` |
+| Attribute | `cloudflare.dns.query.size` |
+| Attribute | `cloudflare.dns.response.size` |
 | Attribute | `cloudflare.firewall.action` |
 | Attribute | `cloudflare.firewall.client.asn` |
 | Attribute | `cloudflare.firewall.client.asn_description` |
@@ -265,6 +304,9 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `cloudflare.http.status_code` |
 | Attribute | `cloudflare.http.user_agent` |
 | Attribute | `cloudflare.http.zone` |
+| Attribute | `cloudflare.rum.site_tag` |
+| Attribute | `cloudflare.rum.device_type` |
+| Attribute | `cloudflare.rum.country` |
 | Attribute | `error.type` |
 | Attribute | `event_name` |
 | Attribute | `gen_ai.input.messages` |

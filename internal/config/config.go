@@ -124,12 +124,6 @@ func Default() Config {
 	audit := c.Collectors["audit.logs"]
 	audit.InitialLookback = 24 * time.Hour
 	c.Collectors["audit.logs"] = audit
-	// The RUM seam is registered before its collector implementation lands.
-	for _, name := range []string{"rum.pageloads", "rum.web_vitals"} {
-		entry := c.Collectors[name]
-		entry.Enabled = false
-		c.Collectors[name] = entry
-	}
 	return c
 }
 func (c Config) Collector(name string) CollectorConfig { return c.Collectors[name] }
