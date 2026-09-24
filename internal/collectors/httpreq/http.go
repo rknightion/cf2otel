@@ -178,6 +178,21 @@ func (b base) metricZones(ctx context.Context) ([]cfapi.Zone, error) {
 		wanted = b.cfg.Cloudflare.Zones
 	}
 	if len(wanted) == 0 {
+		if b.cfg.HTTP.MetricsScope == "all" {
+			if b.cfg.Cloudflare.AccountID == "" {
+				return nil, errors.New("HTTP all-zone metrics require an account ID")
+			}
+			owned := make([]cfapi.Zone, 0, len(zones))
+			for _, zone := range zones {
+				if zone.Account.ID == b.cfg.Cloudflare.AccountID {
+					owned = append(owned, zone)
+				}
+			}
+			if len(owned) == 0 {
+				return nil, errors.New("HTTP all-zone metrics discovered no zones in the configured account")
+			}
+			return owned, nil
+		}
 		return zones, nil
 	}
 	selected := make([]cfapi.Zone, 0, len(zones))

@@ -56,7 +56,7 @@ func (f *fakeAPI) Zones(context.Context) ([]cfapi.Zone, error) {
 	if f.zones != nil {
 		return f.zones, nil
 	}
-	return []cfapi.Zone{{ID: "zone", Name: "example.com"}}, nil
+	return []cfapi.Zone{zoneForAccount("zone", "example.com", "account-fixture")}, nil
 }
 func (f *fakeAPI) DatasetSettings(_ context.Context, scope cfapi.Scope, scopeID, dataset string) (cfapi.DatasetSettings, error) {
 	if f.settingsErr != nil {
@@ -74,7 +74,7 @@ func (f *fakeAPI) DatasetSettings(_ context.Context, scope cfapi.Scope, scopeID,
 func TestEventsRetentionUsesLatestZoneFloor(t *testing.T) {
 	baseTime := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
 	f := &fakeAPI{
-		zones: []cfapi.Zone{{ID: "one", Name: "one.example.test"}, {ID: "two", Name: "two.example.test"}},
+		zones: []cfapi.Zone{zoneForAccount("one", "one.example.test", "account-fixture"), zoneForAccount("two", "two.example.test", "account-fixture")},
 		queryErrors: map[string]error{
 			"one": &cfapi.RetentionGapError{Dataset: "httpRequestsAdaptive", Floor: baseTime.Add(time.Minute)},
 			"two": &cfapi.RetentionGapError{Dataset: "httpRequestsAdaptive", Floor: baseTime.Add(12 * time.Minute)},
@@ -247,6 +247,7 @@ func TestGroupsOmitNoOriginDurationSentinelButKeepRequests(t *testing.T) {
 	c := config.Default()
 	c.HTTP.Scope = "all"
 	c.HTTP.MetricsScope = "all"
+	c.Cloudflare.AccountID = "account-fixture"
 	e := &fakeEmitter{}
 	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 	mark, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
@@ -261,7 +262,7 @@ func TestGroupsOmitNoOriginDurationSentinelButKeepRequests(t *testing.T) {
 func TestMetricsAllScopeBroadensOnlyMetricsAndKeepsEventsScoped(t *testing.T) {
 	f := &fakeAPI{
 		apps:  []accessApp{{Domain: "protected.example.test"}},
-		zones: []cfapi.Zone{{ID: "one", Name: "one.example.test"}, {ID: "two", Name: "two.example.test"}},
+		zones: []cfapi.Zone{zoneForAccount("one", "one.example.test", "account-fixture"), zoneForAccount("two", "two.example.test", "account-fixture")},
 		rows: map[string][]map[string]any{
 			"httpRequestsAdaptive": {
 				{"datetime": "2026-09-23T10:00:00Z", "clientRequestHTTPHost": "protected.example.test", "rayName": "fixture-ray-one"},
@@ -278,6 +279,7 @@ func TestMetricsAllScopeBroadensOnlyMetricsAndKeepsEventsScoped(t *testing.T) {
 	c.Cloudflare.Zones = []string{"one"}
 	c.Identity.Enabled = false
 	c.HTTP.MetricsScope = "all"
+	c.Cloudflare.AccountID = "account-fixture"
 	e := &fakeEmitter{}
 	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 	to := from.Add(2 * time.Hour)
@@ -308,10 +310,39 @@ func TestMetricsAllScopeBroadensOnlyMetricsAndKeepsEventsScoped(t *testing.T) {
 	}
 }
 
+func TestMetricsAllScopeLimitsDiscoveredZonesToConfiguredAccount(t *testing.T) {
+	f := &fakeAPI{
+		zones: []cfapi.Zone{
+			zoneForAccount("owned", "owned.example.test", "account-fixture"),
+			zoneForAccount("foreign", "foreign.example.test", "other-account"),
+			zoneForAccount("missing", "missing.example.test", ""),
+		},
+		rows: map[string][]map[string]any{"httpRequestsAdaptiveGroups": {metricGroup("owned.example.test", 200, "miss", 3)}},
+	}
+	c := config.Default()
+	c.Cloudflare.AccountID = "account-fixture"
+	c.HTTP.MetricsScope = "all"
+	c.Cloudflare.AccountID = "account-fixture"
+	e := &fakeEmitter{}
+	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	if _, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.queries) != 1 || f.queries[0].ScopeID != "owned" || len(e.counts) != 1 {
+		t.Fatalf("all scope queried zones=%v counts=%d", f.queries, len(e.counts))
+	}
+}
+
+func zoneForAccount(id, name, accountID string) cfapi.Zone {
+	zone := cfapi.Zone{ID: id, Name: name}
+	zone.Account.ID = accountID
+	return zone
+}
+
 func TestMetricsDefaultScopeInheritsExistingHTTPScope(t *testing.T) {
 	f := &fakeAPI{
 		apps:  []accessApp{{Domain: "protected.example.test"}},
-		zones: []cfapi.Zone{{ID: "one", Name: "one.example.test"}, {ID: "two", Name: "two.example.test"}},
+		zones: []cfapi.Zone{zoneForAccount("one", "one.example.test", "account-fixture"), zoneForAccount("two", "two.example.test", "account-fixture")},
 		rows: map[string][]map[string]any{"httpRequestsAdaptiveGroups": {
 			metricGroup("protected.example.test", 200, "miss", 2),
 			metricGroup("public.example.test", 200, "miss", 3),
@@ -335,7 +366,7 @@ func TestMetricsDefaultScopeInheritsExistingHTTPScope(t *testing.T) {
 
 func TestMetricsEmptyMetricsScopeKeepsLegacyZoneSubset(t *testing.T) {
 	f := &fakeAPI{
-		zones: []cfapi.Zone{{ID: "one", Name: "one.example.test"}, {ID: "two", Name: "two.example.test"}},
+		zones: []cfapi.Zone{zoneForAccount("one", "one.example.test", "account-fixture"), zoneForAccount("two", "two.example.test", "account-fixture")},
 		rows:  map[string][]map[string]any{"httpRequestsAdaptiveGroups": {metricGroup("public.example.test", 200, "miss", 2)}},
 	}
 	c := config.Default()
@@ -353,13 +384,14 @@ func TestMetricsEmptyMetricsScopeKeepsLegacyZoneSubset(t *testing.T) {
 
 func TestMetricsAllScopeUsesExplicitHTTPZonesAsNarrowingSelector(t *testing.T) {
 	f := &fakeAPI{
-		zones: []cfapi.Zone{{ID: "one", Name: "one.example.test"}, {ID: "two", Name: "two.example.test"}},
+		zones: []cfapi.Zone{zoneForAccount("one", "one.example.test", "account-fixture"), zoneForAccount("two", "two.example.test", "account-fixture")},
 		rows:  map[string][]map[string]any{"httpRequestsAdaptiveGroups": {metricGroup("public.example.test", 200, "miss", 2)}},
 	}
 	c := config.Default()
 	c.Cloudflare.Zones = []string{"one"}
 	c.HTTP.Scope = "all"
 	c.HTTP.MetricsScope = "all"
+	c.Cloudflare.AccountID = "account-fixture"
 	c.HTTP.Zones = []string{"two"}
 	e := &fakeEmitter{}
 	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
@@ -386,6 +418,7 @@ func TestMetricsAllScopeFailsClosedOnMissingZoneDiscovery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := config.Default()
 			c.HTTP.MetricsScope = "all"
+			c.Cloudflare.AccountID = "account-fixture"
 			e := &fakeEmitter{}
 			from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 			mark, err := NewMetrics(&c, tt.api).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
@@ -410,6 +443,7 @@ func TestMetricsRequireEntitledAndPresentGroupFields(t *testing.T) {
 		c := config.Default()
 		c.HTTP.Scope = "all"
 		c.HTTP.MetricsScope = "all"
+		c.Cloudflare.AccountID = "account-fixture"
 		e := &fakeEmitter{}
 		from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 		mark, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
@@ -424,6 +458,7 @@ func TestMetricsRequireEntitledAndPresentGroupFields(t *testing.T) {
 		c := config.Default()
 		c.HTTP.Scope = "all"
 		c.HTTP.MetricsScope = "all"
+		c.Cloudflare.AccountID = "account-fixture"
 		e := &fakeEmitter{}
 		from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 		mark, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
@@ -443,6 +478,7 @@ func TestMetricsSelectionFitsTheAdvertisedFieldLimit(t *testing.T) {
 	c := config.Default()
 	c.HTTP.Scope = "all"
 	c.HTTP.MetricsScope = "all"
+	c.Cloudflare.AccountID = "account-fixture"
 	e := &fakeEmitter{}
 	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 	if _, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e); err != nil {
@@ -465,6 +501,7 @@ func TestMetricsEnforceHostAndSeriesCapsBeforeEmission(t *testing.T) {
 		c := config.Default()
 		c.HTTP.Scope = "all"
 		c.HTTP.MetricsScope = "all"
+		c.Cloudflare.AccountID = "account-fixture"
 		c.HTTP.MaxMetricHostsPerZone = 1
 		e := &fakeEmitter{}
 		from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
@@ -481,6 +518,7 @@ func TestMetricsEnforceHostAndSeriesCapsBeforeEmission(t *testing.T) {
 		c := config.Default()
 		c.HTTP.Scope = "all"
 		c.HTTP.MetricsScope = "all"
+		c.Cloudflare.AccountID = "account-fixture"
 		c.HTTP.MaxMetricSeriesPerWindow = 3
 		e := &fakeEmitter{}
 		from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
@@ -493,13 +531,14 @@ func TestMetricsEnforceHostAndSeriesCapsBeforeEmission(t *testing.T) {
 
 func TestMetricsFailClosedWhenAZoneQueryIsIncomplete(t *testing.T) {
 	f := &fakeAPI{
-		zones:       []cfapi.Zone{{ID: "one", Name: "one.example.test"}, {ID: "two", Name: "two.example.test"}},
+		zones:       []cfapi.Zone{zoneForAccount("one", "one.example.test", "account-fixture"), zoneForAccount("two", "two.example.test", "account-fixture")},
 		rows:        map[string][]map[string]any{"httpRequestsAdaptiveGroups": {metricGroup("one.example.test", 200, "miss", 1)}},
 		queryErrors: map[string]error{"two": errors.New("fixture query failed")},
 	}
 	c := config.Default()
 	c.HTTP.Scope = "all"
 	c.HTTP.MetricsScope = "all"
+	c.Cloudflare.AccountID = "account-fixture"
 	e := &fakeEmitter{}
 	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 	mark, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
@@ -513,13 +552,14 @@ func TestMetricsFailClosedWhenAZoneQueryIsIncomplete(t *testing.T) {
 
 func TestMetricsIncompleteZoneWindowDoesNotAdvanceCheckpoint(t *testing.T) {
 	f := &fakeAPI{
-		zones:       []cfapi.Zone{{ID: "one", Name: "one.example.test"}, {ID: "two", Name: "two.example.test"}},
+		zones:       []cfapi.Zone{zoneForAccount("one", "one.example.test", "account-fixture"), zoneForAccount("two", "two.example.test", "account-fixture")},
 		rows:        map[string][]map[string]any{"httpRequestsAdaptiveGroups": {metricGroup("one.example.test", 200, "miss", 1)}},
 		queryErrors: map[string]error{"two": errors.New("fixture query failed")},
 	}
 	c := config.Default()
 	c.HTTP.Scope = "all"
 	c.HTTP.MetricsScope = "all"
+	c.Cloudflare.AccountID = "account-fixture"
 	e := &fakeEmitter{}
 	store, err := collector.NewFileStore(filepath.Join(t.TempDir(), "checkpoints.json"))
 	if err != nil {
@@ -550,6 +590,7 @@ func TestMetricsFailClosedOnSaturatedGroupsQuery(t *testing.T) {
 	c := config.Default()
 	c.HTTP.Scope = "all"
 	c.HTTP.MetricsScope = "all"
+	c.Cloudflare.AccountID = "account-fixture"
 	c.HTTP.MaxMetricSeriesPerWindow = 20000
 	e := &fakeEmitter{}
 	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
@@ -570,6 +611,7 @@ func TestMetricsHostLabelsAreSanitizedAndNeverContainIP(t *testing.T) {
 		c := config.Default()
 		c.HTTP.Scope = "all"
 		c.HTTP.MetricsScope = "all"
+		c.Cloudflare.AccountID = "account-fixture"
 		e := &fakeEmitter{}
 		from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 		if _, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e); err != nil {
@@ -595,6 +637,7 @@ func TestMetricsHostLabelsAreSanitizedAndNeverContainIP(t *testing.T) {
 		c := config.Default()
 		c.HTTP.Scope = "all"
 		c.HTTP.MetricsScope = "all"
+		c.Cloudflare.AccountID = "account-fixture"
 		e := &fakeEmitter{}
 		from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 		mark, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
