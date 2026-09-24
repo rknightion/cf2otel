@@ -56,3 +56,31 @@ func TestValidationCollectsErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestHTTPMetricControls(t *testing.T) {
+	t.Setenv("CF2OTEL_CLOUDFLARE__ACCOUNT_ID", "test-account")
+	t.Setenv("CF2OTEL_CLOUDFLARE__API_TOKEN", "test-token")
+	t.Setenv("CF2OTEL_OTLP__GRAFANA_CLOUD__INSTANCE_ID", "test-instance")
+	t.Setenv("CF2OTEL_OTLP__GRAFANA_CLOUD__TOKEN", "test-otel-token")
+	t.Setenv("CF2OTEL_HTTP__METRICS_SCOPE", "all")
+	t.Setenv("CF2OTEL_HTTP__MAX_METRIC_HOSTS_PER_ZONE", "25")
+	loaded, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.HTTP.Scope != "access_protected" || loaded.HTTP.MetricsScope != "all" || loaded.HTTP.MaxMetricHostsPerZone != 25 || loaded.HTTP.MaxMetricSeriesPerWindow != 10000 {
+		t.Fatalf("HTTP metric controls did not load: %+v", loaded.HTTP)
+	}
+	loaded.HTTP.MetricsScope = "invalid"
+	loaded.HTTP.MaxMetricHostsPerZone = 0
+	loaded.HTTP.MaxMetricSeriesPerWindow = 0
+	err = loaded.Validate()
+	if err == nil {
+		t.Fatal("expected invalid HTTP metric controls")
+	}
+	for _, name := range []string{"http.metrics_scope", "http.max_metric_hosts_per_zone", "http.max_metric_series_per_window"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("validation missed %s: %v", name, err)
+		}
+	}
+}

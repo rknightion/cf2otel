@@ -62,9 +62,12 @@ type AccessConfig struct {
 	IncludeServiceTokens bool `yaml:"include_service_tokens" json:"include_service_tokens"`
 }
 type HTTPConfig struct {
-	Scope string   `yaml:"scope" json:"scope"`
-	Hosts []string `yaml:"hosts" json:"hosts"`
-	Zones []string `yaml:"zones" json:"zones"`
+	Scope                    string   `yaml:"scope" json:"scope"`
+	MetricsScope             string   `yaml:"metrics_scope" json:"metrics_scope"`
+	Hosts                    []string `yaml:"hosts" json:"hosts"`
+	Zones                    []string `yaml:"zones" json:"zones"`
+	MaxMetricHostsPerZone    int      `yaml:"max_metric_hosts_per_zone" json:"max_metric_hosts_per_zone"`
+	MaxMetricSeriesPerWindow int      `yaml:"max_metric_series_per_window" json:"max_metric_series_per_window"`
 }
 type IdentityConfig struct {
 	Enabled       bool          `yaml:"enabled" json:"enabled"`
@@ -112,7 +115,7 @@ type LogConfig struct {
 var collectorNames = []string{"access.logins", "access.login_metrics", "access.scim", "inventory.access", "httpreq.events", "httpreq.metrics", "aigateway.logs", "aigateway.metrics", "audit.logs", "firewall.events", "firewall.metrics", "dns.events", "dns.metrics", "rum.pageloads", "rum.web_vitals", "gateway.dns", "selfobs"}
 
 func Default() Config {
-	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{Scope: "access_protected"}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
+	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{Scope: "access_protected", MaxMetricHostsPerZone: 1000, MaxMetricSeriesPerWindow: 10000}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
 	for _, name := range collectorNames {
 		c.Collectors[name] = CollectorConfig{Enabled: true, Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
 	}
@@ -184,7 +187,11 @@ func (c Config) Validate() error {
 	add(c.OTLP.GrafanaCloud.InstanceID != "", "otlp.grafana_cloud.instance_id is required")
 	add(c.OTLP.GrafanaCloud.Token != "", "otlp.grafana_cloud.token is required")
 	add(c.HTTP.Scope == "access_protected" || c.HTTP.Scope == "hosts" || c.HTTP.Scope == "all", "http.scope is invalid")
+	add(c.HTTP.MetricsScope == "" || c.HTTP.MetricsScope == "access_protected" || c.HTTP.MetricsScope == "hosts" || c.HTTP.MetricsScope == "all", "http.metrics_scope is invalid")
 	add(c.HTTP.Scope != "hosts" || len(c.HTTP.Hosts) > 0, "http.hosts is required for hosts scope")
+	add(c.HTTP.MetricsScope != "hosts" || len(c.HTTP.Hosts) > 0, "http.hosts is required for metrics hosts scope")
+	add(c.HTTP.MaxMetricHostsPerZone > 0, "http.max_metric_hosts_per_zone must be positive")
+	add(c.HTTP.MaxMetricSeriesPerWindow > 0, "http.max_metric_series_per_window must be positive")
 	add(c.Identity.MatchWindow > 0, "identity.match_window must be positive")
 	add(c.Identity.MaxCandidates > 0, "identity.max_candidates must be positive")
 	add(c.AIGateway.MaxBodyBytes > 0, "ai_gateway.max_body_bytes must be positive")
