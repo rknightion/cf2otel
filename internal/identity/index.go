@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"bytes"
 	"container/heap"
 	"crypto/hmac"
 	"crypto/rand"
@@ -22,19 +23,16 @@ type Stats struct {
 type key struct{ ip, host string }
 
 type candidate struct {
-	login    Login
-	key      key
-	bucket   int64
-	sequence uint64
+	login       Login
+	key         key
+	bucket      int64
+	fingerprint [sha256.Size]byte
 }
 type candidates []*candidate
 
 func (h candidates) Len() int { return len(h) }
 func (h candidates) Less(i, j int) bool {
-	if h[i].login.At.Equal(h[j].login.At) {
-		return h[i].sequence < h[j].sequence
-	}
-	return h[i].login.At.Before(h[j].login.At)
+	return rankLess(h[i].login.At, h[i].fingerprint, h[j].login.At, h[j].fingerprint)
 }
 func (h candidates) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 func (h *candidates) Push(x any)   { *h = append(*h, x.(*candidate)) }
@@ -49,16 +47,12 @@ func (h *candidates) Pop() any {
 type observedLogin struct {
 	fingerprint [sha256.Size]byte
 	at          time.Time
-	sequence    uint64
 }
 type observedLogins []*observedLogin
 
 func (h observedLogins) Len() int { return len(h) }
 func (h observedLogins) Less(i, j int) bool {
-	if h[i].at.Equal(h[j].at) {
-		return h[i].sequence < h[j].sequence
-	}
-	return h[i].at.Before(h[j].at)
+	return rankLess(h[i].at, h[i].fingerprint, h[j].at, h[j].fingerprint)
 }
 func (h observedLogins) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 func (h *observedLogins) Push(x any)   { *h = append(*h, x.(*observedLogin)) }
@@ -81,7 +75,6 @@ type MemoryIndex struct {
 	maxSeen        int
 	fingerprintKey [sha256.Size]byte
 	latest         time.Time
-	sequence       uint64
 	byMinute       map[int64]map[key]map[*candidate]struct{}
 	oldest         candidates
 	seenRows       map[[sha256.Size]byte]struct{}
@@ -141,6 +134,15 @@ func (idx *MemoryIndex) fingerprint(login Login) [sha256.Size]byte {
 	return result
 }
 
+// rankLess orders equal-time rows by a process-keyed digest, so a bounded
+// index retains the same rows regardless of collection or replay order.
+func rankLess(aTime time.Time, aFingerprint [sha256.Size]byte, bTime time.Time, bFingerprint [sha256.Size]byte) bool {
+	if aTime.Equal(bTime) {
+		return bytes.Compare(aFingerprint[:], bFingerprint[:]) < 0
+	}
+	return aTime.Before(bTime)
+}
+
 func (idx *MemoryIndex) Observe(login Login) {
 	k := normalizedKey(login.ClientIP, login.Host)
 	if k.ip == "" || k.host == "" || strings.TrimSpace(login.UserEmail) == "" || login.At.IsZero() {
@@ -156,14 +158,23 @@ func (idx *MemoryIndex) Observe(login Login) {
 	if _, seen := idx.seenRows[fingerprint]; seen {
 		return
 	}
-	idx.sequence++
-	c := &candidate{login: login, key: k, bucket: login.At.Unix() / 60, sequence: idx.sequence}
+	// A row below the bounded seen set is also below the candidate set.
+	// Reject it before either heap changes, including on later replay.
+	if idx.seenOldest.Len() == idx.maxSeen &&
+		!rankLess(idx.seenOldest[0].at, idx.seenOldest[0].fingerprint, login.At, fingerprint) {
+		return
+	}
 	idx.seenRows[fingerprint] = struct{}{}
-	heap.Push(&idx.seenOldest, &observedLogin{fingerprint: fingerprint, at: login.At.Round(0).UTC(), sequence: idx.sequence})
+	heap.Push(&idx.seenOldest, &observedLogin{fingerprint: fingerprint, at: login.At.Round(0).UTC()})
 	for idx.seenOldest.Len() > idx.maxSeen {
 		oldest := heap.Pop(&idx.seenOldest).(*observedLogin)
 		delete(idx.seenRows, oldest.fingerprint)
 	}
+	if idx.oldest.Len() == idx.maxCandidates &&
+		!rankLess(idx.oldest[0].login.At, idx.oldest[0].fingerprint, login.At, fingerprint) {
+		return
+	}
+	c := &candidate{login: login, key: k, bucket: login.At.Unix() / 60, fingerprint: fingerprint}
 	if idx.byMinute[c.bucket] == nil {
 		idx.byMinute[c.bucket] = make(map[key]map[*candidate]struct{})
 	}
@@ -195,7 +206,7 @@ func (idx *MemoryIndex) Lookup(ip, host string, at time.Time) Match {
 				return Match{Ambiguous: true}
 			}
 			user = u
-			if chosen == nil || c.login.At.After(chosen.login.At) || (c.login.At.Equal(chosen.login.At) && c.sequence > chosen.sequence) {
+			if chosen == nil || rankLess(chosen.login.At, chosen.fingerprint, c.login.At, c.fingerprint) {
 				chosen = c
 			}
 		}

@@ -1,6 +1,9 @@
 package identity
 
 import (
+	"bytes"
+	"fmt"
+	"sort"
 	"testing"
 	"time"
 )
@@ -172,5 +175,46 @@ func TestCapacityEvictionBoundsReplayMetadata(t *testing.T) {
 	idx.Prune(at.Add(72 * time.Minute))
 	if len(idx.seenRows) != 0 || idx.seenOldest.Len() != 0 {
 		t.Fatalf("expired replay metadata retained %d row keys and %d expiry entries", len(idx.seenRows), idx.seenOldest.Len())
+	}
+}
+
+func TestSameTimestampOverflowReplayKeepsDeterministicCandidates(t *testing.T) {
+	idx, err := NewWithRetention(10*time.Minute, time.Hour, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
+	rows := make([]Login, idx.maxSeen+1)
+	for i := range rows {
+		rows[i] = Login{
+			ClientIP: fmt.Sprintf("192.0.2.%d", i+1),
+			Host:     "example.com", UserEmail: "user@example.com",
+			RayID: fmt.Sprintf("ray-%d", i), At: at,
+		}
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		left, right := idx.fingerprint(rows[i]), idx.fingerprint(rows[j])
+		return bytes.Compare(left[:], right[:]) < 0
+	})
+	for _, row := range rows {
+		idx.Observe(row)
+	}
+	want := rows[len(rows)-idx.maxCandidates:]
+	for _, row := range want {
+		if got := idx.Lookup(row.ClientIP, row.Host, at); got != (Match{UserEmail: row.UserEmail, LoginRayID: row.RayID, Inferred: true}) {
+			t.Fatalf("retained distinct row %s: got %+v", row.RayID, got)
+		}
+	}
+	idx.Observe(rows[0]) // The first fingerprint has fallen outside the bounded seen set.
+	if got := idx.Lookup(rows[0].ClientIP, rows[0].Host, at); got != (Match{}) {
+		t.Fatalf("overflow replay inserted an out-ranked row: %+v", got)
+	}
+	for _, row := range want {
+		if got := idx.Lookup(row.ClientIP, row.Host, at); got.LoginRayID != row.RayID {
+			t.Fatalf("overflow replay displaced %s: %+v", row.RayID, got)
+		}
+	}
+	if idx.Len() != idx.maxCandidates || len(idx.seenRows) > idx.maxSeen || idx.seenOldest.Len() > idx.maxSeen {
+		t.Fatalf("bounds: candidates=%d, fingerprints=%d, expiry entries=%d", idx.Len(), len(idx.seenRows), idx.seenOldest.Len())
 	}
 }
