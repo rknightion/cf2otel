@@ -5,7 +5,7 @@ const (
 	EventWindowGap             = "cf2otel.window.gap"
 	MetricWindowGap            = "cf2otel.window.gap"
 	MetricWindowCommitFailures = "cf2otel.window.commit_failures"
-	MetricWindowCatchupWindows = "cf2otel.window.catchup_windows"
+	MetricWindowCatchupWindows = "cf2otel.window.catchup_windows" // #nosec G101 -- fixed telemetry name, not a credential
 	AttrWindowFrom             = "cf2otel.window.from"
 	AttrWindowFloor            = "cf2otel.window.floor"
 	AttrWindowGapSeconds       = "cf2otel.window.gap_seconds"
