@@ -103,7 +103,7 @@ func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out tele
 	}
 
 	var records []dnsEvent
-	var retentionGaps []error
+	var gaps []dnsGap
 	enabledZones := 0
 	for _, zone := range zones {
 		settings, err := c.settings(ctx, zone, rawDataset)
@@ -124,16 +124,12 @@ func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out tele
 			Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: rawDataset,
 			WantedFields: wanted, From: from, To: to, Limit: queryLimit,
 		}
-		if err := c.api.Query(ctx, req, &rows); err != nil {
-			var gap *cfapi.RetentionGapError
-			if errors.As(err, &gap) {
-				retentionGaps = append(retentionGaps, fmt.Errorf("zone DNS events: %w", err))
-				continue
-			}
+		gap, err := queryZone(ctx, c.api, req, &rows, zone.Name)
+		if err != nil {
 			return from, fmt.Errorf("zone DNS events: %w", err)
 		}
-		if len(rows) >= effectiveLimit(settings) {
-			return from, errors.New("zone DNS events reached the query limit; narrow the window")
+		if gap != nil {
+			gaps = append(gaps, *gap)
 		}
 		for _, row := range rows {
 			at, ok, err := eventTime(row, from, to)
@@ -162,8 +158,8 @@ func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out tele
 	if enabledZones == 0 {
 		return from, errors.New("DNS event dataset is disabled in every discovered zone")
 	}
-	if len(retentionGaps) > 0 {
-		return from, errors.Join(retentionGaps...)
+	if err := emitDNSGaps(ctx, out, c.Name(), to, gaps); err != nil {
+		return from, err
 	}
 	for _, record := range records {
 		if err := out.LogEvent(ctx, semconv.EventDNSQuery, record.body, record.at, otellog.SeverityInfo, record.attrs...); err != nil {
@@ -188,7 +184,7 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 	}
 
 	var samples []dnsMetric
-	var retentionGaps []error
+	var gaps []dnsGap
 	enabledZones := 0
 	for _, zone := range zones {
 		settings, err := c.settings(ctx, zone, groupsDataset)
@@ -209,16 +205,12 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 			Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: groupsDataset,
 			WantedFields: wanted, From: from, To: to, Limit: queryLimit,
 		}
-		if err := c.api.Query(ctx, req, &rows); err != nil {
-			var gap *cfapi.RetentionGapError
-			if errors.As(err, &gap) {
-				retentionGaps = append(retentionGaps, fmt.Errorf("zone DNS Groups: %w", err))
-				continue
-			}
+		gap, err := queryZone(ctx, c.api, req, &rows, zone.Name)
+		if err != nil {
 			return from, fmt.Errorf("zone DNS Groups: %w", err)
 		}
-		if len(rows) >= effectiveLimit(settings) {
-			return from, errors.New("zone DNS Groups reached the query limit; narrow the window")
+		if gap != nil {
+			gaps = append(gaps, *gap)
 		}
 		for _, row := range rows {
 			count, ok := numericValue(row["count"])
@@ -244,8 +236,8 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 	if enabledZones == 0 {
 		return from, errors.New("DNS Groups dataset is disabled in every discovered zone")
 	}
-	if len(retentionGaps) > 0 {
-		return from, errors.Join(retentionGaps...)
+	if err := emitDNSGaps(ctx, out, c.Name(), to, gaps); err != nil {
+		return from, err
 	}
 	for _, sample := range samples {
 		if err := out.Counter(ctx, semconv.MetricDNSQueries, sample.value, sample.attrs...); err != nil {
@@ -300,11 +292,64 @@ func hasAvailableField(fields []string, wanted string) bool {
 	return false
 }
 
-func effectiveLimit(settings cfapi.DatasetSettings) int {
-	if settings.MaxPageSize > 0 && settings.MaxPageSize < queryLimit {
-		return settings.MaxPageSize
+type dnsGap struct {
+	zone        string
+	from, floor time.Time
+	skippedTo   time.Time
+}
+
+// A retention floor belongs to one zone, but both DNS collectors share one
+// checkpoint across zones. Retry only that zone beyond the floor, preserving
+// the full window for every unaffected zone in the same buffered commit.
+func queryZone(ctx context.Context, api cfapi.Client, req cfapi.GraphQLRequest, rows *[]map[string]any, zone string) (*dnsGap, error) {
+	err := api.Query(ctx, req, rows)
+	if err == nil {
+		return nil, nil
 	}
-	return queryLimit
+	var retention *cfapi.RetentionGapError
+	if !errors.As(err, &retention) {
+		return nil, err
+	}
+	retryFrom := retention.Floor.UTC().Add(time.Minute).Truncate(time.Second)
+	if !retryFrom.After(req.From) {
+		return nil, fmt.Errorf("zone retention floor did not advance: %v", err)
+	}
+	if retryFrom.After(req.To) {
+		retryFrom = req.To
+	}
+	gap := &dnsGap{zone: zone, from: req.From, floor: retention.Floor, skippedTo: retryFrom}
+	if !retryFrom.Before(req.To) {
+		return gap, nil
+	}
+	req.From = retryFrom
+	if err := api.Query(ctx, req, rows); err != nil {
+		// Keep a second retention error away from the scheduler's whole-window
+		// skip path. The shared checkpoint must remain at the original start.
+		return nil, fmt.Errorf("zone retention retry failed: %v", err)
+	}
+	return gap, nil
+}
+
+func emitDNSGaps(ctx context.Context, out telemetry.Emitter, collectorName string, to time.Time, gaps []dnsGap) error {
+	for _, gap := range gaps {
+		seconds := gap.skippedTo.Sub(gap.from).Seconds()
+		attrs := []telemetry.Attr{
+			{Key: semconv.AttrCollector, Value: collectorName},
+			{Key: semconv.AttrDNSZone, Value: gap.zone},
+			{Key: semconv.AttrWindowFrom, Value: gap.from.UTC().Format(time.RFC3339)},
+			{Key: semconv.AttrWindowFloor, Value: gap.floor.UTC().Format(time.RFC3339)},
+			{Key: semconv.AttrWindowGapSeconds, Value: strconv.FormatFloat(seconds, 'f', 0, 64)},
+		}
+		if err := out.LogEvent(ctx, semconv.EventWindowGap, "DNS zone retention floor skipped unavailable rows", to, otellog.SeverityWarn, attrs...); err != nil {
+			return err
+		}
+		if err := out.Counter(ctx, semconv.MetricWindowGap, seconds,
+			telemetry.Attr{Key: semconv.AttrCollector, Value: collectorName},
+			telemetry.Attr{Key: semconv.AttrDNSZone, Value: gap.zone}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (b base) zones(ctx context.Context) ([]cfapi.Zone, error) {

@@ -20,6 +20,7 @@ type fakeAPI struct {
 	settings     map[string]cfapi.DatasetSettings
 	rows         map[string][]map[string]any
 	queryErrors  map[string]error
+	gapBefore    map[string]time.Time
 	queries      []cfapi.GraphQLRequest
 	readSettings []string
 }
@@ -33,6 +34,9 @@ func (f *fakeAPI) Query(_ context.Context, request cfapi.GraphQLRequest, out any
 	key := request.ScopeID + "/" + request.Dataset
 	if err := f.queryErrors[key]; err != nil {
 		return err
+	}
+	if floor := f.gapBefore[key]; !floor.IsZero() && request.From.Before(floor) {
+		return &cfapi.RetentionGapError{Dataset: request.Dataset, Floor: floor}
 	}
 	body, err := json.Marshal(f.rows[key])
 	if err != nil {
@@ -300,6 +304,63 @@ func TestDiscoveredDisabledDNSZoneIsSkipped(t *testing.T) {
 			mark, err = tc.collect(&config.Config{}, api)
 			if err == nil || !mark.Equal(from) || len(api.queries) != 0 {
 				t.Fatalf("all discovered zones disabled: mark=%s error=%v queries=%+v", mark, err, api.queries)
+			}
+		})
+	}
+}
+
+func TestOneDNSZoneRetentionGapPreservesOtherZoneRows(t *testing.T) {
+	from := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	to := from.Add(20 * time.Minute)
+	floor := from.Add(5 * time.Minute)
+	for _, tc := range []struct {
+		name, dataset string
+		fields        []string
+		row           func(time.Time) map[string]any
+		collect       func(*config.Config, cfapi.Client, *telemetry.Buffer) (time.Time, error)
+	}{
+		{"events", rawDataset, []string{"datetime", "queryName", "queryType", "responseCode", "responseCached", "protocol", "coloName"}, func(at time.Time) map[string]any {
+			return map[string]any{"datetime": at.Format(time.RFC3339), "queryName": "example.test", "queryType": "A", "responseCode": "NOERROR", "responseCached": false, "protocol": "UDP", "coloName": "test-colo"}
+		}, func(cfg *config.Config, api cfapi.Client, out *telemetry.Buffer) (time.Time, error) {
+			return NewEvents(cfg, api).CollectWindow(context.Background(), from, to, out)
+		}},
+		{"metrics", groupsDataset, []string{"count"}, func(time.Time) map[string]any { return map[string]any{"count": 1} }, func(cfg *config.Config, api cfapi.Client, out *telemetry.Buffer) (time.Time, error) {
+			return NewMetrics(cfg, api).CollectWindow(context.Background(), from, to, out)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := &fakeAPI{zones: []cfapi.Zone{{ID: "healthy", Name: "healthy.example.test"}, {ID: "gap", Name: "gap.example.test"}},
+				settings:  map[string]cfapi.DatasetSettings{"healthy/" + tc.dataset: dnsSettings(70, tc.fields...), "gap/" + tc.dataset: dnsSettings(70, tc.fields...)},
+				rows:      map[string][]map[string]any{"healthy/" + tc.dataset: {tc.row(from.Add(time.Minute))}, "gap/" + tc.dataset: {tc.row(floor.Add(2 * time.Minute))}},
+				gapBefore: map[string]time.Time{"gap/" + tc.dataset: floor},
+			}
+			out := &telemetry.Buffer{}
+			mark, err := tc.collect(&config.Config{}, api, out)
+			if err != nil || !mark.Equal(to) || len(api.queries) != 3 {
+				t.Fatalf("mark=%s error=%v queries=%+v", mark, err, api.queries)
+			}
+			if !api.queries[0].From.Equal(from) || !api.queries[1].From.Equal(from) || !api.queries[2].From.After(floor) {
+				t.Fatalf("healthy zone did not retain full window or gap zone was not retried: %+v", api.queries)
+			}
+			gapEvents, domainEvents, domainMetrics, gapMetrics := 0, 0, 0, 0
+			for _, record := range out.Records {
+				if record.Event == semconv.EventWindowGap {
+					gapEvents++
+				}
+				if record.Event == semconv.EventDNSQuery {
+					domainEvents++
+				}
+			}
+			for _, metric := range out.Metrics {
+				if metric.Name == semconv.MetricWindowGap {
+					gapMetrics++
+				}
+				if metric.Name == semconv.MetricDNSQueries {
+					domainMetrics++
+				}
+			}
+			if gapEvents != 1 || gapMetrics != 1 || (tc.name == "events" && domainEvents != 2) || (tc.name == "metrics" && domainMetrics != 2) {
+				t.Fatalf("gap events=%d gap metrics=%d domain events=%d domain metrics=%d", gapEvents, gapMetrics, domainEvents, domainMetrics)
 			}
 		})
 	}
