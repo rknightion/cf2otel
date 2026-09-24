@@ -1,10 +1,10 @@
 ---
 id: CFO-0017
 title: Account audit logs collector (v2)
-status: Parked
+status: Done
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-24 08:18'
+updated_date: '2026-09-24 13:48'
 labels:
   - 'wave:2'
   - audit
@@ -21,7 +21,7 @@ ordinal: 17000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Parity with doc-0004 audit section
+- [x] #1 Parity with doc-0004 audit section
 - [x] #2 Live verification on the m7kni stack
 <!-- AC:END -->
 
@@ -52,4 +52,12 @@ Read-only gap probe on 2026-09-23: the missing 15:08:55 UTC source event is now 
 Wave 2 park boundary: source/Loki hourly parity was 293/293, 241/241, 261/261, 112/0, 16/8, 87/0, 205/69, 256/0 for 10:00-18:00 UTC on 2026-09-23. One exact source event at 15:08:55 UTC is absent in Loki after the checkpoint passed it. Resume by investigating source visibility lag and implementing a safe overlap/replay strategy with dedupe, then prove parity in a fresh live window. Current checkpoint must not be rewound ad hoc.
 
 Loop 3 v0.3.1 forward audit proof: measured source visibility lag on 369 fresh events was 167-450 seconds, so collector holdback increased from 2 to 10 minutes without checkpoint rewind or backfill. First complete post-fix hour [2026-09-24 07:00,08:00) UTC reached checkpoint 08:04:09Z and matched exactly: source 248 IDs, Loki 248 rows/248 IDs, zero missing, extra or duplicates, query limit not hit. The required second complete nonzero hour [08:00,09:00) cannot mature before the 08:40 closeout drain bound; AC1 remains open. Resume after audit.logs passes 09:00Z, run fresh source/Loki per-ID parity for that hour, and check AC1 only if both hours match.
+
+Loop 4 second consecutive post-fix hour [2026-09-24 08:00,09:00) UTC: audit.logs checkpoint passed 09:00Z; fresh REST source census returned 232 IDs in 2 pages. Exact Loki query {service_name="cf2otel"} | event_name="cloudflare.audit.event" | cloudflare_audit_id=~".+" returned 232 rows and 232 IDs, zero missing, extra or duplicates, limit not hit. The prior [07:00,08:00) hour was 248/248 with the same zero-difference checks. AC1 parity is satisfied without rewind or backfill.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Two consecutive complete post-fix audit hours matched REST source IDs to Loki exactly: 248/248 and 232/232, with no missing, extra, or duplicate IDs.
+<!-- SECTION:FINAL_SUMMARY:END -->

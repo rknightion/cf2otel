@@ -4,7 +4,7 @@ title: Deploy to camden (Docker) and verify end to end
 status: Parked
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-24 08:19'
+updated_date: '2026-09-24 15:51'
 labels:
   - 'wave:1'
   - deploy
@@ -45,4 +45,8 @@ Additional P6 source check after v0.2.3 deploy: Access SCIM updates REST query f
 Loop 3 P1h restart proof on unchanged v0.2.3: two post-checkpoint source reads more than five minutes apart each found 18 selected-host HTTP rows. The exact Loki query returned 18 rows with 18 composite zone/ray/time keys, zero missing, extra or duplicate keys. Three AI Gateway source IDs each had one Loki event and one direct Tempo span. Private proof is retained outside tracked files. AC2 remains open: Access SCIM source query through 2026-09-24 07:05 UTC returned zero rows, so every wave-1 signal cannot be observed.
 
 Loop 3 P6 closeout source census queried Access SCIM updates from 2026-09-24 00:18:00 to 08:18:58 UTC: zero rows in one page. The v0.3.1 container is healthy, but there is no SCIM source event to verify downstream; AC2 remains open. Resume on a natural SCIM update and verify the corresponding Loki signal before checking AC2.
+
+Loop 4 correction to the loop 3 note: the 18 restart-proof matches used frozen canonical JSON of the fields shared by each source row and Loki body. They were not zone/ray/time keys; Free-zone rows had no ray. AC3 remains checked. P6 DEP census [2026-09-24 08:18:58,13:46:18) UTC returned zero SCIM source rows in one page, so AC2 remains open.
+
+Loop 4 P6 additional source censuses: Access SCIM updates REST returned zero rows in one page for [2026-09-24T08:18:58Z,14:15:50Z) at the CFG readback and zero rows for [08:18:58Z,15:50:53Z) at closeout. DEP census earlier in this loop was also zero through 13:46:18Z. No SCIM source event exists to prove its Loki delivery; AC2 remains open. Resume on a natural SCIM update, then verify its exact Loki row and the remaining wave-1 signals.
 <!-- SECTION:NOTES:END -->
