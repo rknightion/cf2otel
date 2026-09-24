@@ -334,11 +334,11 @@ func sortVitalSeries(series []vitalSeries) {
 
 func (b base) settings(ctx context.Context, dataset string) (cfapi.DatasetSettings, error) {
 	if b.cfg == nil || b.cfg.Cloudflare.AccountID == "" {
-		return cfapi.DatasetSettings{}, errors.New("Cloudflare account ID is required for RUM")
+		return cfapi.DatasetSettings{}, errors.New("cloudflare account ID is required for RUM")
 	}
 	reader, ok := b.api.(datasetSettingsReader)
 	if !ok {
-		return cfapi.DatasetSettings{}, errors.New("Cloudflare client does not expose account dataset settings")
+		return cfapi.DatasetSettings{}, errors.New("cloudflare client does not expose account dataset settings")
 	}
 	settings, err := reader.DatasetSettings(ctx, cfapi.AccountScope, b.cfg.Cloudflare.AccountID, dataset)
 	if err != nil {
