@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.3.0](https://github.com/rknightion/cf2otel/compare/v0.2.3...v0.3.0) (2026-09-24)
+
+
+### Features
+
+* catch up bounded collector windows ([1780b2a](https://github.com/rknightion/cf2otel/commit/1780b2a03247174805194f3081cf29611b359dc3))
+* collect DNS analytics events and counts ([8c57018](https://github.com/rknightion/cf2otel/commit/8c57018e3f63471c92482c7cc87ee35ab5264247))
+* collect RUM pageload and web vitals groups ([7e783dc](https://github.com/rknightion/cf2otel/commit/7e783dc88eb81024f61ca8f5d5a4e25517d87a43))
+* declare catch-up window metric ([3ad6f42](https://github.com/rknightion/cf2otel/commit/3ad6f42f9dae9a0b2fed56486539474dc12c19f2))
+* declare DNS collector seams ([7c7f8af](https://github.com/rknightion/cf2otel/commit/7c7f8afd5dcc333a38bbc86c6ae68934fdf235aa))
+* declare RUM collector seams ([f610b0a](https://github.com/rknightion/cf2otel/commit/f610b0abc4fb5d955d3969e1df007ea41c3d0cda))
+* enable RUM collectors and document signals ([e80a195](https://github.com/rknightion/cf2otel/commit/e80a1951f67afda912a0ac02fe5e05fd1aca8f1a))
+
+
+### Bug Fixes
+
+* bound Access replay fingerprints ([4aa73a2](https://github.com/rknightion/cf2otel/commit/4aa73a230e8df209a0cabe8c555808569ee1e5ec))
+* deduplicate replayed Access identity rows ([af05fe9](https://github.com/rknightion/cf2otel/commit/af05fe94277b94377eed711f0213774031cb741e))
+* hold audit windows for measured source lag ([64a47dc](https://github.com/rknightion/cf2otel/commit/64a47dc6d5ab33bf94e00404edaf2e9d4e636457))
+* identify catch-up metric as non-secret ([8db8e9e](https://github.com/rknightion/cf2otel/commit/8db8e9e1d74b1a3304bd63c89f239323e97dc048))
+* keep DNS retry errors scoped to zone ([de31f9c](https://github.com/rknightion/cf2otel/commit/de31f9ca99652d5425f12e7be8658745e3fc5506))
+* keep DNS seam disabled until collector lands ([45e4b3b](https://github.com/rknightion/cf2otel/commit/45e4b3bcd38143bc6316bbcbabf0a838e268021c))
+* preserve DNS zones across retention gaps ([e2dc9b3](https://github.com/rknightion/cf2otel/commit/e2dc9b3ed5c079169a72d5087b3fd59ba4e6519e))
+* reject empty DNS zone discovery ([1420f2c](https://github.com/rknightion/cf2otel/commit/1420f2ce876adc978eeedab4774c97a2e75ed289))
+* repeat stale RUM gauges after export retry ([bbb14c6](https://github.com/rknightion/cf2otel/commit/bbb14c60f8e995a3426dc49867d5776ee0eac98e))
+* skip disabled discovered DNS zones ([8359b12](https://github.com/rknightion/cf2otel/commit/8359b125e1d580c4ed3a667a52d3f13aa3386202))
+* stabilize Access replay under capacity overflow ([84e72a7](https://github.com/rknightion/cf2otel/commit/84e72a7c90db168bc08b77a8a1d9c42f8cc0ee20))
+* use lowercase collector errors ([b7542ae](https://github.com/rknightion/cf2otel/commit/b7542ae95b76b407f46e667a964bc656bf1a461b))
+
 ## [0.2.3](https://github.com/rknightion/cf2otel/compare/v0.2.2...v0.2.3) (2026-09-23)
 
 
