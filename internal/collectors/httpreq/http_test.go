@@ -240,6 +240,24 @@ func TestGroupsProduceCorrectedMetrics(t *testing.T) {
 	}
 }
 
+func TestGroupsOmitNoOriginDurationSentinelButKeepRequests(t *testing.T) {
+	row := metricGroup("public.example.test", 200, "miss", 7)
+	row["avg"].(map[string]any)["originResponseDurationMs"] = -1
+	f := &fakeAPI{rows: map[string][]map[string]any{"httpRequestsAdaptiveGroups": {row}}}
+	c := config.Default()
+	c.HTTP.Scope = "all"
+	c.HTTP.MetricsScope = "all"
+	e := &fakeEmitter{}
+	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	mark, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
+	if err != nil || !mark.Equal(from.Add(time.Hour)) {
+		t.Fatalf("sentinel returned mark=%s error=%v", mark, err)
+	}
+	if len(e.counts) != 1 || e.counts[0].value != 7 || len(e.gauges) != 0 {
+		t.Fatalf("sentinel counts=%+v gauges=%+v", e.counts, e.gauges)
+	}
+}
+
 func TestMetricsAllScopeBroadensOnlyMetricsAndKeepsEventsScoped(t *testing.T) {
 	f := &fakeAPI{
 		apps:  []accessApp{{Domain: "protected.example.test"}},

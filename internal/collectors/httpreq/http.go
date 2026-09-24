@@ -528,13 +528,15 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 			avg, _ := row["avg"].(map[string]any)
 			if v, ok := avg["originResponseDurationMs"]; includeOriginDuration && ok && v != nil {
 				milliseconds, valid := metricNumber(v)
-				if !valid || milliseconds < 0 {
+				if !valid || milliseconds < -1 {
 					return from, errors.New("HTTP group has an invalid origin duration")
 				}
-				aggregate.originDurationMS += milliseconds * count
-				aggregate.originDurationWeight += count
-				if math.IsInf(aggregate.originDurationMS, 0) || math.IsNaN(aggregate.originDurationMS) || math.IsInf(aggregate.originDurationWeight, 0) || math.IsNaN(aggregate.originDurationWeight) {
-					return from, errors.New("HTTP metric origin duration total is invalid")
+				if milliseconds != -1 {
+					aggregate.originDurationMS += milliseconds * count
+					aggregate.originDurationWeight += count
+					if math.IsInf(aggregate.originDurationMS, 0) || math.IsNaN(aggregate.originDurationMS) || math.IsInf(aggregate.originDurationWeight, 0) || math.IsNaN(aggregate.originDurationWeight) {
+						return from, errors.New("HTTP metric origin duration total is invalid")
+					}
 				}
 			}
 			totals[labels] = aggregate
