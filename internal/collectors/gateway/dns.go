@@ -31,6 +31,18 @@ var gatewayDNSFields = []string{
 	"dimensions.country",
 }
 
+type gatewayDNSDimensionSpec struct {
+	field     string
+	attribute string
+	bound     func(string) string
+}
+
+var gatewayDNSOptionalDimensions = []gatewayDNSDimensionSpec{
+	{field: "dimensions.queryType", attribute: semconv.AttrGatewayDNSQueryType, bound: boundedGatewayDNSQueryType},
+	{field: "dimensions.resolverDecision", attribute: semconv.AttrGatewayDNSDecision, bound: boundedGatewayDNSDecision},
+	{field: "dimensions.country", attribute: semconv.AttrGatewayDNSCountry, bound: boundedGatewayDNSCountry},
+}
+
 type gatewayDatasetSettingsReader interface {
 	DatasetSettings(context.Context, cfapi.Scope, string, string) (cfapi.DatasetSettings, error)
 }
@@ -55,35 +67,45 @@ type gatewayDNSMetric struct {
 
 func (c *dnsMetrics) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (time.Time, error) {
 	if !from.Before(to) {
-		return from, errors.New("invalid Gateway DNS metrics window")
+		return from, errors.New("invalid gateway DNS metrics window")
 	}
 	if c.cfg == nil || c.cfg.Cloudflare.AccountID == "" {
-		return from, errors.New("Gateway DNS requires a configured Cloudflare account")
+		return from, errors.New("gateway DNS requires a configured Cloudflare account")
 	}
 	reader, ok := c.api.(gatewayDatasetSettingsReader)
 	if !ok {
-		return from, errors.New("Cloudflare client does not expose Gateway DNS dataset settings")
+		return from, errors.New("cloudflare client does not expose Gateway DNS dataset settings")
 	}
 	settings, err := reader.DatasetSettings(ctx, cfapi.AccountScope, c.cfg.Cloudflare.AccountID, gatewayDNSDataset)
 	if err != nil {
-		return from, fmt.Errorf("read Gateway DNS dataset settings: %w", err)
+		return from, fmt.Errorf("read gateway DNS dataset settings: %w", err)
 	}
 	if !settings.Enabled {
-		return from, errors.New("Gateway DNS Groups dataset is disabled")
+		return from, errors.New("gateway DNS Groups dataset is disabled")
 	}
-	for _, field := range gatewayDNSFields {
-		if !gatewayHasAvailableField(settings.AvailableFields, field) {
-			return from, fmt.Errorf("Gateway DNS Groups dataset is missing required field %s", field)
-		}
+	if !gatewayHasAvailableField(settings.AvailableFields, "sum.queries") {
+		return from, errors.New("gateway DNS Groups dataset is missing required field sum.queries")
 	}
-	if settings.MaxNumberOfFields <= 0 || settings.MaxNumberOfFields < len(gatewayDNSFields) {
-		return from, errors.New("Gateway DNS Groups dataset has an invalid field limit")
+	if settings.MaxNumberOfFields <= 0 {
+		return from, errors.New("gateway DNS Groups dataset has an invalid field limit")
 	}
 	if settings.MaxPageSize <= 0 {
-		return from, errors.New("Gateway DNS Groups dataset is missing its page-size limit")
+		return from, errors.New("gateway DNS Groups dataset is missing its page-size limit")
 	}
 	if settings.MaxDuration <= 0 || settings.NotOlderThan <= 0 {
-		return from, errors.New("Gateway DNS Groups dataset is missing its duration or retention limit")
+		return from, errors.New("gateway DNS Groups dataset is missing its duration or retention limit")
+	}
+
+	wantedFields := []string{"sum.queries"}
+	selectedDimensions := make([]gatewayDNSDimensionSpec, 0, len(gatewayDNSOptionalDimensions))
+	for _, dimension := range gatewayDNSOptionalDimensions {
+		if len(wantedFields) >= settings.MaxNumberOfFields {
+			break
+		}
+		if gatewayHasAvailableField(settings.AvailableFields, dimension.field) {
+			wantedFields = append(wantedFields, dimension.field)
+			selectedDimensions = append(selectedDimensions, dimension)
+		}
 	}
 
 	var rows []map[string]any
@@ -91,52 +113,44 @@ func (c *dnsMetrics) CollectWindow(ctx context.Context, from, to time.Time, out 
 		Scope:        cfapi.AccountScope,
 		ScopeID:      c.cfg.Cloudflare.AccountID,
 		Dataset:      gatewayDNSDataset,
-		WantedFields: append([]string(nil), gatewayDNSFields...),
+		WantedFields: wantedFields,
 		From:         from,
 		To:           to,
 		Limit:        gatewayDNSQueryLimit,
 	}
 	if err := c.api.Query(ctx, request, &rows); err != nil {
-		return from, fmt.Errorf("query Gateway DNS Groups dataset: %w", err)
+		return from, fmt.Errorf("query gateway DNS Groups dataset: %w", err)
 	}
 	if len(rows) >= gatewayDNSQueryLimit {
-		return from, errors.New("Gateway DNS Groups result reached the collector limit")
+		return from, errors.New("gateway DNS Groups result reached the collector limit")
 	}
 
 	samples := make([]gatewayDNSMetric, 0, len(rows))
 	for _, row := range rows {
 		sum, ok := row["sum"].(map[string]any)
 		if !ok {
-			return from, errors.New("Gateway DNS Groups row is missing sum fields")
+			return from, errors.New("gateway DNS Groups row is missing sum fields")
 		}
 		count, ok := gatewayDNSCount(sum["queries"])
 		if !ok || count <= 0 {
-			return from, errors.New("Gateway DNS Groups row has an invalid query sum")
+			return from, errors.New("gateway DNS Groups row has an invalid query sum")
 		}
-		dimensions, ok := row["dimensions"].(map[string]any)
-		if !ok {
-			return from, errors.New("Gateway DNS Groups row is missing required dimensions")
+		attrs := make([]telemetry.Attr, 0, len(selectedDimensions))
+		if len(selectedDimensions) > 0 {
+			dimensions, ok := row["dimensions"].(map[string]any)
+			if !ok {
+				return from, errors.New("gateway DNS Groups row is missing selected dimensions")
+			}
+			for _, dimension := range selectedDimensions {
+				field := strings.TrimPrefix(dimension.field, "dimensions.")
+				value, ok := gatewayDNSDimension(dimensions[field])
+				if !ok {
+					return from, fmt.Errorf("gateway DNS Groups row has a missing or malformed selected field %s", dimension.field)
+				}
+				attrs = append(attrs, telemetry.Attr{Key: dimension.attribute, Value: dimension.bound(value)})
+			}
 		}
-		queryType, ok := gatewayDNSDimension(dimensions["queryType"])
-		if !ok {
-			return from, errors.New("Gateway DNS Groups row is missing queryType")
-		}
-		decision, ok := gatewayDNSDimension(dimensions["resolverDecision"])
-		if !ok {
-			return from, errors.New("Gateway DNS Groups row is missing resolverDecision")
-		}
-		country, ok := gatewayDNSDimension(dimensions["country"])
-		if !ok {
-			return from, errors.New("Gateway DNS Groups row is missing country")
-		}
-		samples = append(samples, gatewayDNSMetric{
-			value: count,
-			attrs: []telemetry.Attr{
-				{Key: semconv.AttrGatewayDNSQueryType, Value: boundedGatewayDNSQueryType(queryType)},
-				{Key: semconv.AttrGatewayDNSDecision, Value: boundedGatewayDNSDecision(decision)},
-				{Key: semconv.AttrGatewayDNSCountry, Value: boundedGatewayDNSCountry(country)},
-			},
-		})
+		samples = append(samples, gatewayDNSMetric{value: count, attrs: attrs})
 	}
 
 	for _, sample := range samples {

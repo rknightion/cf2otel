@@ -146,6 +146,97 @@ func TestDNSGroupsSumUsesHalfOpenRequestAndBoundedAttributes(t *testing.T) {
 	}
 }
 
+func TestDNSGroupsSelectOnlyAdvertisedOptionalDimension(t *testing.T) {
+	from := time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Minute)
+	settings := gatewaySettings()
+	settings.AvailableFields = []string{"sum_queries", "dimensions_country"}
+	api := &gatewayFakeAPI{
+		settings: settings,
+		rows: []map[string]any{{
+			"sum":        map[string]any{"queries": 5},
+			"dimensions": map[string]any{"country": "GB"},
+		}},
+	}
+	out := &telemetry.Buffer{}
+	mark, err := NewDNSMetrics(gatewayConfig("synthetic-account"), api).CollectWindow(context.Background(), from, to, out)
+	if err != nil {
+		t.Fatal("collection failed with the count and one advertised dimension")
+	}
+	if !mark.Equal(to) || len(api.requests) != 1 {
+		t.Fatal("partial-dimension collection did not complete one window")
+	}
+	wanted := api.requests[0].WantedFields
+	if len(wanted) != 2 || wanted[0] != "sum.queries" || wanted[1] != "dimensions.country" {
+		t.Fatal("query did not select the count and its only available dimension")
+	}
+	if len(out.Metrics) != 1 || out.Metrics[0].Value != 5 || len(out.Metrics[0].Attrs) != 1 || out.Metrics[0].Attrs[0].Key != semconv.AttrGatewayDNSCountry {
+		t.Fatal("collector did not emit the complete sum with only the selected dimension")
+	}
+}
+
+func TestDNSGroupsSelectCountAloneWhenOnlyCountIsAdvertised(t *testing.T) {
+	from := time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Minute)
+	settings := gatewaySettings()
+	settings.AvailableFields = []string{"sum_queries"}
+	settings.MaxNumberOfFields = 1
+	api := &gatewayFakeAPI{settings: settings, rows: []map[string]any{{"sum": map[string]any{"queries": 11}}}}
+	out := &telemetry.Buffer{}
+	mark, err := NewDNSMetrics(gatewayConfig("synthetic-account"), api).CollectWindow(context.Background(), from, to, out)
+	if err != nil {
+		t.Fatal("count-only collection failed")
+	}
+	if !mark.Equal(to) || len(api.requests) != 1 || len(api.requests[0].WantedFields) != 1 || api.requests[0].WantedFields[0] != "sum.queries" {
+		t.Fatal("count-only request did not select just sum.queries")
+	}
+	if len(out.Metrics) != 1 || out.Metrics[0].Value != 11 || len(out.Metrics[0].Attrs) != 0 {
+		t.Fatal("count-only collection did not emit the complete sum without attributes")
+	}
+}
+
+func TestDNSGroupsFieldLimitOneKeepsCountAndOmitsDimensions(t *testing.T) {
+	from := time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Minute)
+	settings := gatewaySettings()
+	settings.MaxNumberOfFields = 1
+	api := &gatewayFakeAPI{settings: settings, rows: []map[string]any{gatewayRow(13, "A", "allow", "GB")}}
+	out := &telemetry.Buffer{}
+	mark, err := NewDNSMetrics(gatewayConfig("synthetic-account"), api).CollectWindow(context.Background(), from, to, out)
+	if err != nil {
+		t.Fatal("field limit one rejected the required count")
+	}
+	if !mark.Equal(to) || len(api.requests) != 1 || len(api.requests[0].WantedFields) != 1 || api.requests[0].WantedFields[0] != "sum.queries" {
+		t.Fatal("field limit one did not retain only the required count field")
+	}
+	if len(out.Metrics) != 1 || out.Metrics[0].Value != 13 || len(out.Metrics[0].Attrs) != 0 {
+		t.Fatal("field limit one did not emit a complete count-only metric")
+	}
+}
+
+func TestDNSGroupsSelectOptionalDimensionsInStableOrder(t *testing.T) {
+	from := time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Minute)
+	settings := gatewaySettings()
+	settings.MaxNumberOfFields = 2
+	api := &gatewayFakeAPI{settings: settings, rows: []map[string]any{gatewayRow(17, "A", "allow", "GB")}}
+	out := &telemetry.Buffer{}
+	mark, err := NewDNSMetrics(gatewayConfig("synthetic-account"), api).CollectWindow(context.Background(), from, to, out)
+	if err != nil {
+		t.Fatal("limited collection failed with one optional dimension")
+	}
+	if !mark.Equal(to) || len(api.requests) != 1 {
+		t.Fatal("limited collection did not complete one window")
+	}
+	wanted := api.requests[0].WantedFields
+	if len(wanted) != 2 || wanted[0] != "sum.queries" || wanted[1] != "dimensions.queryType" {
+		t.Fatal("optional dimensions were not selected in their stable order")
+	}
+	if len(out.Metrics) != 1 || out.Metrics[0].Value != 17 || len(out.Metrics[0].Attrs) != 1 || out.Metrics[0].Attrs[0].Key != semconv.AttrGatewayDNSQueryType {
+		t.Fatal("collector did not emit the complete sum with only its selected dimension")
+	}
+}
+
 func TestDNSGroupsFailClosedOnMissingAccountSettingsOrRowFields(t *testing.T) {
 	from := time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC)
 	to := from.Add(time.Minute)
@@ -159,9 +250,8 @@ func TestDNSGroupsFailClosedOnMissingAccountSettingsOrRowFields(t *testing.T) {
 	}{
 		{name: "missing account", settings: base, rows: []any{}},
 		{name: "dataset disabled", account: "synthetic-account", settings: func() cfapi.DatasetSettings { s := base; s.Enabled = false; return s }(), rows: []any{}},
-		{name: "missing required available field", account: "synthetic-account", settings: func() cfapi.DatasetSettings { s := base; s.AvailableFields = s.AvailableFields[:3]; return s }(), rows: []any{}},
+		{name: "missing required available field", account: "synthetic-account", settings: func() cfapi.DatasetSettings { s := base; s.AvailableFields = s.AvailableFields[1:]; return s }(), rows: []any{}},
 		{name: "zero field limit", account: "synthetic-account", settings: func() cfapi.DatasetSettings { s := base; s.MaxNumberOfFields = 0; return s }(), rows: []any{}},
-		{name: "insufficient field limit", account: "synthetic-account", settings: func() cfapi.DatasetSettings { s := base; s.MaxNumberOfFields = len(gatewayDNSFields) - 1; return s }(), rows: []any{}},
 		{name: "missing page-size limit", account: "synthetic-account", settings: func() cfapi.DatasetSettings { s := base; s.MaxPageSize = 0; return s }(), rows: []any{}},
 		{name: "missing duration limit", account: "synthetic-account", settings: func() cfapi.DatasetSettings { s := base; s.MaxDuration = 0; return s }(), rows: []any{}},
 		{name: "missing retention limit", account: "synthetic-account", settings: func() cfapi.DatasetSettings { s := base; s.NotOlderThan = 0; return s }(), rows: []any{}},
@@ -169,6 +259,7 @@ func TestDNSGroupsFailClosedOnMissingAccountSettingsOrRowFields(t *testing.T) {
 		{name: "missing count", account: "synthetic-account", settings: base, rows: []any{map[string]any{"dimensions": map[string]any{"queryType": "A", "resolverDecision": "allow", "country": "GB"}}}},
 		{name: "zero count group", account: "synthetic-account", settings: base, rows: []any{gatewayRow(0, "A", "allow", "GB")}},
 		{name: "missing required dimension", account: "synthetic-account", settings: base, rows: []any{map[string]any{"sum": map[string]any{"queries": 3}, "dimensions": map[string]any{"queryType": "A", "resolverDecision": "allow"}}}},
+		{name: "malformed selected dimension", account: "synthetic-account", settings: base, rows: []any{map[string]any{"sum": map[string]any{"queries": 3}, "dimensions": map[string]any{"queryType": true, "resolverDecision": "allow", "country": "GB"}}}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
