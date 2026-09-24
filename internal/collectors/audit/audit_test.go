@@ -164,7 +164,8 @@ func TestAuditRestartBoundary(t *testing.T) {
 	cfg.Cloudflare.AccountID = "example-account"
 	out := &fakeEmitter{}
 	path := filepath.Join(t.TempDir(), "checkpoints.json")
-	for _, now := range []time.Time{boundary.Add(2 * time.Minute), boundary.Add(3 * time.Minute)} {
+	lag := newLogs(collector.Deps{Config: &cfg, API: f}).Lag()
+	for _, now := range []time.Time{boundary.Add(lag), boundary.Add(lag + time.Minute)} {
 		f.queries = nil
 		store, err := collector.NewFileStore(path)
 		if err != nil {
@@ -177,7 +178,7 @@ func TestAuditRestartBoundary(t *testing.T) {
 			t.Fatal(err)
 		}
 		querySince, err := time.Parse(time.RFC3339Nano, f.queries[0].Get("since"))
-		if err != nil || !querySince.Before(now.Add(-2*time.Minute)) {
+		if err != nil || !querySince.Before(now.Add(-lag)) {
 			t.Fatalf("query since=%s, want overlap before checkpoint", querySince)
 		}
 	}

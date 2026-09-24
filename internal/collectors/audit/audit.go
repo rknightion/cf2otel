@@ -52,7 +52,10 @@ type logs struct{ deps collector.Deps }
 func newLogs(deps collector.Deps) *logs      { return &logs{deps: deps} }
 func (*logs) Name() string                   { return "audit.logs" }
 func (*logs) DefaultInterval() time.Duration { return 5 * time.Minute }
-func (*logs) Lag() time.Duration             { return 2 * time.Minute }
+
+// A 64-minute live watch observed audit rows up to 450 seconds after event time.
+// Keep a 150-second margin so the checkpoint waits for delayed source rows.
+func (*logs) Lag() time.Duration { return 10 * time.Minute }
 
 func (c *logs) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (time.Time, error) {
 	if !from.Before(to) || c.deps.Config == nil || c.deps.API == nil || out == nil {
