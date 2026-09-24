@@ -158,6 +158,13 @@ func run(args []string) error {
 	registerCollectors(deps)
 	for _, entry := range registry.Entries() {
 		stats.Expect(entry.Collector.Name())
+		if _, ok := entry.Collector.(collector.WindowCollector); ok {
+			configured := cfg.Collector(entry.Collector.Name()).MaxWindow
+			effective := collector.EffectiveCommitWindow(entry)
+			if effective > 0 && configured > effective {
+				slog.Info("collector commit window capped", "collector", entry.Collector.Name(), "configured_max_window", configured, "effective_commit_window", effective)
+			}
+		}
 		if entry.Interval < cli.MinimumInterval {
 			return fmt.Errorf("collector %s interval %s is below minimum %s", entry.Collector.Name(), entry.Interval, cli.MinimumInterval)
 		}

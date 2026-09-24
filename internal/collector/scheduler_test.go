@@ -16,9 +16,9 @@ import (
 )
 
 type recordingEmitter struct {
-	logs, metrics, gapCount int
-	gapValue                float64
-	failureAttrs            [][]telemetry.Attr
+	logs, metrics, gapCount, catchupCount int
+	gapValue                              float64
+	failureAttrs                          [][]telemetry.Attr
 }
 
 func (*recordingEmitter) Gauge(context.Context, string, float64, ...telemetry.Attr) error { return nil }
@@ -27,6 +27,9 @@ func (r *recordingEmitter) Counter(_ context.Context, name string, value float64
 	if name == semconv.MetricWindowGap {
 		r.gapCount++
 		r.gapValue += value
+	}
+	if name == semconv.MetricWindowCatchupWindows {
+		r.catchupCount += int(value)
 	}
 	if name == semconv.MetricWindowCommitFailures {
 		r.failureAttrs = append(r.failureAttrs, append([]telemetry.Attr(nil), attrs...))

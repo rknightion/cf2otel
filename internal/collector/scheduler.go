@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"log/slog"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 var commitMu sync.Mutex
 
 const commitTimeout = 90 * time.Second // SDK retries for up to one minute per export.
+const maxWindowsPerTick = 4
 const commitChunkBytes = 512 * 1024
 const maxSingleSpanBytes = 1024 * 1024 // A capped two-sided AI Gateway span can exceed one normal chunk.
 const commitChunkItems = 512           // Below both SDK processors' default 2048 queue capacity.
@@ -133,12 +135,51 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 			return err
 		}
 	}
-	if !from.Before(to) {
-		return nil
+	for committed := 0; committed < maxWindowsPerTick && from.Before(to); committed++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		// Leave the leading window for the normal cadence. Unbounded entries
+		// already cover their whole backlog in one commit.
+		if committed > 0 && (e.MaxWindow <= 0 || to.Sub(from) <= e.MaxWindow) {
+			break
+		}
+		windowTo := to
+		if e.MaxWindow > 0 && windowTo.Sub(from) > e.MaxWindow {
+			windowTo = from.Add(e.MaxWindow)
+		}
+		mark, err := s.commitWindow(ctx, c, e, from, windowTo)
+		if err != nil {
+			return err
+		}
+		if !mark.After(from) {
+			// A retention gap may be unresolvable within this window.
+			return nil
+		}
+		from = mark
+		if committed > 0 && s.Emitter != nil {
+			_ = s.Emitter.Counter(context.WithoutCancel(ctx), semconv.MetricWindowCatchupWindows, 1,
+				telemetry.Attr{Key: semconv.AttrCollector, Value: c.Name()})
+		}
+		// The process-wide export lock belongs to a single window. Give
+		// other collectors a chance to commit before taking it again.
+		if committed+1 < maxWindowsPerTick && e.MaxWindow > 0 && to.Sub(from) > e.MaxWindow {
+			runtime.Gosched()
+		}
 	}
-	if e.MaxWindow > 0 && to.Sub(from) > e.MaxWindow {
-		to = from.Add(e.MaxWindow)
+	return nil
+}
+
+// EffectiveCommitWindow is the maximum source interval exported by one commit.
+// Zero means the entry has no configured source-window bound.
+func EffectiveCommitWindow(e Entry) time.Duration {
+	if e.MaxWindow > 0 {
+		return e.MaxWindow
 	}
+	return 0
+}
+
+func (s *Scheduler) commitWindow(ctx context.Context, c WindowCollector, e Entry, from, to time.Time) (time.Time, error) {
 	commitMu.Lock()
 	if pending, found := s.failed400[c.Name()]; found {
 		if pending.from.Equal(from) {
@@ -153,15 +194,19 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 	if err != nil {
 		var gap *cfapi.RetentionGapError
 		if errors.As(err, &gap) {
-			return s.skipGap(ctx, c, e, from, to, err)
+			if err := s.skipGap(ctx, c, e, from, to, err); err != nil {
+				return from, err
+			}
+			mark, _ := s.Checkpoints.Get(c.Name())
+			return mark, nil
 		}
-		return err
+		return from, err
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return from, err
 	}
 	if mark.After(to) || !mark.After(from) {
-		return fmt.Errorf("collector %s returned invalid high-water mark", c.Name())
+		return from, fmt.Errorf("collector %s returned invalid high-water mark", c.Name())
 	}
 	commitMu.Lock()
 	defer commitMu.Unlock()
@@ -190,7 +235,7 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 			telemetry.Attr{Key: semconv.AttrExportSignal, Value: telemetry.FailureSignals(err)},
 			telemetry.Attr{Key: semconv.AttrWindowOutcome, Value: outcome})
 		if outcome != "dropped" {
-			return err
+			return from, err
 		}
 		delete(s.failed400, c.Name())
 		s.Logger.Error("window dropped after three payload rejections", "collector", c.Name(), "from", from, "to", to, "error", err)
@@ -198,17 +243,17 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 		delete(s.failed400, c.Name())
 		for _, m := range buffer.Metrics {
 			if err := m.Replay(commitCtx, s.Emitter); err != nil {
-				return err
+				return from, err
 			}
 		}
 	}
 	if err := s.Checkpoints.Set(c.Name(), mark); err != nil {
-		return err
+		return from, err
 	}
 	if s.OnCheckpoint != nil {
 		s.OnCheckpoint(c.Name(), mark)
 	}
-	return nil
+	return mark, nil
 }
 func payloadRejected(err error) bool {
 	seenPayload := false
