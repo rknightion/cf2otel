@@ -331,6 +331,26 @@ func TestMetricsAllScopeLimitsDiscoveredZonesToConfiguredAccount(t *testing.T) {
 	}
 }
 
+func TestMetricsExplicitZoneCannotSelectAnotherAccount(t *testing.T) {
+	f := &fakeAPI{
+		zones: []cfapi.Zone{
+			zoneForAccount("owned", "owned.example.test", "account-fixture"),
+			zoneForAccount("foreign", "foreign.example.test", "other-account"),
+		},
+		rows: map[string][]map[string]any{"httpRequestsAdaptiveGroups": {metricGroup("foreign.example.test", 200, "miss", 3)}},
+	}
+	c := config.Default()
+	c.Cloudflare.AccountID = "account-fixture"
+	c.HTTP.Scope = "all"
+	c.HTTP.Zones = []string{"foreign"}
+	e := &fakeEmitter{}
+	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	mark, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
+	if err == nil || !mark.Equal(from) || len(f.queries) != 0 || len(e.counts) != 0 {
+		t.Fatalf("foreign zone returned mark=%s error=%v queries=%d counts=%d", mark, err, len(f.queries), len(e.counts))
+	}
+}
+
 func zoneForAccount(id, name, accountID string) cfapi.Zone {
 	zone := cfapi.Zone{ID: id, Name: name}
 	zone.Account.ID = accountID
