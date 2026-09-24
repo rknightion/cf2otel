@@ -312,7 +312,7 @@ func queryZone(ctx context.Context, api cfapi.Client, req cfapi.GraphQLRequest, 
 	}
 	retryFrom := retention.Floor.UTC().Add(time.Minute).Truncate(time.Second)
 	if !retryFrom.After(req.From) {
-		return nil, fmt.Errorf("zone retention floor did not advance: %v", err)
+		return nil, errors.New("zone retention floor did not advance: " + err.Error())
 	}
 	if retryFrom.After(req.To) {
 		retryFrom = req.To
@@ -325,7 +325,7 @@ func queryZone(ctx context.Context, api cfapi.Client, req cfapi.GraphQLRequest, 
 	if err := api.Query(ctx, req, rows); err != nil {
 		// Keep a second retention error away from the scheduler's whole-window
 		// skip path. The shared checkpoint must remain at the original start.
-		return nil, fmt.Errorf("zone retention retry failed: %v", err)
+		return nil, errors.New("zone retention retry failed: " + err.Error())
 	}
 	return gap, nil
 }
