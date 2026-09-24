@@ -34,5 +34,5 @@ runtime-default seccomp, no Linux capabilities and no mounted Kubernetes API
 token. Keep the checkpoint PVC when replacing the release if continuity matters.
 
 <!-- x-release-please-start-version -->
-Chart and app version: 0.2.3.
+Chart and app version: 0.3.0.
 <!-- x-release-please-end -->
