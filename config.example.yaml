@@ -10,8 +10,11 @@ access:
   include_service_tokens: false
 http:
   scope: access_protected
+  metrics_scope: "" # Inherit http.scope; set to all to include every account zone in metrics only.
   hosts: []
   zones: []
+  max_metric_hosts_per_zone: 1000
+  max_metric_series_per_window: 10000
 identity:
   enabled: true
   match_window: 15m

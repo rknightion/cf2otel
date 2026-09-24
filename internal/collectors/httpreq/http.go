@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"net"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,10 +22,6 @@ import (
 	otellog "go.opentelemetry.io/otel/log"
 )
 
-var groupFields = []string{
-	"count", "dimensions.clientRequestHTTPHost", "dimensions.edgeResponseStatus",
-	"dimensions.cacheStatus", "avg.originResponseDurationMs",
-}
 var eventFields = []string{
 	"datetime", "rayName", "clientRequestHTTPHost", "clientRequestHTTPMethodName",
 	"clientRequestPath", "clientRequestQuery", "edgeResponseStatus", "originResponseStatus",
@@ -87,8 +86,11 @@ func hostOf(s string) string {
 	return strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
 }
 func (b base) hosts(ctx context.Context) (map[string]bool, error) {
+	return b.hostsFor(ctx, b.cfg.HTTP.Scope)
+}
+func (b base) hostsFor(ctx context.Context, scope string) (map[string]bool, error) {
 	allowed := map[string]bool{}
-	switch b.cfg.HTTP.Scope {
+	switch scope {
 	case "all":
 		return nil, nil
 	case "hosts":
@@ -123,7 +125,7 @@ func (b base) hosts(ctx context.Context) (map[string]bool, error) {
 		}
 		return nil, fmt.Errorf("access app pagination exceeded 100 pages")
 	default:
-		return nil, fmt.Errorf("invalid HTTP scope %q", b.cfg.HTTP.Scope)
+		return nil, fmt.Errorf("invalid HTTP scope %q", scope)
 	}
 }
 func (b base) zones(ctx context.Context) ([]cfapi.Zone, error) {
@@ -149,6 +151,152 @@ func (b base) zones(ctx context.Context) ([]cfapi.Zone, error) {
 	}
 	return selected, nil
 }
+func (b base) metricsScope() string {
+	if b.cfg.HTTP.MetricsScope != "" {
+		return b.cfg.HTTP.MetricsScope
+	}
+	return b.cfg.HTTP.Scope
+}
+func (b base) metricZones(ctx context.Context) ([]cfapi.Zone, error) {
+	zones, err := b.api.Zones(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(zones) == 0 {
+		return nil, errors.New("HTTP metrics zone discovery returned no zones")
+	}
+	for _, zone := range zones {
+		if zone.ID == "" || zone.Name == "" {
+			return nil, errors.New("HTTP metrics zone discovery returned an incomplete zone")
+		}
+	}
+	wanted := b.cfg.HTTP.Zones
+	// Only an explicitly configured metrics_scope=all broadens past the
+	// legacy Cloudflare.Zones selector. An empty metrics scope inherits the
+	// host scope while preserving the old zone subset behavior.
+	if len(wanted) == 0 && b.cfg.HTTP.MetricsScope != "all" {
+		wanted = b.cfg.Cloudflare.Zones
+	}
+	if len(wanted) == 0 {
+		return zones, nil
+	}
+	selected := make([]cfapi.Zone, 0, len(zones))
+	for _, zone := range zones {
+		for _, selector := range wanted {
+			if selector == zone.ID || strings.EqualFold(selector, zone.Name) {
+				selected = append(selected, zone)
+				break
+			}
+		}
+	}
+	if len(selected) == 0 {
+		return nil, errors.New("HTTP metrics zone selectors matched no discovered zones")
+	}
+	return selected, nil
+}
+
+var requiredHTTPGroupFields = []string{
+	"count", "dimensions.clientRequestHTTPHost", "dimensions.edgeResponseStatus", "dimensions.cacheStatus",
+}
+
+type httpGroupSettingsProvider interface {
+	DatasetSettings(context.Context, cfapi.Scope, string, string) (cfapi.DatasetSettings, error)
+}
+
+func httpGroupFieldName(field string) string {
+	field = strings.ToLower(field)
+	for _, prefix := range []string{"dimensions", "avg"} {
+		if strings.HasPrefix(field, prefix+"_") {
+			return prefix + "." + strings.TrimPrefix(field, prefix+"_")
+		}
+	}
+	return field
+}
+
+func httpGroupQueryFields(ctx context.Context, api cfapi.Client, zoneID string) ([]string, error) {
+	provider, ok := api.(httpGroupSettingsProvider)
+	if !ok {
+		return nil, errors.New("HTTP groups settings discovery is unavailable")
+	}
+	settings, err := provider.DatasetSettings(ctx, cfapi.ZoneScope, zoneID, "httpRequestsAdaptiveGroups")
+	if err != nil {
+		return nil, fmt.Errorf("HTTP groups settings: %w", err)
+	}
+	if !settings.Enabled {
+		return nil, errors.New("HTTP groups dataset is disabled for a discovered zone")
+	}
+	available := make(map[string]bool, len(settings.AvailableFields))
+	for _, field := range settings.AvailableFields {
+		available[httpGroupFieldName(field)] = true
+	}
+	for _, field := range requiredHTTPGroupFields {
+		if !available[httpGroupFieldName(field)] {
+			return nil, fmt.Errorf("HTTP groups is missing required field %q", field)
+		}
+	}
+	if settings.MaxNumberOfFields > 0 && settings.MaxNumberOfFields < len(requiredHTTPGroupFields) {
+		return nil, fmt.Errorf("HTTP groups field limit %d is below the required field count %d", settings.MaxNumberOfFields, len(requiredHTTPGroupFields))
+	}
+	fields := append([]string(nil), requiredHTTPGroupFields...)
+	const avgField = "avg.originResponseDurationMs"
+	if available[httpGroupFieldName(avgField)] && (settings.MaxNumberOfFields <= 0 || settings.MaxNumberOfFields > len(fields)) {
+		fields = append(fields, avgField)
+	}
+	return fields, nil
+}
+
+type httpMetricLabels struct {
+	zone   string
+	host   string
+	status string
+	cache  string
+}
+
+type httpMetricTotals struct {
+	requests             float64
+	originDurationMS     float64
+	originDurationWeight float64
+}
+
+func metricNumber(v any) (float64, bool) {
+	var value float64
+	switch n := v.(type) {
+	case float64:
+		value = n
+	case float32:
+		value = float64(n)
+	case int:
+		value = float64(n)
+	case int64:
+		value = float64(n)
+	case json.Number:
+		parsed, err := n.Float64()
+		if err != nil {
+			return 0, false
+		}
+		value = parsed
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(n), 64)
+		if err != nil {
+			return 0, false
+		}
+		value = parsed
+	default:
+		return 0, false
+	}
+	return value, !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+func metricCacheStatus(v any) string {
+	status := strings.ToLower(strings.TrimSpace(str(v)))
+	switch status {
+	case "hit", "miss", "expired", "stale", "updating", "revalidated", "ignoredbypolicy", "bypass", "dynamic", "none", "uncacheable", "unknown":
+		return status
+	default:
+		return "other"
+	}
+}
+
 func str(v any) string {
 	if v == nil {
 		return ""
@@ -287,18 +435,42 @@ func (c events) CollectWindow(ctx context.Context, from, to time.Time, e telemet
 }
 
 func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
-	allowed, err := c.hosts(ctx)
+	scope := c.metricsScope()
+	allowed, err := c.hostsFor(ctx, scope)
 	if err != nil {
 		return from, err
 	}
-	zones, err := c.zones(ctx)
+	zones, err := c.metricZones(ctx)
 	if err != nil {
 		return from, err
 	}
+	if c.cfg.HTTP.MaxMetricHostsPerZone <= 0 {
+		return from, errors.New("HTTP metric host limit must be positive")
+	}
+	if c.cfg.HTTP.MaxMetricSeriesPerWindow <= 0 {
+		return from, errors.New("HTTP metric series limit must be positive")
+	}
+
+	// Buffer a complete window before touching the emitter. A failure in any
+	// zone leaves the caller's checkpoint unchanged without producing partial
+	// metric points. Host labels in all scope remain bounded by both limits.
+	totals := make(map[httpMetricLabels]httpMetricTotals)
+	hostsByZone := make(map[string]map[string]struct{}, len(zones))
 	var retentionGaps []error
 	for _, zone := range zones {
+		fields, err := httpGroupQueryFields(ctx, c.api, zone.ID)
+		if err != nil {
+			return from, err
+		}
+		includeOriginDuration := false
+		for _, field := range fields {
+			if field == "avg.originResponseDurationMs" {
+				includeOriginDuration = true
+				break
+			}
+		}
 		var rows []map[string]any
-		req := cfapi.GraphQLRequest{Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: "httpRequestsAdaptiveGroups", WantedFields: groupFields, From: from, To: to, Limit: 10000}
+		req := cfapi.GraphQLRequest{Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: "httpRequestsAdaptiveGroups", WantedFields: fields, From: from, To: to, Limit: 10000}
 		if err := c.api.Query(ctx, req, &rows); err != nil {
 			var gap *cfapi.RetentionGapError
 			if errors.As(err, &gap) {
@@ -312,34 +484,108 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 		}
 		for _, row := range rows {
 			dims, _ := row["dimensions"].(map[string]any)
-			if row["count"] == nil || field(dims, "clientRequestHTTPHost") == nil {
-				return from, fmt.Errorf("HTTP group missing required count or host field")
+			if row["count"] == nil || field(dims, "clientRequestHTTPHost") == nil || field(dims, "edgeResponseStatus") == nil || field(dims, "cacheStatus") == nil {
+				return from, errors.New("HTTP group missing required count, host, status, or cache field")
 			}
-			host := str(field(dims, "clientRequestHTTPHost"))
+			host := hostOf(str(field(dims, "clientRequestHTTPHost")))
+			if host == "" {
+				return from, errors.New("HTTP group has an empty host field")
+			}
 			if !selected(host, allowed) {
 				continue
 			}
-			count := number(row["count"])
-			if count <= 0 {
+			if net.ParseIP(host) != nil {
+				return from, errors.New("HTTP group host is an IP address; refusing it as a metric label")
+			}
+			count, ok := metricNumber(row["count"])
+			if !ok || count < 0 {
+				return from, errors.New("HTTP group has an invalid count field")
+			}
+			if count == 0 {
 				continue
 			}
-			attrs := []telemetry.Attr{{Key: semconv.AttrHTTPZone, Value: zone.Name},
-				{Key: semconv.AttrHTTPHost, Value: host},
-				{Key: semconv.AttrStatusClass, Value: statusClass(field(dims, "edgeResponseStatus"))},
-				{Key: semconv.AttrHTTPCacheStatus, Value: str(field(dims, "cacheStatus"))}}
-			if err := e.Counter(ctx, semconv.MetricHTTPRequests, count, attrs...); err != nil {
-				return from, err
+			zoneHosts := hostsByZone[zone.ID]
+			if zoneHosts == nil {
+				zoneHosts = make(map[string]struct{})
+				hostsByZone[zone.ID] = zoneHosts
+			}
+			zoneHosts[host] = struct{}{}
+			if len(zoneHosts) > c.cfg.HTTP.MaxMetricHostsPerZone {
+				return from, fmt.Errorf("HTTP metric host count exceeds the per-zone limit %d", c.cfg.HTTP.MaxMetricHostsPerZone)
+			}
+
+			labels := httpMetricLabels{
+				zone:   zone.Name,
+				host:   host,
+				status: statusClass(field(dims, "edgeResponseStatus")),
+				cache:  metricCacheStatus(field(dims, "cacheStatus")),
+			}
+			aggregate := totals[labels]
+			aggregate.requests += count
+			if math.IsInf(aggregate.requests, 0) || math.IsNaN(aggregate.requests) {
+				return from, errors.New("HTTP metric request total is invalid")
 			}
 			avg, _ := row["avg"].(map[string]any)
-			if v, ok := avg["originResponseDurationMs"]; ok && v != nil {
-				if err := e.Gauge(ctx, semconv.MetricHTTPOriginDuration, number(v)/1000, attrs...); err != nil {
-					return from, err
+			if v, ok := avg["originResponseDurationMs"]; includeOriginDuration && ok && v != nil {
+				milliseconds, valid := metricNumber(v)
+				if !valid || milliseconds < 0 {
+					return from, errors.New("HTTP group has an invalid origin duration")
+				}
+				aggregate.originDurationMS += milliseconds * count
+				aggregate.originDurationWeight += count
+				if math.IsInf(aggregate.originDurationMS, 0) || math.IsNaN(aggregate.originDurationMS) || math.IsInf(aggregate.originDurationWeight, 0) || math.IsNaN(aggregate.originDurationWeight) {
+					return from, errors.New("HTTP metric origin duration total is invalid")
 				}
 			}
+			totals[labels] = aggregate
 		}
 	}
 	if len(retentionGaps) > 0 {
 		return from, errors.Join(retentionGaps...)
+	}
+	series := 0
+	for _, aggregate := range totals {
+		series++ // request counter
+		if aggregate.originDurationWeight > 0 {
+			series++ // origin duration gauge has a distinct metric name
+		}
+	}
+	if series > c.cfg.HTTP.MaxMetricSeriesPerWindow {
+		return from, fmt.Errorf("HTTP metric series count %d exceeds the per-window limit %d", series, c.cfg.HTTP.MaxMetricSeriesPerWindow)
+	}
+	labels := make([]httpMetricLabels, 0, len(totals))
+	for label := range totals {
+		labels = append(labels, label)
+	}
+	sort.Slice(labels, func(i, j int) bool {
+		if labels[i].zone != labels[j].zone {
+			return labels[i].zone < labels[j].zone
+		}
+		if labels[i].host != labels[j].host {
+			return labels[i].host < labels[j].host
+		}
+		if labels[i].status != labels[j].status {
+			return labels[i].status < labels[j].status
+		}
+		return labels[i].cache < labels[j].cache
+	})
+	for _, label := range labels {
+		aggregate := totals[label]
+		attrs := []telemetry.Attr{
+			{Key: semconv.AttrHTTPZone, Value: label.zone},
+			{Key: semconv.AttrHTTPHost, Value: label.host},
+			{Key: semconv.AttrStatusClass, Value: label.status},
+			{Key: semconv.AttrHTTPCacheStatus, Value: label.cache},
+		}
+		if err := e.Counter(ctx, semconv.MetricHTTPRequests, aggregate.requests, attrs...); err != nil {
+			return from, err
+		}
+		if aggregate.originDurationWeight > 0 {
+			seconds := aggregate.originDurationMS / aggregate.originDurationWeight / 1000
+			if err := e.Gauge(ctx, semconv.MetricHTTPOriginDuration, seconds, attrs...); err != nil {
+				return from, err
+			}
+		}
 	}
 	return to, nil
 }

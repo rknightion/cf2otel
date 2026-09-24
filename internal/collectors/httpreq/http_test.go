@@ -3,6 +3,7 @@ package httpreq
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"path/filepath"
 	"reflect"
@@ -20,12 +21,15 @@ import (
 )
 
 type fakeAPI struct {
-	rows        map[string][]map[string]any
-	apps        []accessApp
-	queries     []cfapi.GraphQLRequest
-	loginRows   []map[string]any
-	zones       []cfapi.Zone
-	queryErrors map[string]error
+	rows          map[string][]map[string]any
+	apps          []accessApp
+	queries       []cfapi.GraphQLRequest
+	loginRows     []map[string]any
+	zones         []cfapi.Zone
+	zonesErr      error
+	queryErrors   map[string]error
+	groupSettings *cfapi.DatasetSettings
+	settingsErr   error
 }
 
 func (f *fakeAPI) Get(_ context.Context, path string, _ url.Values, out any) error {
@@ -46,10 +50,25 @@ func (f *fakeAPI) Query(_ context.Context, q cfapi.GraphQLRequest, out any) erro
 }
 func (f *fakeAPI) Accounts(context.Context) ([]cfapi.Account, error) { return nil, nil }
 func (f *fakeAPI) Zones(context.Context) ([]cfapi.Zone, error) {
+	if f.zonesErr != nil {
+		return nil, f.zonesErr
+	}
 	if f.zones != nil {
 		return f.zones, nil
 	}
 	return []cfapi.Zone{{ID: "zone", Name: "example.com"}}, nil
+}
+func (f *fakeAPI) DatasetSettings(_ context.Context, scope cfapi.Scope, scopeID, dataset string) (cfapi.DatasetSettings, error) {
+	if f.settingsErr != nil {
+		return cfapi.DatasetSettings{}, f.settingsErr
+	}
+	if scope != cfapi.ZoneScope || scopeID == "" || dataset != "httpRequestsAdaptiveGroups" {
+		return cfapi.DatasetSettings{}, errors.New("unexpected settings request")
+	}
+	if f.groupSettings != nil {
+		return *f.groupSettings, nil
+	}
+	return defaultHTTPGroupSettings(), nil
 }
 
 func TestEventsRetentionUsesLatestZoneFloor(t *testing.T) {
@@ -218,6 +237,378 @@ func TestGroupsProduceCorrectedMetrics(t *testing.T) {
 	}
 	if len(e.gauges) != 1 || e.gauges[0].name != semconv.MetricHTTPOriginDuration || e.gauges[0].value != 0.04 {
 		t.Fatalf("duration=%+v", e.gauges)
+	}
+}
+
+func TestMetricsAllScopeBroadensOnlyMetricsAndKeepsEventsScoped(t *testing.T) {
+	f := &fakeAPI{
+		apps:  []accessApp{{Domain: "protected.example.test"}},
+		zones: []cfapi.Zone{{ID: "one", Name: "one.example.test"}, {ID: "two", Name: "two.example.test"}},
+		rows: map[string][]map[string]any{
+			"httpRequestsAdaptive": {
+				{"datetime": "2026-09-23T10:00:00Z", "clientRequestHTTPHost": "protected.example.test", "rayName": "fixture-ray-one"},
+				{"datetime": "2026-09-23T10:00:00Z", "clientRequestHTTPHost": "public.example.test", "rayName": "fixture-ray-two"},
+			},
+			"httpRequestsAdaptiveGroups": {
+				metricGroup("protected.example.test", 200, "miss", 2),
+				metricGroup("public.example.test", 503, "none", 3),
+			},
+		},
+	}
+	c := config.Default()
+	c.Cloudflare.AccountID = "account-fixture"
+	c.Cloudflare.Zones = []string{"one"}
+	c.Identity.Enabled = false
+	c.HTTP.MetricsScope = "all"
+	e := &fakeEmitter{}
+	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	to := from.Add(2 * time.Hour)
+
+	if _, err := NewEvents(&c, f, nil).CollectWindow(context.Background(), from, to, e); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, to, e); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.logs) != 1 || !hasAttr(e.logs[0].attrs, semconv.AttrHTTPHost, "protected.example.test") {
+		t.Fatalf("events escaped the existing HTTP scope: %+v", e.logs)
+	}
+	if len(e.counts) != 4 {
+		t.Fatalf("all-scope metrics emitted %d rows, want both hosts in both zones", len(e.counts))
+	}
+	if len(f.queries) != 3 || f.queries[0].Dataset != "httpRequestsAdaptive" || f.queries[0].ScopeID != "one" {
+		t.Fatalf("event queries changed with metrics scope: %+v", f.queries)
+	}
+	metricZones := []string{f.queries[1].ScopeID, f.queries[2].ScopeID}
+	if !reflect.DeepEqual(metricZones, []string{"one", "two"}) {
+		t.Fatalf("all-scope metrics queried zones %v, want every discovered zone", metricZones)
+	}
+	for _, row := range e.counts {
+		if !hasAttr(row.attrs, semconv.AttrHTTPHost, "protected.example.test") && !hasAttr(row.attrs, semconv.AttrHTTPHost, "public.example.test") {
+			t.Fatalf("all-scope metrics unexpectedly filtered a host: %+v", row.attrs)
+		}
+	}
+}
+
+func TestMetricsDefaultScopeInheritsExistingHTTPScope(t *testing.T) {
+	f := &fakeAPI{
+		apps:  []accessApp{{Domain: "protected.example.test"}},
+		zones: []cfapi.Zone{{ID: "one", Name: "one.example.test"}, {ID: "two", Name: "two.example.test"}},
+		rows: map[string][]map[string]any{"httpRequestsAdaptiveGroups": {
+			metricGroup("protected.example.test", 200, "miss", 2),
+			metricGroup("public.example.test", 200, "miss", 3),
+		}},
+	}
+	c := config.Default()
+	c.Cloudflare.AccountID = "account-fixture"
+	c.Cloudflare.Zones = []string{"one"}
+	e := &fakeEmitter{}
+	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	if _, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.queries) != 1 || f.queries[0].ScopeID != "one" {
+		t.Fatalf("default metrics zone selection changed: %+v", f.queries)
+	}
+	if len(e.counts) != 1 || !hasAttr(e.counts[0].attrs, semconv.AttrHTTPHost, "protected.example.test") {
+		t.Fatalf("default metrics scope changed: %+v", e.counts)
+	}
+}
+
+func TestMetricsEmptyMetricsScopeKeepsLegacyZoneSubset(t *testing.T) {
+	f := &fakeAPI{
+		zones: []cfapi.Zone{{ID: "one", Name: "one.example.test"}, {ID: "two", Name: "two.example.test"}},
+		rows:  map[string][]map[string]any{"httpRequestsAdaptiveGroups": {metricGroup("public.example.test", 200, "miss", 2)}},
+	}
+	c := config.Default()
+	c.Cloudflare.Zones = []string{"one"}
+	c.HTTP.Scope = "all"
+	e := &fakeEmitter{}
+	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	if _, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.queries) != 1 || f.queries[0].ScopeID != "one" {
+		t.Fatalf("empty metrics_scope changed legacy zone selection: %+v", f.queries)
+	}
+}
+
+func TestMetricsAllScopeUsesExplicitHTTPZonesAsNarrowingSelector(t *testing.T) {
+	f := &fakeAPI{
+		zones: []cfapi.Zone{{ID: "one", Name: "one.example.test"}, {ID: "two", Name: "two.example.test"}},
+		rows:  map[string][]map[string]any{"httpRequestsAdaptiveGroups": {metricGroup("public.example.test", 200, "miss", 2)}},
+	}
+	c := config.Default()
+	c.Cloudflare.Zones = []string{"one"}
+	c.HTTP.Scope = "all"
+	c.HTTP.MetricsScope = "all"
+	c.HTTP.Zones = []string{"two"}
+	e := &fakeEmitter{}
+	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	if _, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.queries) != 1 || f.queries[0].ScopeID != "two" {
+		t.Fatalf("explicit HTTP zone selector was not applied: %+v", f.queries)
+	}
+	if len(e.counts) != 1 {
+		t.Fatalf("explicit HTTP zone selector emitted %d points, want one", len(e.counts))
+	}
+}
+
+func TestMetricsAllScopeFailsClosedOnMissingZoneDiscovery(t *testing.T) {
+	tests := []struct {
+		name string
+		api  *fakeAPI
+	}{
+		{name: "empty inventory", api: &fakeAPI{zones: []cfapi.Zone{}}},
+		{name: "discovery error", api: &fakeAPI{zonesErr: errors.New("discovery unavailable")}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := config.Default()
+			c.HTTP.MetricsScope = "all"
+			e := &fakeEmitter{}
+			from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+			mark, err := NewMetrics(&c, tt.api).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
+			if err == nil || !mark.Equal(from) {
+				t.Fatalf("empty zone discovery returned mark=%s error=%v, want error and unchanged mark", mark, err)
+			}
+			if len(tt.api.queries) != 0 || len(e.counts) != 0 || len(e.gauges) != 0 {
+				t.Fatalf("empty zone discovery queried or emitted: queries=%d counts=%d gauges=%d", len(tt.api.queries), len(e.counts), len(e.gauges))
+			}
+		})
+	}
+}
+
+func TestMetricsRequireEntitledAndPresentGroupFields(t *testing.T) {
+	t.Run("required field is not entitled", func(t *testing.T) {
+		settings := defaultHTTPGroupSettings()
+		settings.AvailableFields = []string{"count", "dimensions_edgeResponseStatus", "dimensions_cacheStatus"}
+		f := &fakeAPI{
+			groupSettings: &settings,
+			rows:          map[string][]map[string]any{"httpRequestsAdaptiveGroups": {metricGroup("public.example.test", 200, "miss", 1)}},
+		}
+		c := config.Default()
+		c.HTTP.Scope = "all"
+		c.HTTP.MetricsScope = "all"
+		e := &fakeEmitter{}
+		from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+		mark, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
+		if err == nil || !mark.Equal(from) || len(f.queries) != 0 || len(e.counts) != 0 {
+			t.Fatalf("unentitled required field returned mark=%s error=%v queries=%d counts=%d", mark, err, len(f.queries), len(e.counts))
+		}
+	})
+	t.Run("required row dimension is missing", func(t *testing.T) {
+		row := metricGroup("public.example.test", 200, "miss", 1)
+		delete(row["dimensions"].(map[string]any), "cacheStatus")
+		f := &fakeAPI{rows: map[string][]map[string]any{"httpRequestsAdaptiveGroups": {row}}}
+		c := config.Default()
+		c.HTTP.Scope = "all"
+		c.HTTP.MetricsScope = "all"
+		e := &fakeEmitter{}
+		from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+		mark, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
+		if err == nil || !mark.Equal(from) || len(e.counts) != 0 {
+			t.Fatalf("missing dimension returned mark=%s error=%v counts=%d", mark, err, len(e.counts))
+		}
+	})
+}
+
+func TestMetricsSelectionFitsTheAdvertisedFieldLimit(t *testing.T) {
+	settings := defaultHTTPGroupSettings()
+	settings.MaxNumberOfFields = len(requiredHTTPGroupFields)
+	f := &fakeAPI{
+		groupSettings: &settings,
+		rows:          map[string][]map[string]any{"httpRequestsAdaptiveGroups": {metricGroup("one.example.test", 200, "miss", 1)}},
+	}
+	c := config.Default()
+	c.HTTP.Scope = "all"
+	c.HTTP.MetricsScope = "all"
+	e := &fakeEmitter{}
+	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	if _, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.queries) != 1 || !reflect.DeepEqual(f.queries[0].WantedFields, requiredHTTPGroupFields) {
+		t.Fatalf("HTTP groups selection ignored the zone field limit: %+v", f.queries)
+	}
+	if len(e.counts) != 1 || len(e.gauges) != 0 {
+		t.Fatalf("optional duration field exceeded the advertised selection: counts=%d gauges=%d", len(e.counts), len(e.gauges))
+	}
+}
+
+func TestMetricsEnforceHostAndSeriesCapsBeforeEmission(t *testing.T) {
+	t.Run("host cap", func(t *testing.T) {
+		f := &fakeAPI{rows: map[string][]map[string]any{"httpRequestsAdaptiveGroups": {
+			metricGroup("one.example.test", 200, "miss", 1),
+			metricGroup("two.example.test", 200, "miss", 1),
+		}}}
+		c := config.Default()
+		c.HTTP.Scope = "all"
+		c.HTTP.MetricsScope = "all"
+		c.HTTP.MaxMetricHostsPerZone = 1
+		e := &fakeEmitter{}
+		from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+		mark, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
+		if err == nil || !mark.Equal(from) || len(e.counts) != 0 || len(e.gauges) != 0 {
+			t.Fatalf("host cap returned mark=%s error=%v counts=%d gauges=%d", mark, err, len(e.counts), len(e.gauges))
+		}
+	})
+	t.Run("series cap", func(t *testing.T) {
+		f := &fakeAPI{rows: map[string][]map[string]any{"httpRequestsAdaptiveGroups": {
+			metricGroup("one.example.test", 200, "miss", 1),
+			metricGroup("one.example.test", 503, "miss", 1),
+		}}}
+		c := config.Default()
+		c.HTTP.Scope = "all"
+		c.HTTP.MetricsScope = "all"
+		c.HTTP.MaxMetricSeriesPerWindow = 3
+		e := &fakeEmitter{}
+		from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+		mark, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
+		if err == nil || !mark.Equal(from) || len(e.counts) != 0 || len(e.gauges) != 0 {
+			t.Fatalf("series cap returned mark=%s error=%v counts=%d gauges=%d", mark, err, len(e.counts), len(e.gauges))
+		}
+	})
+}
+
+func TestMetricsFailClosedWhenAZoneQueryIsIncomplete(t *testing.T) {
+	f := &fakeAPI{
+		zones:       []cfapi.Zone{{ID: "one", Name: "one.example.test"}, {ID: "two", Name: "two.example.test"}},
+		rows:        map[string][]map[string]any{"httpRequestsAdaptiveGroups": {metricGroup("one.example.test", 200, "miss", 1)}},
+		queryErrors: map[string]error{"two": errors.New("fixture query failed")},
+	}
+	c := config.Default()
+	c.HTTP.Scope = "all"
+	c.HTTP.MetricsScope = "all"
+	e := &fakeEmitter{}
+	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	mark, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
+	if err == nil || !mark.Equal(from) {
+		t.Fatalf("incomplete zone query returned mark=%s error=%v", mark, err)
+	}
+	if len(e.counts) != 0 || len(e.gauges) != 0 {
+		t.Fatalf("incomplete zone query emitted partial metrics: counts=%d gauges=%d", len(e.counts), len(e.gauges))
+	}
+}
+
+func TestMetricsIncompleteZoneWindowDoesNotAdvanceCheckpoint(t *testing.T) {
+	f := &fakeAPI{
+		zones:       []cfapi.Zone{{ID: "one", Name: "one.example.test"}, {ID: "two", Name: "two.example.test"}},
+		rows:        map[string][]map[string]any{"httpRequestsAdaptiveGroups": {metricGroup("one.example.test", 200, "miss", 1)}},
+		queryErrors: map[string]error{"two": errors.New("fixture query failed")},
+	}
+	c := config.Default()
+	c.HTTP.Scope = "all"
+	c.HTTP.MetricsScope = "all"
+	e := &fakeEmitter{}
+	store, err := collector.NewFileStore(filepath.Join(t.TempDir(), "checkpoints.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	scheduler := collector.NewScheduler(nil, e, store)
+	scheduler.Now = func() time.Time { return time.Date(2026, 9, 23, 10, 32, 0, 0, time.UTC) }
+	entry := collector.Entry{Collector: NewMetrics(&c, f), Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute}
+	if err := scheduler.RunOnce(context.Background(), entry); err == nil {
+		t.Fatal("incomplete zone query unexpectedly committed")
+	}
+	mark, ok := store.Get("httpreq.metrics")
+	want := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	if !ok || !mark.Equal(want) {
+		t.Fatalf("incomplete zone query checkpoint=%s present=%v, want the unchanged initial cursor %s", mark, ok, want)
+	}
+	if len(e.counts) != 0 || len(e.gauges) != 0 {
+		t.Fatalf("incomplete window reached the emitter: counts=%d gauges=%d", len(e.counts), len(e.gauges))
+	}
+}
+
+func TestMetricsFailClosedOnSaturatedGroupsQuery(t *testing.T) {
+	rows := make([]map[string]any, 10000)
+	for i := range rows {
+		rows[i] = metricGroup("one.example.test", 200, "miss", 1)
+	}
+	f := &fakeAPI{rows: map[string][]map[string]any{"httpRequestsAdaptiveGroups": rows}}
+	c := config.Default()
+	c.HTTP.Scope = "all"
+	c.HTTP.MetricsScope = "all"
+	c.HTTP.MaxMetricSeriesPerWindow = 20000
+	e := &fakeEmitter{}
+	from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	mark, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
+	if err == nil || !mark.Equal(from) || !strings.Contains(err.Error(), "limit") {
+		t.Fatalf("saturated query returned mark=%s error=%v", mark, err)
+	}
+	if len(e.counts) != 0 || len(e.gauges) != 0 {
+		t.Fatalf("saturated query emitted metrics: counts=%d gauges=%d", len(e.counts), len(e.gauges))
+	}
+}
+
+func TestMetricsHostLabelsAreSanitizedAndNeverContainIP(t *testing.T) {
+	t.Run("strips userinfo and path", func(t *testing.T) {
+		f := &fakeAPI{rows: map[string][]map[string]any{"httpRequestsAdaptiveGroups": {
+			metricGroup("https://alice@example.test/private?q=fixture", 200, "miss", 1),
+		}}}
+		c := config.Default()
+		c.HTTP.Scope = "all"
+		c.HTTP.MetricsScope = "all"
+		e := &fakeEmitter{}
+		from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+		if _, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e); err != nil {
+			t.Fatal(err)
+		}
+		if len(e.counts) != 1 || !hasAttr(e.counts[0].attrs, semconv.AttrHTTPHost, "example.test") {
+			t.Fatalf("metric host was not canonicalized: %+v", e.counts)
+		}
+		for _, attr := range e.counts[0].attrs {
+			key := strings.ToLower(attr.Key)
+			if strings.Contains(key, "ip") || strings.Contains(key, "email") || strings.Contains(key, "path") || strings.Contains(key, "ray") || strings.Contains(key, "user_agent") {
+				t.Fatalf("PII attribute key reached metric: %q", attr.Key)
+			}
+			if strings.Contains(attr.Value, "alice") || strings.Contains(attr.Value, "/private") || strings.Contains(attr.Value, "fixture") || strings.Contains(attr.Value, "@") {
+				t.Fatalf("PII-like host content reached metric: %+v", attr)
+			}
+		}
+	})
+	t.Run("rejects an IP host", func(t *testing.T) {
+		f := &fakeAPI{rows: map[string][]map[string]any{"httpRequestsAdaptiveGroups": {
+			metricGroup("203.0.113.7", 200, "miss", 1),
+		}}}
+		c := config.Default()
+		c.HTTP.Scope = "all"
+		c.HTTP.MetricsScope = "all"
+		e := &fakeEmitter{}
+		from := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+		mark, err := NewMetrics(&c, f).CollectWindow(context.Background(), from, from.Add(time.Hour), e)
+		if err == nil || !mark.Equal(from) || len(e.counts) != 0 {
+			t.Fatalf("IP host returned mark=%s error=%v counts=%d", mark, err, len(e.counts))
+		}
+	})
+}
+
+func metricGroup(host string, status int, cache string, count int) map[string]any {
+	return map[string]any{
+		"dimensions": map[string]any{
+			"clientRequestHTTPHost": host,
+			"edgeResponseStatus":    status,
+			"cacheStatus":           cache,
+		},
+		"count": count,
+		"avg":   map[string]any{"originResponseDurationMs": 40},
+	}
+}
+
+func defaultHTTPGroupSettings() cfapi.DatasetSettings {
+	return cfapi.DatasetSettings{
+		Enabled: true,
+		AvailableFields: []string{
+			"count", "dimensions_clientRequestHTTPHost", "dimensions_edgeResponseStatus",
+			"dimensions_cacheStatus", "avg_originResponseDurationMs",
+		},
+		MaxNumberOfFields: 70,
+		MaxDuration:       3600,
+		NotOlderThan:      31 * 24 * 3600,
+		MaxPageSize:       10000,
 	}
 }
 

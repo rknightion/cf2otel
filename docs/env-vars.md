@@ -13,8 +13,11 @@ Configuration loads defaults, then YAML, then `CF2OTEL_` environment overrides. 
 | `cloudflare.max_response_bytes` | `CF2OTEL_CLOUDFLARE__MAX_RESPONSE_BYTES` |
 | `access.include_service_tokens` | `CF2OTEL_ACCESS__INCLUDE_SERVICE_TOKENS` |
 | `http.scope` | `CF2OTEL_HTTP__SCOPE` |
+| `http.metrics_scope` | `CF2OTEL_HTTP__METRICS_SCOPE` |
 | `http.hosts` | `CF2OTEL_HTTP__HOSTS` |
 | `http.zones` | `CF2OTEL_HTTP__ZONES` |
+| `http.max_metric_hosts_per_zone` | `CF2OTEL_HTTP__MAX_METRIC_HOSTS_PER_ZONE` |
+| `http.max_metric_series_per_window` | `CF2OTEL_HTTP__MAX_METRIC_SERIES_PER_WINDOW` |
 | `identity.enabled` | `CF2OTEL_IDENTITY__ENABLED` |
 | `identity.match_window` | `CF2OTEL_IDENTITY__MATCH_WINDOW` |
 | `identity.max_candidates` | `CF2OTEL_IDENTITY__MAX_CANDIDATES` |
