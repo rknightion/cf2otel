@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.0](https://github.com/rknightion/cf2otel/compare/v0.3.1...v0.4.0) (2026-09-24)
+
+
+### Features
+
+* add bounded HTTP metrics scope controls ([76372a8](https://github.com/rknightion/cf2otel/commit/76372a83294c4c62b0e38fb5908679ec813a9707))
+* collect Gateway DNS group metrics ([57749f7](https://github.com/rknightion/cf2otel/commit/57749f7d232be1e3d092220bc4edd7235ff63862))
+* support bounded HTTP metrics across account zones ([bf19cd2](https://github.com/rknightion/cf2otel/commit/bf19cd212bedc8bce8292649d1a9ef8e08a89005))
+
+
+### Bug Fixes
+
+* classify Gateway DNS resolver decisions ([27c4f6e](https://github.com/rknightion/cf2otel/commit/27c4f6efa1c960da744514e998133996ca99450f))
+* constrain explicit HTTP metric zones to account ([20e9981](https://github.com/rknightion/cf2otel/commit/20e9981f0c793b000e37109a15b896f880e1d69d))
+* negotiate Gateway DNS metric dimensions ([e0cca2f](https://github.com/rknightion/cf2otel/commit/e0cca2f8443e0d54f47fa518a29b63e0423ef698))
+* omit HTTP no-origin duration sentinel ([7c07e16](https://github.com/rknightion/cf2otel/commit/7c07e1620c3b65d6cd03b90f5773fd0743e125c4))
+* restrict all-zone HTTP metrics to configured account ([18205c9](https://github.com/rknightion/cf2otel/commit/18205c9e1a92bab808808811b1568998d0304ab0))
+* retain Gateway DNS sums for empty dimensions ([0ca7c56](https://github.com/rknightion/cf2otel/commit/0ca7c56b95d66e0691031213e0af116ff6b81300))
+
 ## [0.3.1](https://github.com/rknightion/cf2otel/compare/v0.3.0...v0.3.1) (2026-09-24)
 
 
