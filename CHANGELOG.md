@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/rknightion/cf2otel/compare/v0.3.0...v0.3.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* select RUM quantiles from advertised GraphQL fields ([f7c9e3a](https://github.com/rknightion/cf2otel/commit/f7c9e3a7a9f6c6e0017deb65db6c6130d736c1b2))
+
 ## [0.3.0](https://github.com/rknightion/cf2otel/compare/v0.2.3...v0.3.0) (2026-09-24)
 
 
