@@ -2,7 +2,13 @@ package identity
 
 import (
 	"container/heap"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/binary"
 	"errors"
+	"hash"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -15,16 +21,9 @@ type Stats struct {
 
 type key struct{ ip, host string }
 
-// loginKey identifies one Access login row across collection retries. Its
-// timestamp is canonical UTC without monotonic clock data for stable map keys.
-type loginKey struct {
-	rayID, clientIP, host, userEmail string
-	at                               time.Time
-}
 type candidate struct {
 	login    Login
 	key      key
-	row      loginKey
 	bucket   int64
 	sequence uint64
 }
@@ -48,17 +47,18 @@ func (h *candidates) Pop() any {
 }
 
 type observedLogin struct {
-	row      loginKey
-	sequence uint64
+	fingerprint [sha256.Size]byte
+	at          time.Time
+	sequence    uint64
 }
 type observedLogins []*observedLogin
 
 func (h observedLogins) Len() int { return len(h) }
 func (h observedLogins) Less(i, j int) bool {
-	if h[i].row.at.Equal(h[j].row.at) {
+	if h[i].at.Equal(h[j].at) {
 		return h[i].sequence < h[j].sequence
 	}
-	return h[i].row.at.Before(h[j].row.at)
+	return h[i].at.Before(h[j].at)
 }
 func (h observedLogins) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 func (h *observedLogins) Push(x any)   { *h = append(*h, x.(*observedLogin)) }
@@ -74,17 +74,19 @@ func (h *observedLogins) Pop() any {
 // interval behind the latest observed login or lookup time. Older out-of-order
 // requests cannot be matched after that interval has been evicted.
 type MemoryIndex struct {
-	mu            sync.Mutex
-	window        time.Duration
-	retention     time.Duration
-	maxCandidates int
-	latest        time.Time
-	sequence      uint64
-	byMinute      map[int64]map[key]map[*candidate]struct{}
-	oldest        candidates
-	seenRows      map[loginKey]struct{}
-	seenOldest    observedLogins // Lightweight row keys outlive capacity eviction, but not retention.
-	stats         Stats
+	mu             sync.Mutex
+	window         time.Duration
+	retention      time.Duration
+	maxCandidates  int
+	maxSeen        int
+	fingerprintKey [sha256.Size]byte
+	latest         time.Time
+	sequence       uint64
+	byMinute       map[int64]map[key]map[*candidate]struct{}
+	oldest         candidates
+	seenRows       map[[sha256.Size]byte]struct{}
+	seenOldest     observedLogins // Bounded fingerprints outlive candidate eviction, but not retention.
+	stats          Stats
 }
 
 var _ Index = (*MemoryIndex)(nil)
@@ -99,17 +101,44 @@ func NewWithRetention(window, retention time.Duration, maxCandidates int) (*Memo
 	if window <= 0 || retention < window || maxCandidates <= 0 {
 		return nil, errors.New("identity window and max candidates must be positive")
 	}
+	maxSeen := maxCandidates
+	if maxCandidates <= math.MaxInt/4 {
+		maxSeen *= 4
+	}
+	var fingerprintKey [sha256.Size]byte
+	if _, err := rand.Read(fingerprintKey[:]); err != nil {
+		return nil, err
+	}
 	return &MemoryIndex{
-		window:        window,
-		retention:     retention,
-		maxCandidates: maxCandidates,
-		byMinute:      make(map[int64]map[key]map[*candidate]struct{}),
-		seenRows:      make(map[loginKey]struct{}),
+		window:         window,
+		retention:      retention,
+		maxCandidates:  maxCandidates,
+		maxSeen:        maxSeen,
+		fingerprintKey: fingerprintKey,
+		byMinute:       make(map[int64]map[key]map[*candidate]struct{}),
+		seenRows:       make(map[[sha256.Size]byte]struct{}),
 	}, nil
 }
 
 func normalizedKey(ip, host string) key {
 	return key{strings.TrimSpace(ip), strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")}
+}
+
+func writeFingerprintPart(h hash.Hash, value string) {
+	var length [8]byte
+	binary.BigEndian.PutUint64(length[:], uint64(len(value)))
+	_, _ = h.Write(length[:])
+	_, _ = h.Write([]byte(value))
+}
+
+func (idx *MemoryIndex) fingerprint(login Login) [sha256.Size]byte {
+	h := hmac.New(sha256.New, idx.fingerprintKey[:])
+	for _, part := range []string{login.RayID, login.ClientIP, login.Host, login.UserEmail, login.At.Round(0).UTC().Format(time.RFC3339Nano)} {
+		writeFingerprintPart(h, part)
+	}
+	var result [sha256.Size]byte
+	copy(result[:], h.Sum(nil))
+	return result
 }
 
 func (idx *MemoryIndex) Observe(login Login) {
@@ -123,17 +152,18 @@ func (idx *MemoryIndex) Observe(login Login) {
 	if login.At.Before(idx.latest.Add(-idx.retention)) {
 		return
 	}
-	row := loginKey{
-		rayID: login.RayID, clientIP: login.ClientIP, host: login.Host, userEmail: login.UserEmail,
-		at: login.At.Round(0).UTC(),
-	}
-	if _, seen := idx.seenRows[row]; seen {
+	fingerprint := idx.fingerprint(login)
+	if _, seen := idx.seenRows[fingerprint]; seen {
 		return
 	}
 	idx.sequence++
-	c := &candidate{login: login, key: k, row: row, bucket: login.At.Unix() / 60, sequence: idx.sequence}
-	idx.seenRows[row] = struct{}{}
-	heap.Push(&idx.seenOldest, &observedLogin{row: row, sequence: idx.sequence})
+	c := &candidate{login: login, key: k, bucket: login.At.Unix() / 60, sequence: idx.sequence}
+	idx.seenRows[fingerprint] = struct{}{}
+	heap.Push(&idx.seenOldest, &observedLogin{fingerprint: fingerprint, at: login.At.Round(0).UTC(), sequence: idx.sequence})
+	for idx.seenOldest.Len() > idx.maxSeen {
+		oldest := heap.Pop(&idx.seenOldest).(*observedLogin)
+		delete(idx.seenRows, oldest.fingerprint)
+	}
 	if idx.byMinute[c.bucket] == nil {
 		idx.byMinute[c.bucket] = make(map[key]map[*candidate]struct{})
 	}
@@ -202,9 +232,9 @@ func (idx *MemoryIndex) advance(at time.Time) {
 		idx.latest = at
 	}
 	cutoff := idx.latest.Add(-idx.retention)
-	for idx.seenOldest.Len() > 0 && idx.seenOldest[0].row.at.Before(cutoff) {
+	for idx.seenOldest.Len() > 0 && idx.seenOldest[0].at.Before(cutoff) {
 		seen := heap.Pop(&idx.seenOldest).(*observedLogin)
-		delete(idx.seenRows, seen.row)
+		delete(idx.seenRows, seen.fingerprint)
 	}
 	for idx.oldest.Len() > 0 && idx.oldest[0].login.At.Before(cutoff) {
 		idx.removeOldest()

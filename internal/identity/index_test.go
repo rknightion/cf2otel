@@ -135,7 +135,7 @@ func TestObserveDeduplicatesCompleteRowIdentity(t *testing.T) {
 	}
 }
 
-func TestCapacityEvictionRetainsOnlyReplayMetadata(t *testing.T) {
+func TestCapacityEvictionBoundsReplayMetadata(t *testing.T) {
 	idx, err := NewWithRetention(10*time.Minute, time.Hour, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -148,11 +148,6 @@ func TestCapacityEvictionRetainsOnlyReplayMetadata(t *testing.T) {
 	if idx.Len() != 1 {
 		t.Fatalf("candidate count after cap = %d, want 1", idx.Len())
 	}
-	for _, seen := range idx.seenOldest {
-		if _, retainsCandidate := any(seen).(*candidate); retainsCandidate {
-			t.Fatal("replay expiry heap retains a full candidate after capacity eviction")
-		}
-	}
 	idx.Observe(evicted)
 	if idx.Len() != 1 {
 		t.Fatalf("replaying an evicted row changed candidate count to %d, want 1", idx.Len())
@@ -163,7 +158,18 @@ func TestCapacityEvictionRetainsOnlyReplayMetadata(t *testing.T) {
 	if got := idx.Lookup(retained.ClientIP, retained.Host, retained.At); got != (Match{UserEmail: retained.UserEmail, LoginRayID: retained.RayID, Inferred: true}) {
 		t.Fatalf("retained row lookup = %+v", got)
 	}
-	idx.Prune(retained.At.Add(time.Hour + time.Second))
+	for i := 0; i < 10; i++ {
+		newer := retained
+		newer.At = at.Add(time.Duration(i+2) * time.Minute)
+		idx.Observe(newer)
+	}
+	if len(idx.seenRows) > idx.maxSeen || idx.seenOldest.Len() > idx.maxSeen {
+		t.Fatalf("replay metadata grew beyond cap %d: map=%d heap=%d", idx.maxSeen, len(idx.seenRows), idx.seenOldest.Len())
+	}
+	if idx.Len() != 1 {
+		t.Fatalf("candidate count after repeated capacity eviction = %d, want 1", idx.Len())
+	}
+	idx.Prune(at.Add(72 * time.Minute))
 	if len(idx.seenRows) != 0 || idx.seenOldest.Len() != 0 {
 		t.Fatalf("expired replay metadata retained %d row keys and %d expiry entries", len(idx.seenRows), idx.seenOldest.Len())
 	}
