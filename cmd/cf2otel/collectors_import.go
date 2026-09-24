@@ -7,6 +7,7 @@ import (
 	"github.com/rknightion/cf2otel/internal/collectors/audit"
 	"github.com/rknightion/cf2otel/internal/collectors/dns"
 	"github.com/rknightion/cf2otel/internal/collectors/firewall"
+	"github.com/rknightion/cf2otel/internal/collectors/gateway"
 	"github.com/rknightion/cf2otel/internal/collectors/httpreq"
 	"github.com/rknightion/cf2otel/internal/collectors/inventory"
 	"github.com/rknightion/cf2otel/internal/collectors/rum"
@@ -24,5 +25,6 @@ func registerCollectors(deps collector.Deps) {
 	firewall.Register(deps)
 	dns.Register(deps)
 	rum.Register(deps)
+	gateway.Register(deps)
 	selfobs.Register(deps)
 }

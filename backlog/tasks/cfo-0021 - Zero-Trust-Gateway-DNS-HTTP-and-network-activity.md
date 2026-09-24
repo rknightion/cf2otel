@@ -1,9 +1,11 @@
 ---
 id: CFO-0021
 title: 'Zero Trust Gateway DNS, HTTP and network activity'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@rob'
 created_date: '2026-09-23 10:04'
+updated_date: '2026-09-24 07:09'
 labels:
   - 'wave:2'
   - gateway
@@ -29,3 +31,15 @@ cf1GatewayDns/Http/Network*RawGroups and rollups, gatewayResolver*, gatewayL4/L7
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Use the live Gateway DNS Groups branch; negotiate advertised fields, emit bounded DNS metrics, and prove the signal on m7kni. Keep HTTP and network branches pending until source traffic exists.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Prebuild source check: Gateway DNS Groups had traffic in both a recent two-hour window and an 89-day window. Gateway HTTP and network Groups returned zero rows in both windows. Queries used advertised sum fields and succeeded; no account identifiers or row payloads were retained in the tracker.
+<!-- SECTION:NOTES:END -->
