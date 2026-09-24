@@ -104,15 +104,20 @@ func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out tele
 
 	var records []dnsEvent
 	var retentionGaps []error
+	enabledZones := 0
 	for _, zone := range zones {
 		settings, err := c.settings(ctx, zone, rawDataset)
 		if err != nil {
 			return from, fmt.Errorf("DNS event dataset settings: %w", err)
 		}
+		if !settings.Enabled && len(c.cfg.Cloudflare.Zones) == 0 {
+			continue
+		}
 		wanted, err := fieldsForZone(settings, []string{"datetime", "queryName", "queryType", "responseCode", "responseCached", "protocol", "coloName"}, rawOptionalFields)
 		if err != nil {
 			return from, fmt.Errorf("zone DNS events: %w", err)
 		}
+		enabledZones++
 
 		var rows []map[string]any
 		req := cfapi.GraphQLRequest{
@@ -154,6 +159,9 @@ func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out tele
 			records = append(records, dnsEvent{at: at, body: string(body), attrs: attrs})
 		}
 	}
+	if enabledZones == 0 {
+		return from, errors.New("DNS event dataset is disabled in every discovered zone")
+	}
 	if len(retentionGaps) > 0 {
 		return from, errors.Join(retentionGaps...)
 	}
@@ -181,15 +189,20 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 
 	var samples []dnsMetric
 	var retentionGaps []error
+	enabledZones := 0
 	for _, zone := range zones {
 		settings, err := c.settings(ctx, zone, groupsDataset)
 		if err != nil {
 			return from, fmt.Errorf("DNS Groups dataset settings: %w", err)
 		}
+		if !settings.Enabled && len(c.cfg.Cloudflare.Zones) == 0 {
+			continue
+		}
 		wanted, err := fieldsForZone(settings, []string{"count"}, groupOptionalFields())
 		if err != nil {
 			return from, fmt.Errorf("zone DNS Groups: %w", err)
 		}
+		enabledZones++
 
 		var rows []map[string]any
 		req := cfapi.GraphQLRequest{
@@ -227,6 +240,9 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 			}
 			samples = append(samples, dnsMetric{value: count, attrs: attrs})
 		}
+	}
+	if enabledZones == 0 {
+		return from, errors.New("DNS Groups dataset is disabled in every discovered zone")
 	}
 	if len(retentionGaps) > 0 {
 		return from, errors.Join(retentionGaps...)

@@ -267,6 +267,44 @@ func TestEmptyZoneDiscoveryDoesNotAdvanceDNS(t *testing.T) {
 	}
 }
 
+func TestDiscoveredDisabledDNSZoneIsSkipped(t *testing.T) {
+	from := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Minute)
+	for _, tc := range []struct {
+		name, dataset string
+		fields        []string
+		collect       func(*config.Config, cfapi.Client) (time.Time, error)
+	}{
+		{"events", rawDataset, []string{"datetime", "queryName", "queryType", "responseCode", "responseCached", "protocol", "coloName"}, func(cfg *config.Config, api cfapi.Client) (time.Time, error) {
+			return NewEvents(cfg, api).CollectWindow(context.Background(), from, to, &telemetry.Buffer{})
+		}},
+		{"metrics", groupsDataset, []string{"count"}, func(cfg *config.Config, api cfapi.Client) (time.Time, error) {
+			return NewMetrics(cfg, api).CollectWindow(context.Background(), from, to, &telemetry.Buffer{})
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := &fakeAPI{zones: []cfapi.Zone{{ID: "disabled", Name: "disabled.example.test"}, {ID: "enabled", Name: "enabled.example.test"}}, settings: map[string]cfapi.DatasetSettings{
+				"disabled/" + tc.dataset: {Enabled: false},
+				"enabled/" + tc.dataset:  dnsSettings(70, tc.fields...),
+			}}
+			mark, err := tc.collect(&config.Config{}, api)
+			if err != nil || !mark.Equal(to) || len(api.queries) != 1 || api.queries[0].ScopeID != "enabled" {
+				t.Fatalf("discovered disabled zone: mark=%s error=%v queries=%+v", mark, err, api.queries)
+			}
+			api.queries = nil
+			mark, err = tc.collect(&config.Config{Cloudflare: config.CloudflareConfig{Zones: []string{"disabled.example.test"}}}, api)
+			if err == nil || !mark.Equal(from) || len(api.queries) != 0 {
+				t.Fatalf("configured disabled zone: mark=%s error=%v queries=%+v", mark, err, api.queries)
+			}
+			api.settings["enabled/"+tc.dataset] = cfapi.DatasetSettings{Enabled: false}
+			mark, err = tc.collect(&config.Config{}, api)
+			if err == nil || !mark.Equal(from) || len(api.queries) != 0 {
+				t.Fatalf("all discovered zones disabled: mark=%s error=%v queries=%+v", mark, err, api.queries)
+			}
+		})
+	}
+}
+
 func hasDNSAttr(attrs []telemetry.Attr, key, value string) bool {
 	for _, attr := range attrs {
 		if attr.Key == key && attr.Value == value {
