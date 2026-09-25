@@ -56,7 +56,7 @@ func (c *eventMetrics) CollectWindow(ctx context.Context, from, to time.Time, ou
 		windowFrom = windowFrom.Add(turnstileBucket)
 	}
 	if !windowFrom.Before(windowTo) {
-		return windowTo, nil
+		return from, errors.New("window contains no complete five-minute bucket")
 	}
 	if c.cfg == nil || c.cfg.Cloudflare.AccountID == "" {
 		return from, errors.New("turnstile events requires a configured Cloudflare account")

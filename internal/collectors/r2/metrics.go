@@ -156,7 +156,7 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 		return from, nil
 	}
 	if !completeFrom.Before(completeTo) {
-		return completeTo, nil
+		return from, errors.New("window contains no complete five-minute bucket")
 	}
 
 	rows, err := c.queryRows(ctx, completeFrom, completeTo, plan)

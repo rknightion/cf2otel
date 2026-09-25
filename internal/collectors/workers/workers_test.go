@@ -91,6 +91,17 @@ func workersTestRow(bucket time.Time, count any, scriptName any) map[string]any 
 	return map[string]any{"count": count, "dimensions": dimensions}
 }
 
+func TestNoCompleteBucketDoesNotAdvance(t *testing.T) {
+	from := time.Date(2026, 9, 24, 10, 2, 0, 0, time.UTC)
+	to := time.Date(2026, 9, 24, 10, 5, 0, 0, time.UTC)
+	api := &workersTestAPI{settings: workersTestSettings()}
+	worker := NewOverviewMetrics(workersTestConfig(), api)
+	mark, err := worker.CollectWindow(context.Background(), from, to, &telemetry.Buffer{})
+	if err == nil || !mark.Equal(from) || len(api.requests) != 0 {
+		t.Fatalf("empty complete-bucket window advanced or queried: mark=%s err=%v requests=%d", mark, err, len(api.requests))
+	}
+}
+
 func TestWorkersOverviewUsesSourceFieldsAndOnlyBoundedScriptAttribute(t *testing.T) {
 	from := time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC)
 	to := from.Add(10 * time.Minute)

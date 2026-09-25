@@ -59,7 +59,7 @@ func (c *overviewMetrics) CollectWindow(ctx context.Context, from, to time.Time,
 		windowFrom = windowFrom.Add(workersBucket)
 	}
 	if !windowFrom.Before(windowTo) {
-		return windowTo, nil
+		return from, errors.New("window contains no complete five-minute bucket")
 	}
 	if c.cfg == nil || c.cfg.Cloudflare.AccountID == "" {
 		return from, errors.New("workers overview requires a configured Cloudflare account")

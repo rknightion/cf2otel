@@ -58,7 +58,7 @@ func (c *healthMetrics) CollectWindow(ctx context.Context, from, to time.Time, o
 		windowFrom = windowFrom.Add(logpushBucket)
 	}
 	if !windowFrom.Before(windowTo) {
-		return windowTo, nil
+		return from, errors.New("window contains no complete five-minute bucket")
 	}
 	if c.cfg == nil || c.cfg.Cloudflare.AccountID == "" {
 		return from, errors.New("logpush health requires a configured Cloudflare account")
