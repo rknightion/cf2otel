@@ -429,6 +429,54 @@ func TestQueryLimitSaturationBisectsBucketsAndHonorsSettings(t *testing.T) {
 	}
 }
 
+func TestMaxPageSizeCapsEmailQueryBuckets(t *testing.T) {
+	zone := testZone("zone-00000000000000000000000000000001", testAccountID)
+	settings := datasetSettings(true, "count", "dimensions_datetimeFiveMinutes")
+	settings.MaxPageSize = 2
+	api := newEmailTestAPI(emailDatasetRouting, []cfapi.Zone{zone}, map[string]cfapi.DatasetSettings{zone.ID: settings})
+	api.query = func(request cfapi.GraphQLRequest) ([]map[string]any, error) {
+		var rows []map[string]any
+		for bucket := request.From; bucket.Before(request.To); bucket = bucket.Add(emailBucket) {
+			rows = append(rows, map[string]any{
+				"count":      1.0,
+				"dimensions": map[string]any{"datetimeFiveMinutes": bucket.Format(time.RFC3339)},
+			})
+			if len(rows) == request.Limit {
+				break
+			}
+		}
+		return rows, nil
+	}
+	cfg := config.Default()
+	cfg.Cloudflare.AccountID = testAccountID
+	window := registeredCollector(t, &cfg, api, "email.routing")
+	emitter := &emailTestEmitter{}
+	from := time.Now().UTC().Truncate(emailBucket).Add(-40 * time.Minute)
+	to := from.Add(20 * time.Minute)
+
+	highWater, err := window.CollectWindow(context.Background(), from, to, emitter)
+	if err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+	if !highWater.Equal(to) {
+		t.Errorf("high-water = %s, want %s", highWater, to)
+	}
+	if len(emitter.metrics) != 1 || emitter.metrics[0].value != 4 {
+		t.Errorf("metrics = %+v, want one counter with value 4", emitter.metrics)
+	}
+	if len(api.queries) != 2 {
+		t.Fatalf("query count = %d, want two page-sized segments", len(api.queries))
+	}
+	for _, request := range api.queries {
+		if request.Limit != 2 {
+			t.Errorf("query limit = %d, want configured maxPageSize 2", request.Limit)
+		}
+		if request.To.Sub(request.From) > 2*emailBucket {
+			t.Errorf("query covered more buckets than its row limit: %s..%s", request.From, request.To)
+		}
+	}
+}
+
 func TestIrreducibleBucketSaturationDoesNotAdvanceOrEmit(t *testing.T) {
 	zone := testZone("zone-00000000000000000000000000000001", testAccountID)
 	api := newEmailTestAPI("emailSendingAdaptiveGroups", []cfapi.Zone{zone}, map[string]cfapi.DatasetSettings{

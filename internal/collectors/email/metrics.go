@@ -114,6 +114,9 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 			queryLimit = emailGraphQLMaxLimit
 		}
 		maxBuckets := int(settings.MaxDuration / int64(emailBucket/time.Second))
+		if maxBuckets > queryLimit {
+			maxBuckets = queryLimit
+		}
 		for segmentStart := windowStart; segmentStart.Before(windowEnd); {
 			segmentEnd := segmentStart.Add(time.Duration(maxBuckets) * emailBucket)
 			if segmentEnd.After(windowEnd) {
