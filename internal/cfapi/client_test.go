@@ -247,8 +247,8 @@ func TestGraphQLFieldChunksJoinByKey(t *testing.T) {
 }
 
 func TestAvailableFieldsFlattenedNames(t *testing.T) {
-	got := intersect([]string{"dimensions.allowed", "sum.logins", "quantiles.largestContentfulPaintP75", "datetime"}, []string{"dimensions_allowed", "sum_logins", "quantiles_largestContentfulPaintP75"})
-	if len(got) != 3 || got[0] != "dimensions.allowed" || got[1] != "sum.logins" || got[2] != "quantiles.largestContentfulPaintP75" {
+	got := intersect([]string{"dimensions.allowed", "sum.logins", "max.value", "quantiles.largestContentfulPaintP75", "datetime"}, []string{"dimensions_allowed", "sum_logins", "max_value", "quantiles_largestContentfulPaintP75"})
+	if len(got) != 4 || got[0] != "dimensions.allowed" || got[1] != "sum.logins" || got[2] != "max.value" || got[3] != "quantiles.largestContentfulPaintP75" {
 		t.Fatalf("got %v", got)
 	}
 }
