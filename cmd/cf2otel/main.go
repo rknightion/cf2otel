@@ -261,11 +261,11 @@ func runOnce(ctx context.Context, s *collector.Scheduler, o cli.Options) error {
 		} else {
 			err = s.RunOnce(ctx, entry)
 		}
-		if s.OnPoll != nil {
-			s.OnPoll(ctx, entry.Collector.Name(), time.Since(start), err, time.Now())
-		}
 		if dryRun {
 			dryEmitter.finishCollector(entry.Collector.Name())
+		}
+		if s.OnPoll != nil {
+			s.OnPoll(ctx, entry.Collector.Name(), time.Since(start), err, time.Now())
 		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", entry.Collector.Name(), err))

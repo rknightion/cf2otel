@@ -73,8 +73,8 @@ func TestDryRunKeepsCheckpointBytesAndDoesNotExport(t *testing.T) {
 	if _, err := fmt.Sscanf(line, "dry-run access.logins: records=%d metrics=%d", &records, &metrics); err != nil {
 		t.Fatalf("dry-run summary missing per-collector record and metric counts: %q", line)
 	}
-	if records == 0 || metrics == 0 {
-		t.Fatalf("dry-run summary did not count emitted records and metrics: %q", line)
+	if records != 2 || metrics != 3 {
+		t.Fatalf("dry-run access.logins summary should count only collector emissions: %q", line)
 	}
 }
 
