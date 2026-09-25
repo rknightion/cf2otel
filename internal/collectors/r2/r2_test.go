@@ -530,7 +530,31 @@ func TestSaturatedQueryBisectionPreservesHalfOpenWindowBoundaries(t *testing.T) 
 	}
 }
 
-func TestIrreducibleOneMinuteSaturationFailsWithoutEmissionOrAdvance(t *testing.T) {
+func TestFifteenMinuteSaturationKeepsFiveMinuteBucketBoundaries(t *testing.T) {
+	from := r2UTC(10, 0)
+	to := from.Add(15 * time.Minute)
+	api := newR2TestAPI(testOperationsDataset)
+	api.query = func(request cfapi.GraphQLRequest) ([]map[string]any, error) {
+		if request.From != request.From.Truncate(5*time.Minute) || request.To != request.To.Truncate(5*time.Minute) {
+			return nil, fmt.Errorf("query split cut a five-minute bucket: [%s,%s)", request.From, request.To)
+		}
+		if request.To.Sub(request.From) > 5*time.Minute {
+			return nil, fmt.Errorf("GraphQL dataset %s window %s..%s saturated limit %d", request.Dataset, request.From.Format(time.RFC3339), request.To.Format(time.RFC3339), request.Limit)
+		}
+		return []map[string]any{r2Row(request.From, map[string]any{"sum": map[string]any{"requests": 1}}, map[string]any{"bucketName": "bucket-a"})}, nil
+	}
+	window := r2WindowCollector(t, r2TestConfig("r2.operations"), api, "r2.operations")
+	out := &telemetry.Buffer{}
+	mark, err := window.CollectWindow(context.Background(), from, to, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !mark.Equal(to) || len(out.Metrics) != 1 || out.Metrics[0].Value != 3 {
+		t.Fatalf("15-minute split: mark=%s metrics=%#v, want three complete buckets", mark, out.Metrics)
+	}
+}
+
+func TestIrreducibleFiveMinuteSaturationFailsWithoutEmissionOrAdvance(t *testing.T) {
 	from := r2UTC(10, 0)
 	to := from.Add(5 * time.Minute)
 	api := newR2TestAPI(testOperationsDataset)
@@ -540,21 +564,21 @@ func TestIrreducibleOneMinuteSaturationFailsWithoutEmissionOrAdvance(t *testing.
 	window := r2WindowCollector(t, r2TestConfig("r2.operations"), api, "r2.operations")
 	out := &telemetry.Buffer{}
 	mark, err := window.CollectWindow(context.Background(), from, to, out)
-	if err == nil || !strings.Contains(err.Error(), "one-minute") {
-		t.Fatalf("irreducible saturated interval returned %v, want one-minute saturation error", err)
+	if err == nil || !strings.Contains(err.Error(), "five-minute") {
+		t.Fatalf("irreducible saturated interval returned %v, want five-minute saturation error", err)
 	}
 	if !mark.Equal(from) || len(out.Metrics) != 0 {
 		t.Fatalf("irreducible query advanced or emitted: mark=%s metrics=%#v", mark, out.Metrics)
 	}
-	foundMinute := false
+	foundBucket := false
 	for _, call := range api.calls {
-		if call.request.To.Sub(call.request.From) == time.Minute {
-			foundMinute = true
+		if call.request.To.Sub(call.request.From) == 5*time.Minute {
+			foundBucket = true
 			break
 		}
 	}
-	if !foundMinute {
-		t.Fatal("query did not bisect down to the irreducible one-minute interval")
+	if !foundBucket {
+		t.Fatal("query did not reach the irreducible five-minute bucket")
 	}
 }
 

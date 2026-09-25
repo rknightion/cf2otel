@@ -291,12 +291,12 @@ func (c *datasetCollector) queryRows(ctx context.Context, from, to time.Time, pl
 		}
 		return rows, nil
 	}
-	if to.Sub(from) <= time.Minute {
-		return nil, fmt.Errorf("R2 Groups dataset %s remains saturated at the irreducible one-minute window", c.spec.dataset)
+	if to.Sub(from) <= r2BucketInterval {
+		return nil, fmt.Errorf("R2 Groups dataset %s remains saturated at the irreducible five-minute bucket", c.spec.dataset)
 	}
-	mid := from.Add(to.Sub(from) / 2).UTC().Truncate(time.Minute)
+	mid := from.Add(to.Sub(from) / 2).UTC().Truncate(r2BucketInterval)
 	if !mid.After(from) || !mid.Before(to) {
-		return nil, fmt.Errorf("R2 Groups dataset %s cannot bisect a saturated interval on minute boundaries", c.spec.dataset)
+		return nil, fmt.Errorf("R2 Groups dataset %s cannot bisect a saturated interval on five-minute bucket boundaries", c.spec.dataset)
 	}
 	left, err := c.queryRows(ctx, from, mid, plan)
 	if err != nil {

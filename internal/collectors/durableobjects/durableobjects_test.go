@@ -383,7 +383,34 @@ func TestSaturatedQueryBisectsAtMinuteBoundariesWithoutGaps(t *testing.T) {
 	}
 }
 
-func TestIrreducibleOneMinuteSaturationFailsWithoutAdvancing(t *testing.T) {
+func TestFifteenMinuteSaturationKeepsFiveMinuteBucketBoundaries(t *testing.T) {
+	from := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+	to := from.Add(15 * time.Minute)
+	api := &durableObjectsTestAPI{
+		settings: map[string]cfapi.DatasetSettings{"durableObjectsInvocationsAdaptiveGroups": standardSettings("sum.requests", "dimensions.datetimeFiveMinutes")},
+		query: func(_ context.Context, request cfapi.GraphQLRequest, out any) error {
+			if !request.From.Equal(request.From.Truncate(5*time.Minute)) || !request.To.Equal(request.To.Truncate(5*time.Minute)) {
+				return errors.New("query split cut a five-minute bucket")
+			}
+			if request.To.Sub(request.From) > 5*time.Minute {
+				return saturatedError(request)
+			}
+			rows := []map[string]any{{"dimensions": map[string]any{"datetimeFiveMinutes": timestamp(request.From)}, "sum": map[string]any{"requests": 1.0}}}
+			encoded, _ := json.Marshal(rows)
+			return json.Unmarshal(encoded, out)
+		},
+	}
+	emitter := &recordingEmitter{}
+	mark, err := runWindow(t, platformConfig(), api, "durableobjects.invocations", from, to, emitter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !mark.Equal(to) || len(emitter.metrics) != 1 || emitter.metrics[0].value != 3 {
+		t.Fatalf("15-minute split: mark=%s metrics=%#v, want three complete buckets", mark, emitter.metrics)
+	}
+}
+
+func TestIrreducibleFiveMinuteSaturationFailsWithoutAdvancing(t *testing.T) {
 	from := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
 	to := from.Add(5 * time.Minute)
 	api := &durableObjectsTestAPI{
@@ -400,14 +427,14 @@ func TestIrreducibleOneMinuteSaturationFailsWithoutAdvancing(t *testing.T) {
 	if !mark.Equal(from) || len(emitter.metrics) != 0 {
 		t.Fatalf("failed saturation advanced to %s or emitted metrics %#v", mark, emitter.metrics)
 	}
-	foundMinute := false
+	foundBucket := false
 	for _, request := range api.requests {
-		if request.To.Sub(request.From) == time.Minute {
-			foundMinute = true
+		if request.To.Sub(request.From) == 5*time.Minute {
+			foundBucket = true
 		}
 	}
-	if !foundMinute {
-		t.Fatal("saturated query was not reduced to an irreducible one-minute window")
+	if !foundBucket {
+		t.Fatal("saturated query was not reduced to an irreducible five-minute bucket")
 	}
 }
 

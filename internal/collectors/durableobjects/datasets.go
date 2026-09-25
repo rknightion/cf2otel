@@ -206,7 +206,7 @@ func (c *datasetCollector) queryRows(ctx context.Context, request cfapi.GraphQLR
 	if !isSaturated(err, request.Dataset) {
 		return nil, err
 	}
-	split, ok := splitAtMinute(from, to)
+	split, ok := splitAtBucket(from, to)
 	if !ok {
 		return nil, err
 	}
@@ -233,18 +233,15 @@ func isSaturated(err error, dataset string) bool {
 	return strings.Contains(message, "GraphQL dataset "+dataset+" window ") && strings.Contains(message, " saturated limit ")
 }
 
-func splitAtMinute(from, to time.Time) (time.Time, bool) {
-	if !from.Before(to) {
+func splitAtBucket(from, to time.Time) (time.Time, bool) {
+	if to.Sub(from) <= durableObjectsBucket {
 		return time.Time{}, false
 	}
-	split := from.Add(to.Sub(from) / 2).Truncate(time.Minute)
-	if !split.After(from) {
-		split = from.Truncate(time.Minute).Add(time.Minute)
-	}
+	split := from.Add(to.Sub(from) / 2).Truncate(durableObjectsBucket)
 	if !split.Before(to) {
 		return time.Time{}, false
 	}
-	return split, true
+	return split, split.After(from)
 }
 
 func (c *datasetCollector) aggregate(rows []map[string]any, from, to time.Time) (float64, bool, error) {
