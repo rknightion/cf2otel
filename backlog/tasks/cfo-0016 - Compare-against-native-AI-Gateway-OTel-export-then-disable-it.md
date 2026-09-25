@@ -1,10 +1,11 @@
 ---
 id: CFO-0016
 title: 'Compare against native AI Gateway OTel export, then disable it'
-status: Parked
-assignee: []
+status: In Progress
+assignee:
+  - '@rknightion'
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-25 10:18'
+updated_date: '2026-09-25 12:56'
 labels:
   - 'wave:1'
   - aigw
@@ -37,6 +38,8 @@ Decision 2026-09-23 (Rob): after the first deployment, compare cf2otel's GenAI o
 
 <!-- SECTION:PLAN:BEGIN -->
 Loop 5 P8: pass 60-minute exactness gate on running Camden binary, use corrected jobStatus-excluding comparator, then no-op/cutover/conditional rollback within three authorized Cloudflare writes and watch native/cf2otel traces.
+
+Loop 6: prove v0.5.1 exact source-ID delivery before no-op and cutover PUTs; watch native and cf2otel traces with conditional rollback.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes

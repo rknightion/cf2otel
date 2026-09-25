@@ -1,9 +1,11 @@
 ---
 id: CFO-0031
 title: Document at-least-once delivery and pin a dedupe key per log family
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@rknightion'
 created_date: '2026-09-25 12:07'
+updated_date: '2026-09-25 12:56'
 labels: []
 dependencies: []
 priority: medium
@@ -29,3 +31,9 @@ Scheduler.commit flushes a window in chunks; if a later chunk fails, the retry r
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Loop 6 L31: document at-least-once delivery and dedupe keys, with AST coverage of every emitted event name.
+<!-- SECTION:PLAN:END -->

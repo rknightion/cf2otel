@@ -1,10 +1,11 @@
 ---
 id: CFO-0024
 title: 'Email routing, email sending and DMARC report datasets'
-status: Parked
-assignee: []
+status: In Progress
+assignee:
+  - '@rknightion'
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-25 10:17'
+updated_date: '2026-09-25 12:55'
 labels:
   - 'wave:2'
   - email
@@ -33,6 +34,12 @@ Zone datasets emailRoutingAdaptive, emailSendingAdaptive, dmarcReportsAdaptive.
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Loop 6: repair independent review blockers, re-review, land exact SHA, release, deploy and compare email Groups source counts with Mimir.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 

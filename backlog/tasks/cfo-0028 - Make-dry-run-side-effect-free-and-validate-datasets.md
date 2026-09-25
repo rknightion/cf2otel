@@ -1,9 +1,11 @@
 ---
 id: CFO-0028
 title: Make -dry-run side-effect free and validate -datasets
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@rknightion'
 created_date: '2026-09-25 12:07'
+updated_date: '2026-09-25 12:56'
 labels:
   - bug
 dependencies: []
@@ -31,3 +33,9 @@ ordinal: 28000
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Loop 6 L28: test seeded-checkpoint dry-run and argument validation red, implement side-effect-free mode and counts, then gate and review.
+<!-- SECTION:PLAN:END -->
