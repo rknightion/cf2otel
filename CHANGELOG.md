@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/rknightion/cf2otel/compare/v0.5.0...v0.5.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* normalize default max field selections ([fe0a438](https://github.com/rknightion/cf2otel/commit/fe0a438ec9fd270d67cf364f0a9f9ec830e5628c))
+* select flattened max fields in GraphQL ([977fa1c](https://github.com/rknightion/cf2otel/commit/977fa1cde34e460662357981b10c241cee8c6af0))
+
 ## [0.5.0](https://github.com/rknightion/cf2otel/compare/v0.4.0...v0.5.0) (2026-09-25)
 
 
