@@ -72,6 +72,8 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cloudflare.queues.delayed_backlog.max_queue_avg_messages` | Maximum per-queue average delayed backlog messages in the latest complete bucket. |
 | `cloudflare.queues.message.operations` | Queue message operation count, account aggregate. |
 | `cloudflare.queues.message.billable_operations` | Queue billable operation sum, account aggregate. |
+| `cloudflare.email.routing.events` | Email Routing Groups count summed across account-owned zones, account aggregate. |
+| `cloudflare.email.sending.events` | Email Sending Groups count summed across account-owned zones, account aggregate. |
 | `cloudflare.ai_gateway.requests` | AI Gateway request count. |
 | `cloudflare.ai_gateway.errors` | AI Gateway error count. |
 | `cloudflare.ai_gateway.cache_hits` | AI Gateway cache hits. |
@@ -169,6 +171,8 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cloudflare.ai_gateway.requests` |
 | Metric | `cloudflare.audit.events` |
 | Metric | `cloudflare.dns.queries` |
+| Metric | `cloudflare.email.routing.events` |
+| Metric | `cloudflare.email.sending.events` |
 | Metric | `cloudflare.gateway.dns.queries` |
 | Metric | `cloudflare.firewall.events` |
 | Metric | `cloudflare.http.origin.duration` |

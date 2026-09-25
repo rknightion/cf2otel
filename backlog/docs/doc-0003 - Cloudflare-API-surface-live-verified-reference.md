@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-09-25 03:45'
+updated_date: '2026-09-25 04:15'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -197,4 +197,9 @@ a maximum per queue; no Queue identifier reaches a metric attribute or log. The 
 window that saturates at one complete five-minute bucket rather than split that aggregate.
 
 Zone-scoped email presence was rechecked over 30 days on 2026-09-25: routing and sending Groups
-variants had rows; the DMARC dataset had none. The email collectors remain a separate pending build.
+variants had rows; the DMARC dataset had none. Two collectors are implemented locally for the Groups-backed routing and sending datasets; their release and source-to-Mimir proof remain pending. They select only `count` and `dimensions.datetimeFiveMinutes`, sum complete five-minute buckets across account-owned zones, and emit no zone metric attribute. A disabled zone is skipped. No DMARC collector is built.
+
+| Zone dataset | Selected fields | E24-A source finding |
+| --- | --- | --- |
+| `emailRoutingAdaptiveGroups` | `count`, `dimensions.datetimeFiveMinutes` | Enabled Groups variant had rows on two zones in the 30-day census. |
+| `emailSendingAdaptiveGroups` | `count`, `dimensions.datetimeFiveMinutes` | Enabled Groups variant had rows on two zones in the 30-day census. |
