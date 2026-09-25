@@ -474,4 +474,8 @@ func TestRetentionAndMaximumDurationSettingsAreRespected(t *testing.T) {
 	if err == nil || !highWater.Equal(staleFrom) || len(api.queries) != 0 || len(emitter.metrics) != 0 {
 		t.Errorf("retention floor was ignored: high-water=%s err=%v queries=%v metrics=%v", highWater, err, api.queries, emitter.metrics)
 	}
+	var gap *cfapi.RetentionGapError
+	if !errors.As(err, &gap) || gap.Dataset != "emailSendingAdaptiveGroups" || !gap.Floor.After(staleFrom) {
+		t.Errorf("retention failure must identify the dataset and floor: gap=%v err=%v", gap, err)
+	}
 }

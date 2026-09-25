@@ -93,7 +93,7 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 		if !settings.Enabled {
 			continue
 		}
-		if err := validateEmailSettings(settings, windowStart); err != nil {
+		if err := validateEmailSettings(settings, c.spec.dataset, windowStart); err != nil {
 			return from, fmt.Errorf("%s zone dataset settings: %w", c.spec.name, err)
 		}
 
@@ -127,7 +127,7 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 	return windowEnd, nil
 }
 
-func validateEmailSettings(settings cfapi.DatasetSettings, from time.Time) error {
+func validateEmailSettings(settings cfapi.DatasetSettings, dataset string, from time.Time) error {
 	for _, field := range []string{"count", "dimensions.datetimeFiveMinutes"} {
 		if !emailHasAvailableField(settings.AvailableFields, field) {
 			return fmt.Errorf("missing required field %s", field)
@@ -150,7 +150,7 @@ func validateEmailSettings(settings cfapi.DatasetSettings, from time.Time) error
 	}
 	retentionFloor := time.Now().UTC().Add(-time.Duration(settings.NotOlderThan) * time.Second)
 	if from.Before(retentionFloor) {
-		return errors.New("window begins before dataset retention floor")
+		return &cfapi.RetentionGapError{Dataset: dataset, Floor: retentionFloor}
 	}
 	return nil
 }
