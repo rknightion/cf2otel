@@ -27,7 +27,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp{service_name=\"cf2otel\"})",
+          "expr": "time() - (max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\"}) or max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp{service_name=\"cf2otel\"}))",
           "instant": true,
           "range": false,
           "refId": "A"

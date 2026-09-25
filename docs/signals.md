@@ -22,86 +22,88 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 
 ## Metrics
 
-| Name | Meaning |
-| --- | --- |
-| `cloudflare.access.logins` | Human Access login count from `cf1AccessLoginsRawGroups`. |
-| `cloudflare.access.identity_logins` | Exact REST identity-login count by app, allowed, connection and action; excludes nonidentity service-token rows. |
-| `cloudflare.access.requests` | Access request count from `accessLoginRequestsAdaptiveGroups`; keep `nonidentity` traffic separate. |
-| `cloudflare.access.apps` | Access application inventory gauge. |
-| `cloudflare.access.users` | Access user inventory gauge. |
-| `cloudflare.http.requests` | Request count from sample-corrected `httpRequestsAdaptiveGroups`. |
-| `cloudflare.http.origin.duration` | Average origin response duration per Groups window, in seconds. |
-| `cloudflare.audit.events` | Exact audit event count by resource product, action type and action result. |
-| `cloudflare.firewall.events` | Security event count from a Groups dataset by zone. Pro Groups provides action and source dimensions; Free ByTimeGroups rejects them despite `settings.availableFields` advertising them. |
-| `cloudflare.dns.queries` | DNS query count from `dnsAnalyticsAdaptiveGroups` by zone and available bounded dimensions. |
-| `cloudflare.gateway.dns.queries` | Gateway DNS query sum from account-level `cf1GatewayDnsRawGroups`, by bounded query type, resolver decision and country. |
-| `cloudflare.rum.page_views` | Page views from `rumPageloadEventsAdaptiveGroups` by country and device. |
-| `cloudflare.rum.sessions` | Visit sum from `rumPageloadEventsAdaptiveGroups` by country and device. |
-| `cloudflare.rum.lcp.p75` | Rolling p75 largest contentful paint gauge, milliseconds inferred from GraphQL timing values. |
-| `cloudflare.rum.inp.p75` | Rolling p75 interaction to next paint gauge, milliseconds inferred from GraphQL timing values. |
-| `cloudflare.rum.fid.p75` | Rolling p75 first input delay gauge, milliseconds inferred from GraphQL timing values. |
-| `cloudflare.rum.fcp.p75` | Rolling p75 first contentful paint gauge, milliseconds inferred from GraphQL timing values. |
-| `cloudflare.rum.ttfb.p75` | Rolling p75 time to first byte gauge, milliseconds inferred from GraphQL timing values. |
-| `cloudflare.rum.cls.p75` | Rolling p75 cumulative layout shift score gauge. |
-| `cloudflare.workers.requests` | Worker request count from `workersOverviewRequestsAdaptiveGroups`, optionally by bounded script name. |
-| `cloudflare.turnstile.events` | Turnstile event count from `turnstileAdaptiveGroups`, account aggregate. |
-| `cloudflare.logpush.uploads` | Logpush upload count from `logpushHealthAdaptiveGroups`, account aggregate. |
-| `cloudflare.logpush.records` | Logpush record count from `logpushHealthAdaptiveGroups`, account aggregate. |
-| `cloudflare.d1.read_queries` | D1 read query sum from `d1AnalyticsAdaptiveGroups`, account aggregate. |
-| `cloudflare.d1.write_queries` | D1 write query sum from `d1AnalyticsAdaptiveGroups`, account aggregate. |
-| `cloudflare.d1.queries` | D1 query count from `d1QueriesAdaptiveGroups`; query text is not selected. |
-| `cloudflare.d1.storage.max_database_bytes` | Maximum D1 database size across databases in the latest complete bucket, `By`. |
-| `cloudflare.kv.requests` | KV operation request sum from `kvOperationsAdaptiveGroups`, account aggregate. |
-| `cloudflare.kv.storage.max_namespace_bytes` | Maximum KV namespace bytes in the latest complete bucket, `By`. |
-| `cloudflare.kv.storage.max_namespace_keys` | Maximum KV namespace key count in the latest complete bucket. |
-| `cloudflare.r2.bandwidth.download.bytes` | R2 download byte sum, optionally by bounded bucket name, `By`. |
-| `cloudflare.r2.bandwidth.upload.bytes` | R2 upload byte sum, optionally by bounded bucket name, `By`. |
-| `cloudflare.r2.catalog.data.operations` | R2 catalog data operation count, optionally by bounded namespace name. |
-| `cloudflare.r2.catalog.maintenance.jobs` | R2 catalog maintenance job count, optionally by bounded namespace name. |
-| `cloudflare.r2.requests` | R2 operation request sum, optionally by bounded bucket name. |
-| `cloudflare.r2.storage.payload.bytes` | R2 payload-size gauge in the latest complete bucket per bucket, `By`. |
-| `cloudflare.r2.storage.objects` | R2 object-count gauge in the latest complete bucket per bucket. |
-| `cloudflare.r2sql.queries` | R2 SQL query count, optionally by bounded bucket name; table names are omitted. |
-| `cloudflare.durableobjects.requests` | Durable Objects invocation request sum, account aggregate. |
-| `cloudflare.durableobjects.subrequests` | Durable Objects periodic subrequest sum, account aggregate. |
-| `cloudflare.durableobjects.sql_storage.max_namespace_bytes` | Maximum Durable Objects SQL storage across namespaces in the latest complete bucket, `By`. |
-| `cloudflare.durableobjects.subrequests.request_body.bytes` | Durable Objects uncached request-body byte sum, account aggregate, `By`. |
-| `cloudflare.queues.backlog.max_queue_avg_messages` | Maximum per-queue average backlog messages in the latest complete bucket. |
-| `cloudflare.queues.backlog.max_queue_avg_bytes` | Maximum per-queue average backlog bytes in the latest complete bucket, `By`. |
-| `cloudflare.queues.consumer.max_queue_avg_concurrency` | Maximum per-queue average consumer concurrency in the latest complete bucket. |
-| `cloudflare.queues.delayed_backlog.max_queue_avg_messages` | Maximum per-queue average delayed backlog messages in the latest complete bucket. |
-| `cloudflare.queues.message.operations` | Queue message operation count, account aggregate. |
-| `cloudflare.queues.message.billable_operations` | Queue billable operation sum, account aggregate. |
-| `cloudflare.ai_gateway.requests` | AI Gateway request count. |
-| `cloudflare.ai_gateway.errors` | AI Gateway error count. |
-| `cloudflare.ai_gateway.cache_hits` | AI Gateway cache hits. |
-| `cloudflare.ai_gateway.cost` | AI Gateway request cost. |
-| `gen_ai.client.operation.duration` | GenAI operation duration. |
-| `gen_ai.client.inference.usage.input_tokens` | Input token usage. |
-| `gen_ai.client.inference.usage.output_tokens` | Output token usage. |
-| `gen_ai.client.inference.usage.cache_read.input_tokens` | Cached input tokens. |
-| `gen_ai.client.inference.usage.reasoning.output_tokens` | Reasoning output tokens. |
-| `gen_ai.client.inference.operation.input_tokens` | Input tokens by operation. |
-| `gen_ai.client.inference.operation.output_tokens` | Output tokens by operation. |
-| `cf2otel.scrape.success` | Collector scrape success state. |
-| `cf2otel.scrape.duration` | Collector scrape duration. |
-| `cf2otel.scrape.errors` | Collector scrape errors. |
-| `cf2otel.scrape.last_success_timestamp` | Time of last successful collector scrape. |
-| `cf2otel.export.success` | Successful OTLP exports. |
-| `cf2otel.export.errors` | Failed OTLP exports. |
-| `cf2otel.build.info` | Build identity. |
-| `cf2otel.checkpoint.age` | Age of the oldest collector checkpoint. |
-| `cf2otel.api.requests` | Cloudflare API requests. |
-| `cf2otel.api.duration` | Cloudflare API request duration. |
-| `cf2otel.api.retries` | Cloudflare API retries. |
-| `cf2otel.identity.matched` | HTTP events matched to one Access identity. |
-| `cf2otel.identity.unmatched` | HTTP events without a match. |
-| `cf2otel.identity.ambiguous` | HTTP events with more than one candidate. |
-| `cf2otel.window.gap` | Skipped retention-gap seconds by collector. |
-| `cf2otel.window.commit_failures` | Failed window commits by retry or dropped outcome. |
-| `cf2otel.window.catchup_windows` | Additional bounded collector windows committed in one scheduler tick. |
+| Name | Unit | Meaning |
+| --- | --- | --- |
+| `cloudflare.access.logins` | `1` | Human Access login count from `cf1AccessLoginsRawGroups`. |
+| `cloudflare.access.identity_logins` | `1` | Exact REST identity-login count by app, allowed, connection and action; excludes nonidentity service-token rows. |
+| `cloudflare.access.requests` | `{request}` | Access request count from `accessLoginRequestsAdaptiveGroups`; keep `nonidentity` traffic separate. |
+| `cloudflare.access.apps` | `1` | Access application inventory gauge. |
+| `cloudflare.access.users` | `1` | Access user inventory gauge. |
+| `cloudflare.http.requests` | `{request}` | Request count from sample-corrected `httpRequestsAdaptiveGroups`. |
+| `cloudflare.http.origin.duration` | `s` | Average origin response duration per Groups window, in seconds. |
+| `cloudflare.audit.events` | `1` | Exact audit event count by resource product, action type and action result. |
+| `cloudflare.firewall.events` | `1` | Security event count from a Groups dataset by zone. Pro Groups provides action and source dimensions; Free ByTimeGroups rejects them despite `settings.availableFields` advertising them. |
+| `cloudflare.dns.queries` | `1` | DNS query count from `dnsAnalyticsAdaptiveGroups` by zone and available bounded dimensions. |
+| `cloudflare.gateway.dns.queries` | `1` | Gateway DNS query sum from account-level `cf1GatewayDnsRawGroups`, by bounded query type, resolver decision and country. |
+| `cloudflare.rum.page_views` | `1` | Page views from `rumPageloadEventsAdaptiveGroups` by country and device. |
+| `cloudflare.rum.sessions` | `1` | Visit sum from `rumPageloadEventsAdaptiveGroups` by country and device. |
+| `cloudflare.rum.lcp.p75` | `s` | Rolling p75 largest contentful paint gauge, converted from inferred GraphQL milliseconds to seconds. |
+| `cloudflare.rum.inp.p75` | `s` | Rolling p75 interaction to next paint gauge, converted from inferred GraphQL milliseconds to seconds. |
+| `cloudflare.rum.fid.p75` | `s` | Rolling p75 first input delay gauge, converted from inferred GraphQL milliseconds to seconds. |
+| `cloudflare.rum.fcp.p75` | `s` | Rolling p75 first contentful paint gauge, converted from inferred GraphQL milliseconds to seconds. |
+| `cloudflare.rum.ttfb.p75` | `s` | Rolling p75 time to first byte gauge, converted from inferred GraphQL milliseconds to seconds. |
+| `cloudflare.rum.cls.p75` | `1` | Rolling p75 cumulative layout shift score gauge. |
+| `cloudflare.workers.requests` | `{request}` | Worker request count from `workersOverviewRequestsAdaptiveGroups`, optionally by bounded script name. |
+| `cloudflare.turnstile.events` | `1` | Turnstile event count from `turnstileAdaptiveGroups`, account aggregate. |
+| `cloudflare.logpush.uploads` | `1` | Logpush upload count from `logpushHealthAdaptiveGroups`, account aggregate. |
+| `cloudflare.logpush.records` | `1` | Logpush record count from `logpushHealthAdaptiveGroups`, account aggregate. |
+| `cloudflare.d1.read_queries` | `1` | D1 read query sum from `d1AnalyticsAdaptiveGroups`, account aggregate. |
+| `cloudflare.d1.write_queries` | `1` | D1 write query sum from `d1AnalyticsAdaptiveGroups`, account aggregate. |
+| `cloudflare.d1.queries` | `1` | D1 query count from `d1QueriesAdaptiveGroups`; query text is not selected. |
+| `cloudflare.d1.storage.max_database_bytes` | `By` | Maximum D1 database size across databases in the latest complete bucket, `By`. |
+| `cloudflare.kv.requests` | `{request}` | KV operation request sum from `kvOperationsAdaptiveGroups`, account aggregate. |
+| `cloudflare.kv.storage.max_namespace_bytes` | `By` | Maximum KV namespace bytes in the latest complete bucket, `By`. |
+| `cloudflare.kv.storage.max_namespace_keys` | `1` | Maximum KV namespace key count in the latest complete bucket. |
+| `cloudflare.r2.bandwidth.download.bytes` | `By` | R2 download byte sum, optionally by bounded bucket name, `By`. |
+| `cloudflare.r2.bandwidth.upload.bytes` | `By` | R2 upload byte sum, optionally by bounded bucket name, `By`. |
+| `cloudflare.r2.catalog.data.operations` | `1` | R2 catalog data operation count, optionally by bounded namespace name. |
+| `cloudflare.r2.catalog.maintenance.jobs` | `1` | R2 catalog maintenance job count, optionally by bounded namespace name. |
+| `cloudflare.r2.requests` | `{request}` | R2 operation request sum, optionally by bounded bucket name. |
+| `cloudflare.r2.storage.payload.bytes` | `By` | R2 payload-size gauge in the latest complete bucket per bucket, `By`. |
+| `cloudflare.r2.storage.objects` | `1` | R2 object-count gauge in the latest complete bucket per bucket. |
+| `cloudflare.r2sql.queries` | `1` | R2 SQL query count, optionally by bounded bucket name; table names are omitted. |
+| `cloudflare.durableobjects.requests` | `{request}` | Durable Objects invocation request sum, account aggregate. |
+| `cloudflare.durableobjects.subrequests` | `{request}` | Durable Objects periodic subrequest sum, account aggregate. |
+| `cloudflare.durableobjects.sql_storage.max_namespace_bytes` | `By` | Maximum Durable Objects SQL storage across namespaces in the latest complete bucket, `By`. |
+| `cloudflare.durableobjects.subrequests.request_body.bytes` | `By` | Durable Objects uncached request-body byte sum, account aggregate, `By`. |
+| `cloudflare.queues.backlog.max_queue_avg_messages` | `1` | Maximum per-queue average backlog messages in the latest complete bucket. |
+| `cloudflare.queues.backlog.max_queue_avg_bytes` | `By` | Maximum per-queue average backlog bytes in the latest complete bucket, `By`. |
+| `cloudflare.queues.consumer.max_queue_avg_concurrency` | `1` | Maximum per-queue average consumer concurrency in the latest complete bucket. |
+| `cloudflare.queues.delayed_backlog.max_queue_avg_messages` | `1` | Maximum per-queue average delayed backlog messages in the latest complete bucket. |
+| `cloudflare.queues.message.operations` | `1` | Queue message operation count, account aggregate. |
+| `cloudflare.queues.message.billable_operations` | `1` | Queue billable operation sum, account aggregate. |
+| `cloudflare.ai_gateway.requests` | `{request}` | AI Gateway request count. |
+| `cloudflare.ai_gateway.errors` | `1` | AI Gateway error count. |
+| `cloudflare.ai_gateway.cache_hits` | `1` | AI Gateway cache hits. |
+| `cloudflare.ai_gateway.cost` | `1` | AI Gateway request cost. |
+| `gen_ai.client.operation.duration` | `s` | GenAI operation duration. |
+| `gen_ai.client.inference.usage.input_tokens` | `{token}` | Input token usage. |
+| `gen_ai.client.inference.usage.output_tokens` | `{token}` | Output token usage. |
+| `gen_ai.client.inference.usage.cache_read.input_tokens` | `{token}` | Cached input tokens. |
+| `gen_ai.client.inference.usage.reasoning.output_tokens` | `{token}` | Reasoning output tokens. |
+| `gen_ai.client.inference.operation.input_tokens` | `{token}` | Input tokens by operation. |
+| `gen_ai.client.inference.operation.output_tokens` | `{token}` | Output tokens by operation. |
+| `cf2otel.scrape.success` | `1` | Collector scrape success state. |
+| `cf2otel.scrape.duration` | `s` | Collector scrape duration. |
+| `cf2otel.scrape.errors` | `1` | Collector scrape errors. |
+| `cf2otel.scrape.last_success_timestamp` | `s` | Time of last successful collector scrape. |
+| `cf2otel.export.success` | `1` | Successful OTLP exports. |
+| `cf2otel.export.errors` | `1` | Failed OTLP exports. |
+| `cf2otel.build.info` | `1` | Build identity. |
+| `cf2otel.checkpoint.age` | `s` | Age of the oldest collector checkpoint. |
+| `cf2otel.api.requests` | `{request}` | Cloudflare API requests. |
+| `cf2otel.api.duration` | `s` | Cloudflare API request duration. |
+| `cf2otel.api.retries` | `1` | Cloudflare API retries. |
+| `cf2otel.identity.matched` | `1` | HTTP events matched to one Access identity. |
+| `cf2otel.identity.unmatched` | `1` | HTTP events without a match. |
+| `cf2otel.identity.ambiguous` | `1` | HTTP events with more than one candidate. |
+| `cf2otel.window.gap` | `s` | Skipped retention-gap seconds by collector. |
+| `cf2otel.window.commit_failures` | `1` | Failed window commits by retry or dropped outcome. |
+| `cf2otel.window.catchup_windows` | `1` | Additional bounded collector windows committed in one scheduler tick. |
 
-Platform gauges select the latest complete five-minute source bucket and emit at export time. The units `1` and `By` above describe intended units; the current emitter does not attach OTLP unit metadata. Queue IDs are used only inside source aggregation and are never metric attributes.
+Platform gauges select the latest complete five-minute source bucket and emit at export time. The emitter attaches the listed UCUM units to OTLP instruments. RUM timing values are converted from source milliseconds to seconds before recording. The GenAI operation histogram and poller API/scrape histograms use explicit second-based buckets, including sub-second boundaries. Queue IDs are used only inside source aggregation and are never metric attributes.
+
+Prometheus compatibility naming adds `_seconds` for `s` when the base name lacks it and `_ratio` for dimensionless gauges. Names already ending in `_bytes` retain that suffix, and annotated `{token}` and `{request}` units add no suffix. The generated Grafana queries accept both old and new series names during rollout and revert.
 
 AI Gateway metrics combine Cloudflare request outcome measurements with GenAI duration and usage conventions.
 

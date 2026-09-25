@@ -77,7 +77,11 @@ func (e *otelEmitter) Gauge(ctx context.Context, n string, v float64, a ...Attr)
 	i := e.gauges[n]
 	var err error
 	if i == nil {
-		i, err = e.meter.Float64Gauge(n)
+		opts := []metric.Float64GaugeOption{}
+		if spec, ok := semconv.Metric(n); ok {
+			opts = append(opts, metric.WithUnit(spec.Unit), metric.WithDescription(spec.Description))
+		}
+		i, err = e.meter.Float64Gauge(n, opts...)
 		if err == nil {
 			e.gauges[n] = i
 		}
@@ -85,6 +89,9 @@ func (e *otelEmitter) Gauge(ctx context.Context, n string, v float64, a ...Attr)
 	e.mu.Unlock()
 	if err != nil {
 		return err
+	}
+	if spec, ok := semconv.Metric(n); ok && spec.Scale != 0 {
+		v *= spec.Scale
 	}
 	i.Record(ctx, v, metric.WithAttributes(attrs(a)...))
 	return nil
@@ -94,7 +101,11 @@ func (e *otelEmitter) Counter(ctx context.Context, n string, v float64, a ...Att
 	i := e.counters[n]
 	var err error
 	if i == nil {
-		i, err = e.meter.Float64Counter(n)
+		opts := []metric.Float64CounterOption{}
+		if spec, ok := semconv.Metric(n); ok {
+			opts = append(opts, metric.WithUnit(spec.Unit), metric.WithDescription(spec.Description))
+		}
+		i, err = e.meter.Float64Counter(n, opts...)
 		if err == nil {
 			e.counters[n] = i
 		}
@@ -111,7 +122,14 @@ func (e *otelEmitter) Histogram(ctx context.Context, n string, v float64, a ...A
 	i := e.histograms[n]
 	var err error
 	if i == nil {
-		i, err = e.meter.Float64Histogram(n)
+		opts := []metric.Float64HistogramOption{}
+		if spec, ok := semconv.Metric(n); ok {
+			opts = append(opts, metric.WithUnit(spec.Unit), metric.WithDescription(spec.Description))
+			if len(spec.Boundaries) != 0 {
+				opts = append(opts, metric.WithExplicitBucketBoundaries(spec.Boundaries...))
+			}
+		}
+		i, err = e.meter.Float64Histogram(n, opts...)
 		if err == nil {
 			e.histograms[n] = i
 		}

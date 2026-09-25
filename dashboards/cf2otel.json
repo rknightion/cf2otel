@@ -520,7 +520,7 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "expr": "histogram_quantile(0.95, sum by (le, gen_ai_request_model) (rate(gen_ai_client_operation_duration_bucket{service_name=\"cf2otel\"}[$__rate_interval])))",
+                        "expr": "histogram_quantile(0.95, sum by (le, gen_ai_request_model) (rate(gen_ai_client_operation_duration_seconds_bucket{service_name=\"cf2otel\"}[$__rate_interval])) or (sum by (le, gen_ai_request_model) (rate(gen_ai_client_operation_duration_bucket{service_name=\"cf2otel\"}[$__rate_interval])) unless on (gen_ai_request_model) sum by (gen_ai_request_model) (rate(gen_ai_client_operation_duration_seconds_bucket{service_name=\"cf2otel\",le=\"+Inf\"}[$__rate_interval]))))",
                         "format": "time_series",
                         "instant": false,
                         "legendFormat": "",
@@ -662,7 +662,7 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "expr": "time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp{service_name=\"cf2otel\"})",
+                        "expr": "time() - (max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\"}) or max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp{service_name=\"cf2otel\"}))",
                         "format": "time_series",
                         "instant": false,
                         "legendFormat": "",
@@ -836,7 +836,7 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_age{service_name=\"cf2otel\"})",
+                        "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_age_seconds{service_name=\"cf2otel\"}) or max by (cf2otel_collector) (cf2otel_checkpoint_age{service_name=\"cf2otel\"})",
                         "format": "time_series",
                         "instant": false,
                         "legendFormat": "",
@@ -1474,7 +1474,7 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "expr": "max(cloudflare_kv_storage_max_namespace_keys{service_name=\"cf2otel\"})",
+                        "expr": "max(cloudflare_kv_storage_max_namespace_keys_ratio{service_name=\"cf2otel\"}) or max(cloudflare_kv_storage_max_namespace_keys{service_name=\"cf2otel\"})",
                         "format": "time_series",
                         "instant": false,
                         "legendFormat": "",
@@ -1880,7 +1880,7 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "expr": "max by (cloudflare_r2_bucket_name) (cloudflare_r2_storage_objects{service_name=\"cf2otel\"})",
+                        "expr": "max by (cloudflare_r2_bucket_name) (cloudflare_r2_storage_objects_ratio{service_name=\"cf2otel\"}) or max by (cloudflare_r2_bucket_name) (cloudflare_r2_storage_objects{service_name=\"cf2otel\"})",
                         "format": "time_series",
                         "instant": false,
                         "legendFormat": "",
@@ -2228,7 +2228,7 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "expr": "max(cloudflare_queues_backlog_max_queue_avg_messages{service_name=\"cf2otel\"})",
+                        "expr": "max(cloudflare_queues_backlog_max_queue_avg_messages_ratio{service_name=\"cf2otel\"}) or max(cloudflare_queues_backlog_max_queue_avg_messages{service_name=\"cf2otel\"})",
                         "format": "time_series",
                         "instant": false,
                         "legendFormat": "",
@@ -2344,7 +2344,7 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "expr": "max(cloudflare_queues_consumer_max_queue_avg_concurrency{service_name=\"cf2otel\"})",
+                        "expr": "max(cloudflare_queues_consumer_max_queue_avg_concurrency_ratio{service_name=\"cf2otel\"}) or max(cloudflare_queues_consumer_max_queue_avg_concurrency{service_name=\"cf2otel\"})",
                         "format": "time_series",
                         "instant": false,
                         "legendFormat": "",
@@ -2402,7 +2402,7 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "expr": "max(cloudflare_queues_delayed_backlog_max_queue_avg_messages{service_name=\"cf2otel\"})",
+                        "expr": "max(cloudflare_queues_delayed_backlog_max_queue_avg_messages_ratio{service_name=\"cf2otel\"}) or max(cloudflare_queues_delayed_backlog_max_queue_avg_messages{service_name=\"cf2otel\"})",
                         "format": "time_series",
                         "instant": false,
                         "legendFormat": "",

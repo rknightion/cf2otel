@@ -15,7 +15,7 @@ PROM = "grafanacloud-prom"
 
 RULES = [
     ("cf2otel-collector-stale", "cf2otel collector is stale", "Collector last-success timestamp is older than 15 minutes.", 401,
-     'time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp{service_name="cf2otel"})', 900, "Alerting"),
+     'time() - (max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel"}) or max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp{service_name="cf2otel"}))', 900, "Alerting"),
     ("cf2otel-export-failure", "cf2otel export is failing", "OTLP export failures occurred in the last 15 minutes.", 403,
      'sum(increase(cf2otel_export_errors_total{service_name="cf2otel"}[15m])) or on() (0 * sum(increase(cf2otel_export_success_total{service_name="cf2otel"}[15m])))', 0, "Alerting"),
 ]
