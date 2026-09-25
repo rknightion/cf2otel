@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.5.0](https://github.com/rknightion/cf2otel/compare/v0.4.0...v0.5.0) (2026-09-25)
+
+
+### Features
+
+* add platform analytics dashboard panels ([182b285](https://github.com/rknightion/cf2otel/commit/182b285d6b24e2d683ac837c5ac324d312a4dcc1))
+* collect Cloudflare Queue metrics ([cb52517](https://github.com/rknightion/cf2otel/commit/cb525175cfe590032b7c57b4250d6d4a01ebd21f))
+* collect D1 and KV account metrics ([0306489](https://github.com/rknightion/cf2otel/commit/03064897e82bf8d7f508af382045987075198367))
+* collect Durable Objects analytics ([c7f9f88](https://github.com/rknightion/cf2otel/commit/c7f9f88ceaaf9fcb3d4441f8fc222e348320db4d))
+* collect R2 analytics ([461b811](https://github.com/rknightion/cf2otel/commit/461b811616e304313075588ae75b058fbfbc083d))
+* collect Workers Turnstile and Logpush analytics ([0e0c6d0](https://github.com/rknightion/cf2otel/commit/0e0c6d031c8125d7c2e93e8c263b1882217751c4))
+* freeze platform collector metric seams ([dad5e8e](https://github.com/rknightion/cf2otel/commit/dad5e8e98e8a8b1c85306bb4ef5366924cf9024b))
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/knadh/koanf/v2 to v2.3.7 ([#17](https://github.com/rknightion/cf2otel/issues/17)) ([69308ec](https://github.com/rknightion/cf2otel/commit/69308ec6b43700a30649e0ba04efda8b705f0e47))
+* fail R2 windows without a complete bucket ([465b38e](https://github.com/rknightion/cf2otel/commit/465b38ec353d13b1e2d2436ef683802cf4cfadad))
+* hold checkpoints until a complete platform bucket ([d87577e](https://github.com/rknightion/cf2otel/commit/d87577ed933e0e17567ad1793bcaae3d9059b42b))
+* hold Queue checkpoint until a complete bucket ([26e9a28](https://github.com/rknightion/cf2otel/commit/26e9a286531c8a48b2697300690b0d3af9e42241))
+* name queue snapshot gauges by aggregation ([c2a386c](https://github.com/rknightion/cf2otel/commit/c2a386c7090ac5eb5b5a70b47683b89c5a620f29))
+* split platform Groups on bucket boundaries ([66ac178](https://github.com/rknightion/cf2otel/commit/66ac178afa8f02d2307f11b61c9ce2791f351089))
+* use lowercase Durable Objects errors ([83079be](https://github.com/rknightion/cf2otel/commit/83079bec4f714a4310019bad7b04023c1d0e1b70))
+* use lowercase Queue error strings ([8282104](https://github.com/rknightion/cf2otel/commit/8282104678bf4a5500031c541aa05dd8a403c0bd))
+
 ## [0.4.0](https://github.com/rknightion/cf2otel/compare/v0.3.1...v0.4.0) (2026-09-24)
 
 
