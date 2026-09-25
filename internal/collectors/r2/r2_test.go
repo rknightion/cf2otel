@@ -157,6 +157,17 @@ func r2WindowCollector(t *testing.T, cfg *config.Config, api cfapi.Client, name 
 	return nil
 }
 
+func TestNoCompleteBucketFailsWithoutProgress(t *testing.T) {
+	api := &r2TestAPI{settings: map[string]cfapi.DatasetSettings{testOperationsDataset: r2TestSettings(testOperationsDataset)}}
+	window := r2WindowCollector(t, r2TestConfig("r2.operations"), api, "r2.operations")
+	from := time.Date(2026, 9, 24, 10, 1, 0, 0, time.UTC)
+	to := from.Add(time.Minute)
+	mark, err := window.CollectWindow(context.Background(), from, to, &telemetry.Buffer{})
+	if err == nil || !mark.Equal(from) || len(api.calls) != 0 {
+		t.Fatalf("no complete bucket advanced or queried: mark=%s err=%v calls=%d", mark, err, len(api.calls))
+	}
+}
+
 func r2UTC(hour, minute int) time.Time {
 	return time.Date(2026, 9, 25, hour, minute, 0, 0, time.UTC)
 }

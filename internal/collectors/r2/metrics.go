@@ -152,9 +152,6 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 
 	completeFrom := ceilR2Bucket(from.UTC())
 	completeTo := to.UTC().Truncate(r2BucketInterval)
-	if !completeTo.After(from) {
-		return from, nil
-	}
 	if !completeFrom.Before(completeTo) {
 		return from, errors.New("window contains no complete five-minute bucket")
 	}
