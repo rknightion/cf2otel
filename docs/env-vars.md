@@ -18,6 +18,7 @@ Configuration loads defaults, then YAML, then `CF2OTEL_` environment overrides. 
 | `http.zones` | `CF2OTEL_HTTP__ZONES` |
 | `http.max_metric_hosts_per_zone` | `CF2OTEL_HTTP__MAX_METRIC_HOSTS_PER_ZONE` |
 | `http.max_metric_series_per_window` | `CF2OTEL_HTTP__MAX_METRIC_SERIES_PER_WINDOW` |
+| `platform.max_metric_series_per_window` | `CF2OTEL_PLATFORM__MAX_METRIC_SERIES_PER_WINDOW` |
 | `identity.enabled` | `CF2OTEL_IDENTITY__ENABLED` |
 | `identity.match_window` | `CF2OTEL_IDENTITY__MATCH_WINDOW` |
 | `identity.max_candidates` | `CF2OTEL_IDENTITY__MAX_CANDIDATES` |

@@ -43,6 +43,35 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cloudflare.rum.fcp.p75` | Rolling p75 first contentful paint gauge, milliseconds inferred from GraphQL timing values. |
 | `cloudflare.rum.ttfb.p75` | Rolling p75 time to first byte gauge, milliseconds inferred from GraphQL timing values. |
 | `cloudflare.rum.cls.p75` | Rolling p75 cumulative layout shift score gauge. |
+| `cloudflare.workers.requests` | Worker request count from `workersOverviewRequestsAdaptiveGroups`, optionally by bounded script name. |
+| `cloudflare.turnstile.events` | Turnstile event count from `turnstileAdaptiveGroups`, account aggregate. |
+| `cloudflare.logpush.uploads` | Logpush upload count from `logpushHealthAdaptiveGroups`, account aggregate. |
+| `cloudflare.logpush.records` | Logpush record count from `logpushHealthAdaptiveGroups`, account aggregate. |
+| `cloudflare.d1.read_queries` | D1 read query sum from `d1AnalyticsAdaptiveGroups`, account aggregate. |
+| `cloudflare.d1.write_queries` | D1 write query sum from `d1AnalyticsAdaptiveGroups`, account aggregate. |
+| `cloudflare.d1.queries` | D1 query count from `d1QueriesAdaptiveGroups`; query text is not selected. |
+| `cloudflare.d1.storage.max_database_bytes` | Maximum D1 database size across databases in the latest complete bucket, `By`. |
+| `cloudflare.kv.requests` | KV operation request sum from `kvOperationsAdaptiveGroups`, account aggregate. |
+| `cloudflare.kv.storage.max_namespace_bytes` | Maximum KV namespace bytes in the latest complete bucket, `By`. |
+| `cloudflare.kv.storage.max_namespace_keys` | Maximum KV namespace key count in the latest complete bucket. |
+| `cloudflare.r2.bandwidth.download.bytes` | R2 download byte sum, optionally by bounded bucket name, `By`. |
+| `cloudflare.r2.bandwidth.upload.bytes` | R2 upload byte sum, optionally by bounded bucket name, `By`. |
+| `cloudflare.r2.catalog.data.operations` | R2 catalog data operation count, optionally by bounded namespace name. |
+| `cloudflare.r2.catalog.maintenance.jobs` | R2 catalog maintenance job count, optionally by bounded namespace name. |
+| `cloudflare.r2.requests` | R2 operation request sum, optionally by bounded bucket name. |
+| `cloudflare.r2.storage.payload.bytes` | R2 payload-size gauge in the latest complete bucket per bucket, `By`. |
+| `cloudflare.r2.storage.objects` | R2 object-count gauge in the latest complete bucket per bucket. |
+| `cloudflare.r2sql.queries` | R2 SQL query count, optionally by bounded bucket name; table names are omitted. |
+| `cloudflare.durableobjects.requests` | Durable Objects invocation request sum, account aggregate. |
+| `cloudflare.durableobjects.subrequests` | Durable Objects periodic subrequest sum, account aggregate. |
+| `cloudflare.durableobjects.sql_storage.max_namespace_bytes` | Maximum Durable Objects SQL storage across namespaces in the latest complete bucket, `By`. |
+| `cloudflare.durableobjects.subrequests.request_body.bytes` | Durable Objects uncached request-body byte sum, account aggregate, `By`. |
+| `cloudflare.queues.backlog.max_queue_avg_messages` | Maximum per-queue average backlog messages in the latest complete bucket. |
+| `cloudflare.queues.backlog.max_queue_avg_bytes` | Maximum per-queue average backlog bytes in the latest complete bucket, `By`. |
+| `cloudflare.queues.consumer.max_queue_avg_concurrency` | Maximum per-queue average consumer concurrency in the latest complete bucket. |
+| `cloudflare.queues.delayed_backlog.max_queue_avg_messages` | Maximum per-queue average delayed backlog messages in the latest complete bucket. |
+| `cloudflare.queues.message.operations` | Queue message operation count, account aggregate. |
+| `cloudflare.queues.message.billable_operations` | Queue billable operation sum, account aggregate. |
 | `cloudflare.ai_gateway.requests` | AI Gateway request count. |
 | `cloudflare.ai_gateway.errors` | AI Gateway error count. |
 | `cloudflare.ai_gateway.cache_hits` | AI Gateway cache hits. |
@@ -72,6 +101,8 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cf2otel.window.commit_failures` | Failed window commits by retry or dropped outcome. |
 | `cf2otel.window.catchup_windows` | Additional bounded collector windows committed in one scheduler tick. |
 
+Platform gauges select the latest complete five-minute source bucket and emit at export time. The units `1` and `By` above describe intended units; the current emitter does not attach OTLP unit metadata. Queue IDs are used only inside source aggregation and are never metric attributes.
+
 AI Gateway metrics combine Cloudflare request outcome measurements with GenAI duration and usage conventions.
 
 ## Attributes
@@ -88,6 +119,7 @@ AI Gateway metrics combine Cloudflare request outcome measurements with GenAI du
 | Firewall | `cloudflare.firewall.*` attributes are listed individually below; IP, path, query, user agent and ray are log only. |
 | DNS | `cloudflare.dns.*` attributes are listed individually below; query name and IPs are log only. |
 | Gateway DNS | `cloudflare.gateway.dns.query.type`, `cloudflare.gateway.dns.decision`, `cloudflare.gateway.dns.country`; only bounded metric dimensions. |
+| Platform resource names | `cloudflare.workers.script_name`, `cloudflare.r2.bucket_name`, `cloudflare.r2.catalog.namespace_name`, `cloudflare.r2sql.bucket_name`; bounded names only. |
 | RUM | `cloudflare.rum.country`, `cloudflare.rum.device_type`, `cloudflare.rum.site_tag`; gauges use device and optional site tag. |
 | Window delivery | `cf2otel.window.*` describes retention gaps and commit outcomes. |
 | Poller | `cf2otel.collector`, `cf2otel.version`, `cf2otel.commit`, `cf2otel.export.signal`, `cf2otel.build.version`, `cf2otel.build.commit` |
@@ -156,6 +188,39 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `gen_ai.client.inference.usage.output_tokens` |
 | Metric | `gen_ai.client.inference.usage.reasoning.output_tokens` |
 | Metric | `gen_ai.client.operation.duration` |
+| Metric | `cloudflare.d1.queries` |
+| Metric | `cloudflare.d1.read_queries` |
+| Metric | `cloudflare.d1.storage.max_database_bytes` |
+| Metric | `cloudflare.d1.write_queries` |
+| Metric | `cloudflare.durableobjects.requests` |
+| Metric | `cloudflare.durableobjects.sql_storage.max_namespace_bytes` |
+| Metric | `cloudflare.durableobjects.subrequests` |
+| Metric | `cloudflare.durableobjects.subrequests.request_body.bytes` |
+| Metric | `cloudflare.kv.requests` |
+| Metric | `cloudflare.kv.storage.max_namespace_bytes` |
+| Metric | `cloudflare.kv.storage.max_namespace_keys` |
+| Metric | `cloudflare.logpush.records` |
+| Metric | `cloudflare.logpush.uploads` |
+| Metric | `cloudflare.queues.backlog.max_queue_avg_bytes` |
+| Metric | `cloudflare.queues.backlog.max_queue_avg_messages` |
+| Metric | `cloudflare.queues.consumer.max_queue_avg_concurrency` |
+| Metric | `cloudflare.queues.delayed_backlog.max_queue_avg_messages` |
+| Metric | `cloudflare.queues.message.billable_operations` |
+| Metric | `cloudflare.queues.message.operations` |
+| Metric | `cloudflare.r2.bandwidth.download.bytes` |
+| Metric | `cloudflare.r2.bandwidth.upload.bytes` |
+| Metric | `cloudflare.r2.catalog.data.operations` |
+| Metric | `cloudflare.r2.catalog.maintenance.jobs` |
+| Metric | `cloudflare.r2.requests` |
+| Metric | `cloudflare.r2.storage.objects` |
+| Metric | `cloudflare.r2.storage.payload.bytes` |
+| Metric | `cloudflare.r2sql.queries` |
+| Metric | `cloudflare.turnstile.events` |
+| Metric | `cloudflare.workers.requests` |
+| Attribute | `cloudflare.r2.bucket_name` |
+| Attribute | `cloudflare.r2.catalog.namespace_name` |
+| Attribute | `cloudflare.r2sql.bucket_name` |
+| Attribute | `cloudflare.workers.script_name` |
 | Attribute | `cf2otel.api.method` |
 | Attribute | `cf2otel.build.commit` |
 | Attribute | `cf2otel.build.version` |
