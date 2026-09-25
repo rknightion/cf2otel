@@ -1,11 +1,11 @@
 ---
 id: CFO-0024
 title: 'Email routing, email sending and DMARC report datasets'
-status: In Progress
+status: Parked
 assignee:
   - '@rknightion'
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-25 14:23'
+updated_date: '2026-09-25 14:52'
 labels:
   - 'wave:2'
   - email
@@ -51,4 +51,6 @@ Loop 5 E24-B local candidate a2c5ba8486a9fc995113543d35b43559e269107e is committ
 Loop 5 owner closeout: E24-B routing and sending Groups candidate 54cb82708afa0ad441b807f290fb1121592b534d is committed locally only, with docs, exact-SHA just check and just ci passing and CodeRabbit correction review complete. Required independent REV-E24-R2 has no verdict; no email commit was pushed, released or deployed, so AC2-4 remain unchecked. Resume by reviewing that exact candidate against 182b285d6b24e2d683ac837c5ac324d312a4dcc1, then reconcile with current main without discarding the local candidate. Implementation attempts worker 1/4 plus root corrections; review-repair 3/3 used (retention error, fail-closed zone selection, dated test fixture); infrastructure retry: review-dispatch stall; grant: frozen build routing and sending only, no DMARC.
 
 Loop 6: candidate 9bb6ff8 passed independent email review; merged and pushed cbc3d0de6a68daf5d645f5613ceb4cb0cde77bf5. just check and just ci passed at exact SHA; nine workflow runs concluded success. Added-line privacy scan found zero hits across 23 zones. AC3 and AC4 still require a release, Camden deployment and source-to-Mimir comparison.
+
+Loop 6 release gate parked: at DEP-ready after P8, release-please PR #20 base 7a7bbdd and head 29000c9 proposed v0.5.2 but its generated CHANGELOG omitted the landed Email Routing and Sending feature a4aeb08 and earlier email fixes reachable since v0.5.1. The PR was not merged. CFO-0035 tracks the release-note repair. Resume only when a regenerated release candidate at a named main SHA lists the feature and newly delivered fixes and all required workflows at that SHA pass; then REL-n, Camden DEP-n and LIVE-24 source-to-Mimir proof remain. AC2 stays proven; AC3/4 are unchecked.
 <!-- SECTION:NOTES:END -->

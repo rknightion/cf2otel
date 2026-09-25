@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-25 10:17'
+updated_date: '2026-09-25 14:54'
 labels:
   - 'wave:2'
   - platform
@@ -85,10 +85,14 @@ Loop 5 SEAM-W pushed at c2a386c7090ac5eb5b5a70b47683b89c5a620f29 after just chec
 Loop 5 AC2 source and docs shipped at 182b285d6b24e2d683ac837c5ac324d312a4dcc1: 22 Groups collectors, 33 declared platform names, five collapsed dashboard rows, exact-SHA just check and just ci exit 0, CI ci-success and all required workflows success. F-lane implementation attempts F1=2, F2=2, F3=1, F4=1, F5=1; root corrections handled bucket splits, checkpoint hold and lint. CodeRabbit found and repaired a material R2 split defect; final dashboard review's JSON regeneration claim was disproven by gen-check and live m7kni readback. REV-23 independent Sol/medium child could not be dispatched on the current agent control surface, so release PR #18 stays open; AC3/4 unproven. Review-repair budget remains 3/3 for task-level REV; infrastructure retries included CodeRabbit rate limits and one WebSocket close, no extra Cloudflare write. Grant: frozen CFO-0023 build/release/deploy decision. Resume at REV-23 on exact pushed 182b285, then REL/DEP/LIVE.
 
 Loop 5 closeout: v0.5.1 release and Camden deployment healthy; all 36 prepatch checkpoints advanced, none missing or rewound. Natural source-to-Mimir comparisons matched 16 counter metrics, Turnstile count 6, four Queue gauges on source-bearing buckets, and six storage gauges after the max-field patch. R2 SQL and Durable Objects request-body Groups had zero postdeploy rows through 10:15Z but each had rows in the same prior-seven-day aggregate: absent input, not delivery proof. The source watcher was stopped at owner closeout. Implementation attempts F1=2/4, F2=2/4, F3=1/4, F4=1/4, F5=1/4; review-repair platform 2/3 and max-field FIX 1/3; infrastructure retries CodeRabbit rate limit and WebSocket close; grant: frozen build, release and deploy decision.
+
+Loop 6 opportunistic closeout, 2026-09-25T14:53Z: durableObjectsSubrequestsAdaptiveGroups returned one complete 12:00Z bucket with sum.requestBodySizeUncached=21685 over [10:15Z,14:53Z). Camden durableobjects.subrequests checkpoint reached 14:35Z. Mimir query sum(cloudflare_durableobjects_subrequests_request_body_bytes_total{service_name="cf2otel"}) had no series at 11:59Z or 12:10Z, then one series valued 21685 at 12:20Z and 14:53Z. This is an exact natural-source delivery observation for the formerly sparse request-body metric. r2sqlOperationsAdaptiveGroups returned zero rows in the same source interval, so R2 SQL delivery remains unproven absent input.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Loop 5 shipped 22 platform Groups collectors and dashboard panels in v0.5.1. Camden is healthy with monotonic checkpoints. Every dataset with observed postdeploy source rows matched m7kni; two sparse datasets are recorded only as absent input with prior-seven-day source rows.
+
+Loop 6 later observed Durable Objects request-body delivery: one 12:00Z source bucket of 21685 bytes matched the newly appearing Mimir series at 21685 after checkpoint delivery. R2 SQL still had no source rows through 14:53Z and remains unproven.
 <!-- SECTION:FINAL_SUMMARY:END -->
