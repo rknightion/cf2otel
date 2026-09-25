@@ -4,7 +4,7 @@ title: Deploy to camden (Docker) and verify end to end
 status: Parked
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-24 15:51'
+updated_date: '2026-09-25 10:18'
 labels:
   - 'wave:1'
   - deploy
@@ -49,4 +49,6 @@ Loop 3 P6 closeout source census queried Access SCIM updates from 2026-09-24 00:
 Loop 4 correction to the loop 3 note: the 18 restart-proof matches used frozen canonical JSON of the fields shared by each source row and Loki body. They were not zone/ray/time keys; Free-zone rows had no ray. AC3 remains checked. P6 DEP census [2026-09-24 08:18:58,13:46:18) UTC returned zero SCIM source rows in one page, so AC2 remains open.
 
 Loop 4 P6 additional source censuses: Access SCIM updates REST returned zero rows in one page for [2026-09-24T08:18:58Z,14:15:50Z) at the CFG readback and zero rows for [08:18:58Z,15:50:53Z) at closeout. DEP census earlier in this loop was also zero through 13:46:18Z. No SCIM source event exists to prove its Loki delivery; AC2 remains open. Resume on a natural SCIM update, then verify its exact Loki row and the remaining wave-1 signals.
+
+Loop 5 closeout P6: Access SCIM updates source census [2026-09-24T08:18:58Z,2026-09-25T10:18:05Z) returned zero rows in one page. AC2 remains unchecked; resume on a natural SCIM update and compare its exact Loki signal before checking all wave-1 signals. Implementation attempts 0/4 this loop, review-repair 0/3, infrastructure retries 0; grant: read-only opportunistic census.
 <!-- SECTION:NOTES:END -->
