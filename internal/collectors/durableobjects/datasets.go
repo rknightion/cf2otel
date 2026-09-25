@@ -99,13 +99,13 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 		return from, errors.New("invalid Durable Objects metrics window")
 	}
 	if c.cfg == nil || c.cfg.Cloudflare.AccountID == "" {
-		return from, errors.New("Durable Objects metrics require a configured Cloudflare account")
+		return from, errors.New("durable objects metrics require a configured Cloudflare account")
 	}
 	if c.api == nil {
-		return from, errors.New("Durable Objects metrics require a Cloudflare client")
+		return from, errors.New("durable objects metrics require a Cloudflare client")
 	}
 	if out == nil {
-		return from, errors.New("Durable Objects metrics require an emitter")
+		return from, errors.New("durable objects metrics require an emitter")
 	}
 	seriesLimit := c.cfg.Platform.MaxMetricSeriesPerWindow
 	if seriesLimit <= 0 {
@@ -113,33 +113,33 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 	}
 	reader, ok := c.api.(datasetSettingsReader)
 	if !ok {
-		return from, errors.New("Cloudflare client does not expose Durable Objects dataset settings")
+		return from, errors.New("cloudflare client does not expose durable objects dataset settings")
 	}
 	settings, err := reader.DatasetSettings(ctx, cfapi.AccountScope, c.cfg.Cloudflare.AccountID, c.spec.dataset)
 	if err != nil {
 		return from, fmt.Errorf("read %s dataset settings: %w", c.spec.name, err)
 	}
 	if !settings.Enabled {
-		return from, fmt.Errorf("Durable Objects dataset %s is disabled", c.spec.dataset)
+		return from, fmt.Errorf("durable objects dataset %s is disabled", c.spec.dataset)
 	}
 	if settings.MaxNumberOfFields <= 0 {
-		return from, fmt.Errorf("Durable Objects dataset %s has an invalid field limit", c.spec.dataset)
+		return from, fmt.Errorf("durable objects dataset %s has an invalid field limit", c.spec.dataset)
 	}
 	if settings.MaxPageSize <= 0 {
-		return from, fmt.Errorf("Durable Objects dataset %s has an invalid page-size limit", c.spec.dataset)
+		return from, fmt.Errorf("durable objects dataset %s has an invalid page-size limit", c.spec.dataset)
 	}
 	if settings.MaxDuration <= 0 || settings.NotOlderThan <= 0 {
-		return from, fmt.Errorf("Durable Objects dataset %s is missing its duration or retention limit", c.spec.dataset)
+		return from, fmt.Errorf("durable objects dataset %s is missing its duration or retention limit", c.spec.dataset)
 	}
 	for _, field := range []string{c.spec.valueField, durableObjectsTimeField} {
 		if !availableField(settings.AvailableFields, field) {
-			return from, fmt.Errorf("Durable Objects dataset %s is missing required field %s", c.spec.dataset, field)
+			return from, fmt.Errorf("durable objects dataset %s is missing required field %s", c.spec.dataset, field)
 		}
 	}
 
 	fields := []string{c.spec.valueField, durableObjectsTimeField}
 	if len(fields) > settings.MaxNumberOfFields {
-		return from, fmt.Errorf("Durable Objects dataset %s needs %d required fields, limit %d", c.spec.dataset, len(fields), settings.MaxNumberOfFields)
+		return from, fmt.Errorf("durable objects dataset %s needs %d required fields, limit %d", c.spec.dataset, len(fields), settings.MaxNumberOfFields)
 	}
 	if c.spec.optionalNamespace && len(fields) < settings.MaxNumberOfFields && availableField(settings.AvailableFields, "dimensions.namespaceName") {
 		fields = append(fields, "dimensions.namespaceName")
