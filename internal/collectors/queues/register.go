@@ -127,14 +127,14 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 		return from, errors.New("invalid Queue Groups window")
 	}
 	if c.cfg == nil || c.api == nil || c.cfg.Cloudflare.AccountID == "" {
-		return from, errors.New("Queue Groups collector requires a configured Cloudflare account and API")
+		return from, errors.New("queue Groups collector requires a configured Cloudflare account and API")
 	}
 	if out == nil {
-		return from, errors.New("Queue Groups collector requires a telemetry emitter")
+		return from, errors.New("queue Groups collector requires a telemetry emitter")
 	}
 	reader, ok := c.api.(settingsReader)
 	if !ok {
-		return from, errors.New("Cloudflare client does not expose Queue Groups dataset settings")
+		return from, errors.New("cloudflare client does not expose Queue Groups dataset settings")
 	}
 	settings, err := reader.DatasetSettings(ctx, cfapi.AccountScope, c.cfg.Cloudflare.AccountID, c.spec.dataset)
 	if err != nil {
@@ -187,37 +187,37 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 
 func buildQueryPlan(spec datasetSpec, settings cfapi.DatasetSettings) (queryPlan, error) {
 	if !settings.Enabled {
-		return queryPlan{}, fmt.Errorf("Queue Groups dataset %s is disabled", spec.dataset)
+		return queryPlan{}, fmt.Errorf("queue Groups dataset %s is disabled", spec.dataset)
 	}
 	if settings.MaxNumberOfFields <= 0 {
-		return queryPlan{}, fmt.Errorf("Queue Groups dataset %s has an invalid field limit", spec.dataset)
+		return queryPlan{}, fmt.Errorf("queue Groups dataset %s has an invalid field limit", spec.dataset)
 	}
 	if settings.MaxPageSize <= 0 {
-		return queryPlan{}, fmt.Errorf("Queue Groups dataset %s has no page-size limit", spec.dataset)
+		return queryPlan{}, fmt.Errorf("queue Groups dataset %s has no page-size limit", spec.dataset)
 	}
 	if settings.MaxDuration <= 0 || settings.NotOlderThan <= 0 {
-		return queryPlan{}, fmt.Errorf("Queue Groups dataset %s has no duration or retention limit", spec.dataset)
+		return queryPlan{}, fmt.Errorf("queue Groups dataset %s has no duration or retention limit", spec.dataset)
 	}
 
 	fields := make([]string, 0, len(spec.metrics)+2)
 	for _, metric := range spec.metrics {
 		if !availableField(settings.AvailableFields, metric.field) {
-			return queryPlan{}, fmt.Errorf("Queue Groups dataset %s is missing required field %s", spec.dataset, metric.field)
+			return queryPlan{}, fmt.Errorf("queue Groups dataset %s is missing required field %s", spec.dataset, metric.field)
 		}
 		fields = append(fields, metric.field)
 	}
 	if !availableField(settings.AvailableFields, queueTimestampField) {
-		return queryPlan{}, fmt.Errorf("Queue Groups dataset %s is missing required field %s", spec.dataset, queueTimestampField)
+		return queryPlan{}, fmt.Errorf("queue Groups dataset %s is missing required field %s", spec.dataset, queueTimestampField)
 	}
 	fields = append(fields, queueTimestampField)
 	if spec.queueIDMax {
 		if !availableField(settings.AvailableFields, queueIDField) {
-			return queryPlan{}, fmt.Errorf("Queue Groups dataset %s is missing required field %s", spec.dataset, queueIDField)
+			return queryPlan{}, fmt.Errorf("queue Groups dataset %s is missing required field %s", spec.dataset, queueIDField)
 		}
 		fields = append(fields, queueIDField)
 	}
 	if len(fields) > settings.MaxNumberOfFields {
-		return queryPlan{}, fmt.Errorf("Queue Groups dataset %s field limit %d is below its %d required fields", spec.dataset, settings.MaxNumberOfFields, len(fields))
+		return queryPlan{}, fmt.Errorf("queue Groups dataset %s field limit %d is below its %d required fields", spec.dataset, settings.MaxNumberOfFields, len(fields))
 	}
 	return queryPlan{fields: fields, limit: min(queueQueryLimit, settings.MaxPageSize)}, nil
 }
@@ -251,17 +251,17 @@ func (c *groupsCollector) queryRows(ctx context.Context, request cfapi.GraphQLRe
 				return nil, parseErr
 			}
 			if bucket.Before(request.From) || !bucket.Before(request.To) || bucket.Add(queueBucketDuration).After(request.To) {
-				return nil, fmt.Errorf("Queue Groups dataset %s returned a bucket outside its half-open query window", c.spec.dataset)
+				return nil, fmt.Errorf("queue Groups dataset %s returned a bucket outside its half-open query window", c.spec.dataset)
 			}
 		}
 		return rows, nil
 	}
 	if request.To.Sub(request.From) <= queueMinimumQueryWindow {
-		return nil, fmt.Errorf("Queue Groups dataset %s remains saturated at the irreducible five-minute bucket", c.spec.dataset)
+		return nil, fmt.Errorf("queue Groups dataset %s remains saturated at the irreducible five-minute bucket", c.spec.dataset)
 	}
 	mid := request.From.Add(request.To.Sub(request.From) / 2).UTC().Truncate(queueBucketDuration)
 	if !mid.After(request.From) || !mid.Before(request.To) {
-		return nil, fmt.Errorf("Queue Groups dataset %s cannot bisect a saturated interval on five-minute boundaries", c.spec.dataset)
+		return nil, fmt.Errorf("queue Groups dataset %s cannot bisect a saturated interval on five-minute boundaries", c.spec.dataset)
 	}
 	leftRequest := request
 	leftRequest.To = mid
@@ -295,20 +295,20 @@ func (c *groupsCollector) aggregate(rows []map[string]any, from, to time.Time) (
 	for _, row := range rows {
 		bucket, err := rowBucket(row)
 		if err != nil {
-			return nil, fmt.Errorf("Queue Groups dataset %s returned an invalid five-minute bucket", c.spec.dataset)
+			return nil, fmt.Errorf("queue Groups dataset %s returned an invalid five-minute bucket", c.spec.dataset)
 		}
 		if bucket.Before(from) || !bucket.Before(to) || bucket.Add(queueBucketDuration).After(to) {
-			return nil, fmt.Errorf("Queue Groups dataset %s returned an incomplete or out-of-window bucket", c.spec.dataset)
+			return nil, fmt.Errorf("queue Groups dataset %s returned an incomplete or out-of-window bucket", c.spec.dataset)
 		}
 		values := make(map[string]float64, len(c.spec.metrics))
 		for _, metric := range c.spec.metrics {
 			raw, ok := fieldValue(row, metric.field)
 			if !ok {
-				return nil, fmt.Errorf("Queue Groups dataset %s row is missing selected value field %s", c.spec.dataset, metric.field)
+				return nil, fmt.Errorf("queue Groups dataset %s row is missing selected value field %s", c.spec.dataset, metric.field)
 			}
 			value, ok := nonnegativeNumber(raw)
 			if !ok {
-				return nil, fmt.Errorf("Queue Groups dataset %s row has an invalid value for %s", c.spec.dataset, metric.field)
+				return nil, fmt.Errorf("queue Groups dataset %s row has an invalid value for %s", c.spec.dataset, metric.field)
 			}
 			values[metric.name] = value
 		}
@@ -317,7 +317,7 @@ func (c *groupsCollector) aggregate(rows []map[string]any, from, to time.Time) (
 			raw, ok := fieldValue(row, queueIDField)
 			queue, valid := queueIdentifier(raw)
 			if !ok || !valid {
-				return nil, fmt.Errorf("Queue Groups dataset %s row is missing a valid internal queue grouping value", c.spec.dataset)
+				return nil, fmt.Errorf("queue Groups dataset %s row is missing a valid internal queue grouping value", c.spec.dataset)
 			}
 			if bucket.After(latestBucket) {
 				latestBucket = bucket
@@ -344,7 +344,7 @@ func (c *groupsCollector) aggregate(rows []map[string]any, from, to time.Time) (
 			}
 			counters[metric.name] += values[metric.name]
 			if math.IsNaN(counters[metric.name]) || math.IsInf(counters[metric.name], 0) {
-				return nil, fmt.Errorf("Queue Groups dataset %s counter overflow for %s", c.spec.dataset, metric.field)
+				return nil, fmt.Errorf("queue Groups dataset %s counter overflow for %s", c.spec.dataset, metric.field)
 			}
 			counterSeen[metric.name] = true
 		}
