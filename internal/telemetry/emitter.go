@@ -90,9 +90,6 @@ func (e *otelEmitter) Gauge(ctx context.Context, n string, v float64, a ...Attr)
 	if err != nil {
 		return err
 	}
-	if spec, ok := semconv.Metric(n); ok && spec.Scale != 0 {
-		v *= spec.Scale
-	}
 	i.Record(ctx, v, metric.WithAttributes(attrs(a)...))
 	return nil
 }

@@ -1,12 +1,10 @@
 package semconv
 
-// MetricSpec holds the instrument metadata and measurement scale for a declared metric.
-// A scale of zero means the emitted value is already in the declared unit.
+// MetricSpec holds instrument metadata for a declared metric.
 type MetricSpec struct {
 	Unit        string
 	Description string
 	Boundaries  []float64
-	Scale       float64
 }
 
 // The operation buckets resolve latency through a minute; poller buckets also
@@ -29,11 +27,11 @@ var metricSpecs = map[string]MetricSpec{
 	MetricGatewayDNSQueries:              {Unit: "1", Description: "Gateway DNS query sum from account-level cf1GatewayDnsRawGroups, by bounded query type, resolver decision and country."},
 	MetricRUMPageViews:                   {Unit: "1", Description: "Page views from rumPageloadEventsAdaptiveGroups by country and device."},
 	MetricRUMSessions:                    {Unit: "1", Description: "Visit sum from rumPageloadEventsAdaptiveGroups by country and device."},
-	MetricRUMLCPP75:                      {Unit: "s", Description: "Rolling p75 largest contentful paint in seconds, converted from GraphQL milliseconds.", Scale: 0.001},
-	MetricRUMINPP75:                      {Unit: "s", Description: "Rolling p75 interaction to next paint in seconds, converted from GraphQL milliseconds.", Scale: 0.001},
-	MetricRUMFIDP75:                      {Unit: "s", Description: "Rolling p75 first input delay in seconds, converted from GraphQL milliseconds.", Scale: 0.001},
-	MetricRUMFCPP75:                      {Unit: "s", Description: "Rolling p75 first contentful paint in seconds, converted from GraphQL milliseconds.", Scale: 0.001},
-	MetricRUMTTFBP75:                     {Unit: "s", Description: "Rolling p75 time to first byte in seconds, converted from GraphQL milliseconds.", Scale: 0.001},
+	MetricRUMLCPP75:                      {Unit: "s", Description: "Rolling p75 largest contentful paint in seconds, converted from GraphQL milliseconds."},
+	MetricRUMINPP75:                      {Unit: "s", Description: "Rolling p75 interaction to next paint in seconds, converted from GraphQL milliseconds."},
+	MetricRUMFIDP75:                      {Unit: "s", Description: "Rolling p75 first input delay in seconds, converted from GraphQL milliseconds."},
+	MetricRUMFCPP75:                      {Unit: "s", Description: "Rolling p75 first contentful paint in seconds, converted from GraphQL milliseconds."},
+	MetricRUMTTFBP75:                     {Unit: "s", Description: "Rolling p75 time to first byte in seconds, converted from GraphQL milliseconds."},
 	MetricRUMCLSP75:                      {Unit: "1", Description: "Rolling p75 cumulative layout shift score gauge."},
 	MetricWorkersRequests:                {Unit: "{request}", Description: "Worker request count from workersOverviewRequestsAdaptiveGroups, optionally by bounded script name."},
 	MetricTurnstileEvents:                {Unit: "1", Description: "Turnstile event count from turnstileAdaptiveGroups, account aggregate."},

@@ -138,7 +138,7 @@ func TestEmitterExportsMetricMetadataAndDurationBuckets(t *testing.T) {
 	}{
 		{semconv.MetricAPIRequests, 1, "counter"},
 		{semconv.MetricCheckpointAge, 9, "gauge"},
-		{semconv.MetricRUMLCPP75, 750, "gauge"},
+		{semconv.MetricRUMLCPP75, 0.75, "gauge"},
 		{semconv.MetricGenAIInputTokens, 12, "counter"},
 		{semconv.MetricGenAIDuration, 0.7, "histogram"},
 		{semconv.MetricAPIDuration, 0.03, "histogram"},
