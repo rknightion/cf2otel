@@ -4,7 +4,7 @@ title: 'Compare against native AI Gateway OTel export, then disable it'
 status: Parked
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-25 06:58'
+updated_date: '2026-09-25 10:18'
 labels:
   - 'wave:1'
   - aigw
@@ -59,4 +59,6 @@ Loop 3 P1h passed the composite-key HTTP restart proof and released cutover. Fre
 Loop 4 final-runtime gate passed on [14:43,15:43) UTC after aigateway.logs checkpoint 15:45:23Z: 69 source IDs, 69 exact Loki request rows, 69 direct Tempo spans, one per ID. One body-unavailable request lacked a content-log trace ID; exact-ID Tempo search located its trace and direct readback confirmed the span. Fresh gateway pre-state had one native OTel destination; two Workers observability destinations were saved privately. A 23-field no-op body retaining three null fields succeeded (2xx; exact code not retained), and re-GET changed only modified_at. The one cutover PUT returned HTTP 200; re-GET changed only otel to [] and modified_at. The Workers destination objects then differed only in configuration.jobStatus.last_complete on both destinations; their stable configuration was identical. The private script incorrectly treated those autonomous timestamps as a configuration change and sent the one authorized rollback PUT, HTTP 200. Final gateway re-GET restored the sole native OTel entry and all pre-state fields apart from modified_at; Workers stable configuration remained identical. The private comparator is corrected and a local regression check distinguishes timestamp drift from a real configuration change. No post-cutover watch was run because rollback restored native export. AC2/3 remain open; the three authorized gateway writes are exhausted. Resume requires a fresh scoped cutover authorization and live gate, using the corrected destination comparison.
 
 Loop 5 P8-T regression passed; P8.0 [2026-09-25T01:37:48Z,04:37:48Z) had 0 source IDs after the aigateway.logs checkpoint passed its end. No Cloudflare PUT was sent (0/3 authorized writes used); closeout GET still had one native OTel entry and two Workers destinations. Park AC2/3 until a fresh 60-minute window has at least three source IDs, extending once to three hours, and exact Loki/Tempo one-to-one proof passes. Implementation attempts: tooling 1; review-repair 0; infrastructure retries 0; grant: 2026-09-25 three-write decision.
+
+Loop 5 owner closeout: P8.0 three-hour exactness window had zero source IDs, zero Loki rows and zero exact Tempo spans. P8 no-op, cutover and conditional rollback were not sent (0/3 authorized writes used); native AI Gateway OTel export remains configured and Workers destinations remain present. Resume only after a fresh 60-minute running-binary window has at least three source IDs with one-to-one Loki and direct Tempo proof, allowing the defined extension to three hours. Tooling implementation 1/4, review-repair 0/3, infrastructure retries 0; grant: frozen three-write P8 decision.
 <!-- SECTION:NOTES:END -->
