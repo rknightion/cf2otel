@@ -75,7 +75,7 @@ func turnstileTestConfig() *config.Config {
 func turnstileTestRow(bucket time.Time, count any) map[string]any {
 	return map[string]any{
 		"count":      count,
-		"dimensions": map[string]any{"datetimeFiveMinutes": bucket.UTC().Format(time.RFC3339), "sitekey": "synthetic-site-key", "email": "private@example.com"},
+		"dimensions": map[string]any{"datetimeFiveMinutes": bucket.UTC().Format(time.RFC3339), "sitekey": "synthetic-site-key", "email": "synthetic-private-value"},
 	}
 }
 

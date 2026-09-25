@@ -111,7 +111,7 @@ func TestWorkersOverviewUsesSourceFieldsAndOnlyBoundedScriptAttribute(t *testing
 		workersTestRow(from, 4, strings.Repeat("x", 129)),
 		workersTestRow(from, 6, "   "),
 	}
-	rows[0]["email"] = "private@example.com"
+	rows[0]["email"] = "synthetic-private-value"
 	rows[0]["dimensions"].(map[string]any)["path"] = "/private/path"
 	api := &workersTestAPI{
 		settings: workersTestSettings(),
