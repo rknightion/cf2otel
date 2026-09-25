@@ -497,7 +497,7 @@ func mergeJSON(left, right json.RawMessage) (json.RawMessage, error) {
 }
 
 func normalField(field string) string {
-	for _, prefix := range []string{"dimensions_", "sum_", "avg_", "uniq_", "quantiles_"} {
+	for _, prefix := range []string{"dimensions_", "sum_", "avg_", "max_", "uniq_", "quantiles_"} {
 		if strings.HasPrefix(field, prefix) {
 			return strings.TrimSuffix(prefix, "_") + "." + strings.TrimPrefix(field, prefix)
 		}

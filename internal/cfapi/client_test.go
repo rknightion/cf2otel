@@ -251,6 +251,10 @@ func TestAvailableFieldsFlattenedNames(t *testing.T) {
 	if len(got) != 4 || got[0] != "dimensions.allowed" || got[1] != "sum.logins" || got[2] != "max.value" || got[3] != "quantiles.largestContentfulPaintP75" {
 		t.Fatalf("got %v", got)
 	}
+	defaults := intersect(nil, []string{"max_value"})
+	if len(defaults) != 1 || defaults[0] != "max.value" {
+		t.Fatalf("default fields %v", defaults)
+	}
 }
 
 func TestRetryAfterAndResponseCap(t *testing.T) {
