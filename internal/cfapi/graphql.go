@@ -163,7 +163,7 @@ func intersect(wanted, available []string) []string {
 	set := map[string]bool{}
 	for _, f := range available {
 		set[strings.ToLower(f)] = true
-		for _, prefix := range []string{"dimensions_", "sum_", "avg_", "uniq_", "quantiles_"} {
+		for _, prefix := range []string{"dimensions_", "sum_", "avg_", "max_", "uniq_", "quantiles_"} {
 			if strings.HasPrefix(f, prefix) {
 				set[strings.ToLower(strings.TrimSuffix(prefix, "_")+"."+strings.TrimPrefix(f, prefix))] = true
 			}
