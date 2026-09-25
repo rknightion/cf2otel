@@ -85,6 +85,7 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 	}
 
 	total := float64(0)
+	enabledZones := 0
 	for _, zone := range selectedZones {
 		settings, err := reader.DatasetSettings(ctx, cfapi.ZoneScope, zone.ID, c.spec.dataset)
 		if err != nil {
@@ -93,6 +94,7 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 		if !settings.Enabled {
 			continue
 		}
+		enabledZones++
 		if err := validateEmailSettings(settings, c.spec.dataset, windowStart); err != nil {
 			return from, fmt.Errorf("%s zone dataset settings: %w", c.spec.name, err)
 		}
@@ -117,6 +119,9 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 			}
 			segmentStart = segmentEnd
 		}
+	}
+	if enabledZones == 0 {
+		return from, errors.New("no account-owned zone has an enabled email Groups dataset")
 	}
 
 	// Email datasets expose no allowed metric dimensions, so each collector emits
@@ -168,17 +173,21 @@ func emailHasAvailableField(available []string, wanted string) bool {
 }
 
 func selectAccountZones(zones []cfapi.Zone, accountID string, configured []string) ([]cfapi.Zone, error) {
-	allowed := make(map[string]bool, len(configured))
-	for _, id := range configured {
-		allowed[id] = true
-	}
+	matched := make([]bool, len(configured))
 	selected := make([]cfapi.Zone, 0, len(zones))
 	seen := make(map[string]bool, len(zones))
 	for _, zone := range zones {
 		if zone.Account.ID != accountID {
 			continue
 		}
-		if len(allowed) > 0 && !allowed[zone.ID] {
+		included := len(configured) == 0
+		for i, nameOrID := range configured {
+			if nameOrID != "" && (nameOrID == zone.ID || strings.EqualFold(nameOrID, zone.Name)) {
+				matched[i] = true
+				included = true
+			}
+		}
+		if !included {
 			continue
 		}
 		if zone.ID == "" {
@@ -189,6 +198,14 @@ func selectAccountZones(zones []cfapi.Zone, accountID string, configured []strin
 		}
 		seen[zone.ID] = true
 		selected = append(selected, zone)
+	}
+	for _, found := range matched {
+		if !found {
+			return nil, errors.New("configured email zone absent from account-owned discovery")
+		}
+	}
+	if len(selected) == 0 {
+		return nil, errors.New("no account-owned email zones were discovered")
 	}
 	return selected, nil
 }

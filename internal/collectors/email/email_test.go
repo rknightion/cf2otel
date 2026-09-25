@@ -238,6 +238,67 @@ func TestCollectorsAggregateOwnedZonesAndEmitUnlabeledCounters(t *testing.T) {
 	}
 }
 
+func TestConfiguredOwnedZoneNameSelectsAndCounts(t *testing.T) {
+	zone := testZone("zone-00000000000000000000000000000001", testAccountID)
+	zone.Name = "owned.invalid"
+	api := newEmailTestAPI(emailDatasetRouting, []cfapi.Zone{zone}, map[string]cfapi.DatasetSettings{
+		zone.ID: datasetSettings(true, "count", "dimensions_datetimeFiveMinutes"),
+	})
+	api.query = func(cfapi.GraphQLRequest) ([]map[string]any, error) {
+		return []map[string]any{{"count": 3.0, "dimensions": map[string]any{"datetimeFiveMinutes": testFrom}}}, nil
+	}
+	cfg := config.Default()
+	cfg.Cloudflare.AccountID = testAccountID
+	cfg.Cloudflare.Zones = []string{"OWNED.INVALID"}
+	window := registeredCollector(t, &cfg, api, "email.routing")
+	emitter := &emailTestEmitter{}
+	from := fixedTime(t, testFrom)
+	to := from.Add(emailBucket)
+
+	highWater, err := window.CollectWindow(context.Background(), from, to, emitter)
+	if err != nil || !highWater.Equal(to) || len(api.queries) != 1 || api.queries[0].ScopeID != zone.ID {
+		t.Fatalf("configured owned zone was not queried: high-water=%s err=%v queries=%v", highWater, err, api.queries)
+	}
+	if len(emitter.metrics) != 1 || emitter.metrics[0].value != 3 {
+		t.Errorf("emitted metrics = %+v, want one count of 3", emitter.metrics)
+	}
+}
+
+func TestZoneSelectionAndEntitlementGapsFailWithoutAdvance(t *testing.T) {
+	owned := testZone("zone-00000000000000000000000000000001", testAccountID)
+	owned.Name = "owned.invalid"
+	foreign := testZone("zone-00000000000000000000000000000002", "acct-foreign")
+	foreign.Name = "foreign.invalid"
+	for _, test := range []struct {
+		name       string
+		zones      []cfapi.Zone
+		configured []string
+		enabled    bool
+	}{
+		{name: "unmatched name", zones: []cfapi.Zone{owned}, configured: []string{"missing.invalid"}, enabled: true},
+		{name: "foreign ID", zones: []cfapi.Zone{owned, foreign}, configured: []string{foreign.ID}, enabled: true},
+		{name: "no owned zones", zones: []cfapi.Zone{foreign}, enabled: true},
+		{name: "all datasets disabled", zones: []cfapi.Zone{owned}, enabled: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			api := newEmailTestAPI(emailDatasetRouting, test.zones, map[string]cfapi.DatasetSettings{
+				owned.ID: datasetSettings(test.enabled, "count", "dimensions_datetimeFiveMinutes"),
+			})
+			cfg := config.Default()
+			cfg.Cloudflare.AccountID = testAccountID
+			cfg.Cloudflare.Zones = test.configured
+			window := registeredCollector(t, &cfg, api, "email.routing")
+			emitter := &emailTestEmitter{}
+			from := fixedTime(t, testFrom)
+
+			highWater, err := window.CollectWindow(context.Background(), from, from.Add(emailBucket), emitter)
+			if err == nil || !highWater.Equal(from) || len(api.queries) != 0 || len(emitter.metrics) != 0 {
+				t.Errorf("selection gap advanced or emitted: high-water=%s err=%v queries=%v metrics=%v", highWater, err, api.queries, emitter.metrics)
+			}
+		})
+	}
+}
+
 func TestMissingRequiredSettingsFieldFailsWithoutEmissionOrCheckpointAdvance(t *testing.T) {
 	for _, missing := range []string{"count", "dimensions_datetimeFiveMinutes"} {
 		t.Run(missing, func(t *testing.T) {
