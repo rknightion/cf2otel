@@ -16,10 +16,9 @@ import (
 	otellog "go.opentelemetry.io/otel/log"
 )
 
-const (
-	testAccountID = "acct-00000000000000000000000000000001"
-	testFrom      = "2026-09-25T10:00:00Z"
-)
+const testAccountID = "acct-00000000000000000000000000000001"
+
+var testFrom = time.Now().UTC().Truncate(5 * time.Minute).Add(-20 * time.Minute).Format(time.RFC3339)
 
 type emailTestAPI struct {
 	zones        []cfapi.Zone
