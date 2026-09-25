@@ -401,11 +401,8 @@ func TestIncompleteAndInitiallyUnalignedWindowsHoldCheckpointUntilFullBucket(t *
 	window := queueWindow(t, queueTestConfig("queues.message_operations"), api, "queues.message_operations")
 	from := queueFixtureFrom.Add(2 * time.Minute)
 	mark, err := window.CollectWindow(context.Background(), from, queueFixtureFrom.Add(9*time.Minute), &telemetry.Buffer{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !mark.Equal(from) || len(api.calls) != 0 {
-		t.Fatalf("incomplete interval advanced or queried: mark=%s calls=%d", mark, len(api.calls))
+	if err == nil || !mark.Equal(from) || len(api.calls) != 0 {
+		t.Fatalf("incomplete interval advanced or queried: mark=%s err=%v calls=%d", mark, err, len(api.calls))
 	}
 
 	to := queueFixtureFrom.Add(17 * time.Minute)

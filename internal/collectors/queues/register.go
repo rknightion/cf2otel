@@ -148,7 +148,7 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 	completeFrom := ceilBucket(from.UTC())
 	completeTo := floorBucket(to.UTC())
 	if !completeFrom.Before(completeTo) {
-		return from, nil
+		return from, errors.New("window contains no complete five-minute bucket")
 	}
 	request := cfapi.GraphQLRequest{
 		Scope:        cfapi.AccountScope,
