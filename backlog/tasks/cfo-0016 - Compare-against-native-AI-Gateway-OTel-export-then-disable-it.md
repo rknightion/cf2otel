@@ -1,11 +1,11 @@
 ---
 id: CFO-0016
 title: 'Compare against native AI Gateway OTel export, then disable it'
-status: In Progress
+status: Done
 assignee:
   - '@rknightion'
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-25 12:56'
+updated_date: '2026-09-25 14:49'
 labels:
   - 'wave:1'
   - aigw
@@ -23,15 +23,15 @@ Decision 2026-09-23 (Rob): after the first deployment, compare cf2otel's GenAI o
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 Side-by-side comparison for at least 20 matched requests recorded in the wave report, with every attribute the native span has present in cf2otel's
-- [ ] #2 Native AI Gateway OTel export disabled with the pre-state captured, and Workers OTLP destinations verified unchanged
-- [ ] #3 service.name=ai-gateway spans stop arriving in Tempo while cf2otel spans continue
+- [x] #2 Native AI Gateway OTel export disabled with the pre-state captured, and Workers OTLP destinations verified unchanged
+- [x] #3 service.name=ai-gateway spans stop arriving in Tempo while cf2otel spans continue
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
-- [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
-- [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
+- [x] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
+- [x] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
+- [x] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -64,4 +64,12 @@ Loop 4 final-runtime gate passed on [14:43,15:43) UTC after aigateway.logs check
 Loop 5 P8-T regression passed; P8.0 [2026-09-25T01:37:48Z,04:37:48Z) had 0 source IDs after the aigateway.logs checkpoint passed its end. No Cloudflare PUT was sent (0/3 authorized writes used); closeout GET still had one native OTel entry and two Workers destinations. Park AC2/3 until a fresh 60-minute window has at least three source IDs, extending once to three hours, and exact Loki/Tempo one-to-one proof passes. Implementation attempts: tooling 1; review-repair 0; infrastructure retries 0; grant: 2026-09-25 three-write decision.
 
 Loop 5 owner closeout: P8.0 three-hour exactness window had zero source IDs, zero Loki rows and zero exact Tempo spans. P8 no-op, cutover and conditional rollback were not sent (0/3 authorized writes used); native AI Gateway OTel export remains configured and Workers destinations remain present. Resume only after a fresh 60-minute running-binary window has at least three source IDs with one-to-one Loki and direct Tempo proof, allowing the defined extension to three hours. Tooling implementation 1/4, review-repair 0/3, infrastructure retries 0; grant: frozen three-write P8 decision.
+
+Loop 6 P8: on running v0.5.1, [12:45:35Z,13:45:35Z) contained six source IDs, six Loki rows and six direct Tempo spans, exactly one each. Fresh no-op and cutover PUTs each returned HTTP 200; re-GET changed only modified_at for no-op, then otel and modified_at for cutover. Both Workers destinations retained identical stable configuration. In [13:59:45Z,14:29:45Z), three source IDs each had one Loki row and one direct cf2otel Tempo span, with zero extras; native Tempo spans were zero. The pre-cutover control had seven source IDs and six native spans. The first read-only watcher failed on a Tempo search limit of 5000 exceeding 1000; a bounded retry with limit 1000 passed at 14:48:46Z. No rollback PUT was sent, leaving one authorized write unused.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Disabled only the native AI Gateway OTel export after exact source-ID proof, preserving both Workers destinations. The settled postcutover window showed zero native spans and one cf2otel Loki row and direct Tempo span per source ID. Two of three authorized writes were used; no rollback was needed.
+<!-- SECTION:FINAL_SUMMARY:END -->
