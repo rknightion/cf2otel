@@ -145,7 +145,7 @@ func validateEmailSettings(settings cfapi.DatasetSettings, from time.Time) error
 	if settings.NotOlderThan <= 0 {
 		return errors.New("dataset retention limit is missing")
 	}
-	if int64(settings.MaxDuration)/int64(emailBucket/time.Second) < 1 {
+	if settings.MaxDuration/int64(emailBucket/time.Second) < 1 {
 		return errors.New("dataset duration limit cannot contain a complete five-minute bucket")
 	}
 	retentionFloor := time.Now().UTC().Add(-time.Duration(settings.NotOlderThan) * time.Second)
