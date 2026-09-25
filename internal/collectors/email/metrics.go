@@ -31,6 +31,16 @@ type datasetSpec struct {
 	name, dataset, metric string
 }
 
+// emailRetentionError stays distinct from cfapi.RetentionGapError so the scheduler fails closed.
+type emailRetentionError struct {
+	dataset string
+	floor   time.Time
+}
+
+func (e *emailRetentionError) Error() string {
+	return fmt.Sprintf("email dataset %s retention gap: floor %s", e.dataset, e.floor.UTC().Format(time.RFC3339))
+}
+
 var (
 	routingSpec = datasetSpec{name: "email.routing", dataset: emailDatasetRouting, metric: semconv.MetricEmailRoutingEvents}
 	sendingSpec = datasetSpec{name: "email.sending", dataset: emailDatasetSending, metric: semconv.MetricEmailSendingEvents}
@@ -155,7 +165,7 @@ func validateEmailSettings(settings cfapi.DatasetSettings, dataset string, from 
 	}
 	retentionFloor := time.Now().UTC().Add(-time.Duration(settings.NotOlderThan) * time.Second)
 	if from.Before(retentionFloor) {
-		return &cfapi.RetentionGapError{Dataset: dataset, Floor: retentionFloor}
+		return &emailRetentionError{dataset: dataset, floor: retentionFloor}
 	}
 	return nil
 }

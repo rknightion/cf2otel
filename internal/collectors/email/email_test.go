@@ -69,7 +69,10 @@ type emailMetric struct {
 	attrs []telemetry.Attr
 }
 
-type emailTestEmitter struct{ metrics []emailMetric }
+type emailTestEmitter struct {
+	metrics []emailMetric
+	events  []string
+}
 
 func (e *emailTestEmitter) Gauge(context.Context, string, float64, ...telemetry.Attr) error {
 	return nil
@@ -81,10 +84,27 @@ func (e *emailTestEmitter) Counter(_ context.Context, name string, value float64
 func (e *emailTestEmitter) Histogram(context.Context, string, float64, ...telemetry.Attr) error {
 	return nil
 }
-func (e *emailTestEmitter) LogEvent(context.Context, string, string, time.Time, otellog.Severity, ...telemetry.Attr) error {
+func (e *emailTestEmitter) LogEvent(_ context.Context, name, _ string, _ time.Time, _ otellog.Severity, _ ...telemetry.Attr) error {
+	e.events = append(e.events, name)
 	return nil
 }
 func (e *emailTestEmitter) Span(context.Context, telemetry.SpanSpec) error { return nil }
+
+type emailCheckpointStore struct {
+	values map[string]time.Time
+	writes int
+}
+
+func (s *emailCheckpointStore) Get(name string) (time.Time, bool) {
+	value, ok := s.values[name]
+	return value, ok
+}
+
+func (s *emailCheckpointStore) Set(name string, value time.Time) error {
+	s.values[name] = value
+	s.writes++
+	return nil
+}
 
 func testZone(id, accountID string) cfapi.Zone {
 	var zone cfapi.Zone
@@ -298,6 +318,37 @@ func TestZoneSelectionAndEntitlementGapsFailWithoutAdvance(t *testing.T) {
 	}
 }
 
+func TestSchedulerDoesNotSkipEmailRetentionGap(t *testing.T) {
+	zone := testZone("zone-00000000000000000000000000000001", testAccountID)
+	api := newEmailTestAPI(emailDatasetRouting, []cfapi.Zone{zone}, map[string]cfapi.DatasetSettings{
+		zone.ID: datasetSettings(true, "count", "dimensions_datetimeFiveMinutes"),
+	})
+	cfg := config.Default()
+	cfg.Cloudflare.AccountID = testAccountID
+	window := registeredCollector(t, &cfg, api, "email.routing")
+	now := time.Now().UTC().Truncate(5 * time.Minute)
+	initial := now.Add(-26 * time.Hour)
+	checkpoints := &emailCheckpointStore{values: map[string]time.Time{"email.routing": initial}}
+	emitter := &emailTestEmitter{}
+	scheduler := collector.NewScheduler(nil, emitter, checkpoints)
+	scheduler.Now = func() time.Time { return now }
+	entry := collector.Entry{Collector: window, Interval: 5 * time.Minute, MaxWindow: time.Hour}
+
+	err := scheduler.RunOnce(context.Background(), entry)
+	if err == nil {
+		t.Error("RunOnce succeeded for an email window older than dataset retention")
+	}
+	if got, _ := checkpoints.Get(window.Name()); !got.Equal(initial) || checkpoints.writes != 0 {
+		t.Errorf("email retention failure advanced checkpoint from %s to %s (%d writes)", initial, got, checkpoints.writes)
+	}
+	if len(emitter.events) != 0 || len(emitter.metrics) != 0 {
+		t.Errorf("email retention failure emitted events or metrics: events=%v metrics=%v", emitter.events, emitter.metrics)
+	}
+	if len(api.queries) != 0 {
+		t.Errorf("email retention failure queried data: %+v", api.queries)
+	}
+}
+
 func TestMissingRequiredSettingsFieldFailsWithoutEmissionOrCheckpointAdvance(t *testing.T) {
 	for _, missing := range []string{"count", "dimensions_datetimeFiveMinutes"} {
 		t.Run(missing, func(t *testing.T) {
@@ -416,26 +467,27 @@ func TestAdjacentAndInitiallyUnalignedWindowsUseCompleteBucketsOnly(t *testing.T
 	cfg := config.Default()
 	cfg.Cloudflare.AccountID = testAccountID
 	window := registeredCollector(t, &cfg, api, "email.routing")
-	from := fixedTime(t, "2026-09-25T10:02:00Z")
-	firstTo := fixedTime(t, "2026-09-25T10:17:00Z")
+	bucketStart := time.Now().UTC().Truncate(emailBucket).Add(-30 * time.Minute)
+	from := bucketStart.Add(2 * time.Minute)
+	firstTo := bucketStart.Add(17 * time.Minute)
 	firstEmitter := &emailTestEmitter{}
 	firstHigh, err := window.CollectWindow(context.Background(), from, firstTo, firstEmitter)
 	if err != nil {
 		t.Fatalf("first CollectWindow: %v", err)
 	}
-	if want := fixedTime(t, "2026-09-25T10:15:00Z"); !firstHigh.Equal(want) {
+	if want := bucketStart.Add(15 * time.Minute); !firstHigh.Equal(want) {
 		t.Errorf("first high-water = %s, want %s", firstHigh, want)
 	}
-	secondTo := fixedTime(t, "2026-09-25T10:27:00Z")
+	secondTo := bucketStart.Add(27 * time.Minute)
 	secondEmitter := &emailTestEmitter{}
 	secondHigh, err := window.CollectWindow(context.Background(), firstHigh, secondTo, secondEmitter)
 	if err != nil {
 		t.Fatalf("second CollectWindow: %v", err)
 	}
-	if want := fixedTime(t, "2026-09-25T10:25:00Z"); !secondHigh.Equal(want) {
+	if want := bucketStart.Add(25 * time.Minute); !secondHigh.Equal(want) {
 		t.Errorf("second high-water = %s, want %s", secondHigh, want)
 	}
-	if len(api.queries) != 2 || !api.queries[0].From.Equal(fixedTime(t, "2026-09-25T10:05:00Z")) || !api.queries[0].To.Equal(firstHigh) || !api.queries[1].From.Equal(firstHigh) || !api.queries[1].To.Equal(secondHigh) {
+	if len(api.queries) != 2 || !api.queries[0].From.Equal(bucketStart.Add(5*time.Minute)) || !api.queries[0].To.Equal(firstHigh) || !api.queries[1].From.Equal(firstHigh) || !api.queries[1].To.Equal(secondHigh) {
 		t.Errorf("adjacent query windows have a gap or overlap: %+v", api.queries)
 	}
 	if len(firstEmitter.metrics) != 1 || firstEmitter.metrics[0].value != 2 || len(secondEmitter.metrics) != 1 || secondEmitter.metrics[0].value != 2 {
@@ -534,8 +586,12 @@ func TestRetentionAndMaximumDurationSettingsAreRespected(t *testing.T) {
 	if err == nil || !highWater.Equal(staleFrom) || len(api.queries) != 0 || len(emitter.metrics) != 0 {
 		t.Errorf("retention floor was ignored: high-water=%s err=%v queries=%v metrics=%v", highWater, err, api.queries, emitter.metrics)
 	}
-	var gap *cfapi.RetentionGapError
-	if !errors.As(err, &gap) || gap.Dataset != "emailSendingAdaptiveGroups" || !gap.Floor.After(staleFrom) {
-		t.Errorf("retention failure must identify the dataset and floor: gap=%v err=%v", gap, err)
+	var gap *emailRetentionError
+	if !errors.As(err, &gap) || gap.dataset != "emailSendingAdaptiveGroups" || !gap.floor.After(staleFrom) {
+		t.Errorf("retention failure must identify the email dataset and floor: gap=%v err=%v", gap, err)
+	}
+	var schedulerGap *cfapi.RetentionGapError
+	if errors.As(err, &schedulerGap) {
+		t.Errorf("email retention failure must not be eligible for scheduler skip: %v", schedulerGap)
 	}
 }
