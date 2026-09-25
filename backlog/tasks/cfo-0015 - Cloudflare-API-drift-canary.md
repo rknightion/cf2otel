@@ -1,10 +1,10 @@
 ---
 id: CFO-0015
 title: Cloudflare API drift canary
-status: Parked
+status: Done
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-24 15:51'
+updated_date: '2026-09-25 01:40'
 labels:
   - 'wave:1'
   - ci
@@ -21,7 +21,7 @@ Scheduled workflow reading KV secret/rknightion/cf2otel (role rknightion-cf2otel
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Workflow runs green on main on schedule and on dispatch
+- [x] #1 Workflow runs green on main on schedule and on dispatch
 - [x] #2 A deliberate contract edit makes it fail with a readable diff
 - [x] #3 The token never appears in logs or artefacts
 <!-- AC:END -->
@@ -43,4 +43,12 @@ Wave 2 exhaustive download check: runs 35863371244, 35865194472, 35865604985, 35
 2026-09-24 P9: watcher ran from 06:23 to its 07:30 UTC deadline after the 06:17 cron slot; direct workflow history showed zero schedule-triggered Cloudflare API drift runs and only the five earlier 2026-09-23 workflow_dispatch runs. AC1 remains open: a successful dispatch does not prove the scheduled invocation. Resume on the first schedule-triggered run, require success at its exact SHA, then download and scan its logs and artifacts for both token byte strings before checking AC1.
 
 Loop 4 P9c changed the drift workflow cron to 17 */6 * * * and pushed b9c190223a89ff2781144851659d51a65779a642. Exact-SHA CI, Release and security workflows passed. A schedule-triggered drift run 35994974900 succeeded at 11:46:22Z on the earlier dff1edca103a80b312a39f30e86464da83fd1cae SHA, before the new cron push; it is not P9 proof at the changed SHA. At 2026-09-24 15:50:54 UTC, workflow history had no schedule-triggered run at b9c190223a89ff2781144851659d51a65779a642. The next new-cron slot is 18:17 UTC. AC1 remains open; resume when that scheduled run concludes, require success at its exact SHA, download logs/artifacts, and scan both secret byte strings with zero hits.
+
+Loop 5 CLOSE-15: schedule run 36062061611 at 69308ec6b43700a30649e0ba04efda8b705f0e47 succeeded; its one job succeeded, zero artifacts, two downloaded log files totaling 39708 bytes; exact schema-probe and runtime token byte hits were each zero. Loop 5 attempts: implementation 0/4, review-repair 0/3, infrastructure retries 0, grants: prior schedule authority; Done.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Loop 5: scheduled drift run 36062061611 succeeded at the cron-bearing SHA; exhaustive two-file log and zero-artifact check found neither credential byte string. Prior dispatch and deliberate-diff evidence remain recorded.
+<!-- SECTION:FINAL_SUMMARY:END -->
