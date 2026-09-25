@@ -24,6 +24,42 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestParseDryRunRequiresOneShotCollection(t *testing.T) {
+	for _, args := range [][]string{
+		{"-dry-run"},
+		{"-dry-run", "-reset-state", "-once"},
+	} {
+		if _, err := Parse(args); err == nil {
+			t.Errorf("Parse(%q) accepted invalid dry-run arguments", args)
+		}
+	}
+	for _, args := range [][]string{
+		{"-dry-run", "-once"},
+		{"-dry-run", "-since", "2026-09-25T10:00:00Z", "-before", "2026-09-25T11:00:00Z"},
+	} {
+		if _, err := Parse(args); err != nil {
+			t.Errorf("Parse(%q) rejected valid dry-run arguments: %v", args, err)
+		}
+	}
+}
+
+func TestParseDatasetsRequiresCollectionMode(t *testing.T) {
+	if _, err := Parse([]string{"-datasets", "access.logins"}); err == nil {
+		t.Fatal("accepted -datasets in daemon mode")
+	}
+}
+
+func TestParseRequiresCompleteWindowBounds(t *testing.T) {
+	for _, args := range [][]string{
+		{"-once", "-since", "2026-09-25T10:00:00Z"},
+		{"-once", "-before", "2026-09-25T11:00:00Z"},
+	} {
+		if _, err := Parse(args); err == nil {
+			t.Errorf("Parse(%q) accepted an incomplete collection window", args)
+		}
+	}
+}
+
 func TestPermissionMessage(t *testing.T) {
 	if got := MissingPermission(403, "GET /accounts/x/ai-gateway/gateways/x/logs/x/request"); !strings.Contains(got, "AI Gateway Read") {
 		t.Fatal(got)

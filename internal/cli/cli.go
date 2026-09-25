@@ -64,8 +64,17 @@ func Parse(args []string) (Options, error) {
 			return o, fmt.Errorf("-before: %w", err)
 		}
 	}
+	if o.Since.IsZero() != o.Before.IsZero() {
+		return o, errors.New("-since and -before must be supplied together")
+	}
 	if !o.Since.IsZero() && !o.Before.IsZero() && !o.Since.Before(o.Before) {
 		return o, errors.New("-since must precede -before")
+	}
+	if o.DryRun && o.ResetState {
+		return o, errors.New("-dry-run cannot be combined with -reset-state")
+	}
+	if o.DryRun && !o.Once && (o.Since.IsZero() || o.Before.IsZero()) {
+		return o, errors.New("-dry-run requires -once or both -since and -before")
 	}
 	if datasets != "" {
 		for _, d := range strings.Split(datasets, ",") {
@@ -75,6 +84,9 @@ func Parse(args []string) (Options, error) {
 			}
 			o.Datasets = append(o.Datasets, d)
 		}
+	}
+	if len(o.Datasets) > 0 && !o.Once && o.Since.IsZero() && o.Before.IsZero() {
+		return o, errors.New("-datasets requires -once or -since and -before")
 	}
 	modes := 0
 	for _, active := range []bool{o.Version, o.Healthcheck, o.Validate, o.PrintEffectiveConfig, o.Explore != ""} {
