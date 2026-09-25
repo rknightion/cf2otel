@@ -238,6 +238,10 @@ func (c *metrics) queryCompleteBuckets(ctx context.Context, zoneID string, from,
 	}
 	var rows []map[string]any
 	if err := c.api.Query(ctx, request, &rows); err != nil {
+		var gap *cfapi.RetentionGapError
+		if errors.As(err, &gap) {
+			return 0, &emailRetentionError{dataset: c.spec.dataset, floor: gap.Floor}
+		}
 		if !strings.Contains(strings.ToLower(err.Error()), emailSaturatedErrorText) {
 			return 0, err
 		}

@@ -349,6 +349,36 @@ func TestSchedulerDoesNotSkipEmailRetentionGap(t *testing.T) {
 	}
 }
 
+func TestSchedulerDoesNotSkipEmailQueryRetentionGap(t *testing.T) {
+	zone := testZone("zone-00000000000000000000000000000001", testAccountID)
+	api := newEmailTestAPI(emailDatasetRouting, []cfapi.Zone{zone}, map[string]cfapi.DatasetSettings{
+		zone.ID: datasetSettings(true, "count", "dimensions_datetimeFiveMinutes"),
+	})
+	api.query = func(request cfapi.GraphQLRequest) ([]map[string]any, error) {
+		return nil, &cfapi.RetentionGapError{Dataset: request.Dataset, Floor: request.From.Add(emailBucket)}
+	}
+	cfg := config.Default()
+	cfg.Cloudflare.AccountID = testAccountID
+	window := registeredCollector(t, &cfg, api, "email.routing")
+	now := time.Now().UTC().Truncate(emailBucket)
+	initial := now.Add(-20 * time.Minute)
+	checkpoints := &emailCheckpointStore{values: map[string]time.Time{"email.routing": initial}}
+	emitter := &emailTestEmitter{}
+	scheduler := collector.NewScheduler(nil, emitter, checkpoints)
+	scheduler.Now = func() time.Time { return now }
+	entry := collector.Entry{Collector: window, Interval: emailBucket, MaxWindow: time.Hour}
+
+	if err := scheduler.RunOnce(context.Background(), entry); err == nil {
+		t.Error("RunOnce succeeded when Query reported an email retention gap")
+	}
+	if got, _ := checkpoints.Get(window.Name()); !got.Equal(initial) || checkpoints.writes != 0 {
+		t.Errorf("query retention gap advanced checkpoint from %s to %s (%d writes)", initial, got, checkpoints.writes)
+	}
+	if len(api.queries) == 0 || len(emitter.events) != 0 || len(emitter.metrics) != 0 {
+		t.Errorf("query retention gap not fail closed: queries=%d events=%d metrics=%d", len(api.queries), len(emitter.events), len(emitter.metrics))
+	}
+}
+
 func TestMissingRequiredSettingsFieldFailsWithoutEmissionOrCheckpointAdvance(t *testing.T) {
 	for _, missing := range []string{"count", "dimensions_datetimeFiveMinutes"} {
 		t.Run(missing, func(t *testing.T) {
