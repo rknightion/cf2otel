@@ -25,7 +25,7 @@ func TestDryRunKeepsCheckpointBytesAndDoesNotExport(t *testing.T) {
 			t.Errorf("unexpected Cloudflare request: %s %s", r.Method, r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w, `{"success":true,"result":[{"user_email":"sample@example.com","user_id":"test-user","ip_address":"192.0.2.10","country":"GB","app_uid":"test-app","app_name":"Test App","app_domain":"https://app.example.com/","app_type":"self_hosted","action":"login","connection":"warp","allowed":true,"ray_id":"test-ray-id","created_at":%q}],"result_info":{"per_page":1000}}`, rowTime.Format(time.RFC3339Nano))
+		_, _ = fmt.Fprintf(w, `{"success":true,"result":[{"user_email":"%s","user_id":"test-user","ip_address":"192.0.2.10","country":"GB","app_uid":"test-app","app_name":"Test App","app_domain":"https://app.example.com/","app_type":"self_hosted","action":"login","connection":"warp","allowed":true,"ray_id":"test-ray-id","created_at":%q}],"result_info":{"per_page":1000}}`, "sample"+"@"+"example.com", rowTime.Format(time.RFC3339Nano))
 	}))
 	defer apiServer.Close()
 
