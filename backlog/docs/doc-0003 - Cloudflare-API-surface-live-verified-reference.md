@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-09-24 15:52'
+updated_date: '2026-09-25 03:45'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -156,3 +156,45 @@ superset of it.
 - AI Gateway update: a fresh gateway GET exposed 23 settable fields after excluding `id`, `created_at`, `modified_at`, `internal` and `wholesale`. Three settable fields were null: `rate_limiting_interval`, `rate_limiting_limit` and `logpush_public_key`. A no-op PUT retaining them succeeded with a 2xx response (exact code was not retained); re-GET changed only `modified_at`. A PUT changing only `otel` to `[]` returned HTTP 200 and re-GET showed only `otel` and `modified_at` changed. An authorized rollback PUT returned HTTP 200 and restored the original gateway configuration apart from `modified_at`. No API error body exists for these accepted requests.
 - Workers observability destinations: two destination objects had identical stable configuration before cutover, after cutover and after rollback. Their `configuration.jobStatus.last_complete` values advanced independently during the readbacks. Comparing the whole destination objects as immutable configuration caused a false rollback; compare the destination configuration while excluding only this operational timestamp. The native AI Gateway export remains enabled after rollback.
 - Audit v2 forward proof: the second complete post-holdback UTC hour had 232 source IDs and 232 matching Loki rows and IDs, with zero missing, extra or duplicate IDs. The prior hour was 248/248.
+
+## 9. Loop 5 platform Groups selections (2026-09-25)
+
+The built platform collectors use account-scoped GraphQL Groups datasets. Every query selects
+`dimensions.datetimeFiveMinutes` and only complete five-minute buckets. Counters sum additive fields;
+storage gauges take the latest complete bucket. Metric points are stamped at export time, and
+`1`/`By` are intended units rather than OTLP instrument unit metadata in the current emitter.
+These are implemented selections, not proof of deployed values; source-to-Mimir comparisons remain pending.
+
+| Dataset | Selected value fields | Aggregation and optional selection |
+| --- | --- | --- |
+| `workersOverviewRequestsAdaptiveGroups` | `count` | Sum; optional `dimensions.scriptName` becomes a bounded metric attribute. |
+| `turnstileAdaptiveGroups` | `count` | Account sum; no resource attribute. |
+| `logpushHealthAdaptiveGroups` | `sum.uploads`, `sum.records` | Account sums; no job identifier. |
+| `d1AnalyticsAdaptiveGroups` | `sum.readQueries`, `sum.writeQueries` | Account sums. |
+| `d1QueriesAdaptiveGroups` | `count` | Account sum; query text is never selected. |
+| `d1StorageAdaptiveGroups` | `max.databaseSizeBytes` | Maximum across databases in latest bucket; no database identifier. |
+| `kvOperationsAdaptiveGroups` | `sum.requests` | Account sum. |
+| `kvStorageAdaptiveGroups` | `max.byteCount`, `max.keyCount` | Maxima across namespaces in latest bucket; no namespace identifier. |
+| `r2BandwidthUsageAdaptiveGroups` | `sum.bytesDownload`, `sum.bytesUpload` | Sums; optional bounded `dimensions.bucketName`. |
+| `r2CatalogDataOperationsAdaptiveGroups` | `count` | Sum; optional bounded `dimensions.namespaceName`; no table name. |
+| `r2CatalogTableMaintenanceAdaptiveGroups` | `count` | Sum; optional bounded `dimensions.namespaceName`; no table name. |
+| `r2OperationsAdaptiveGroups` | `sum.requests` | Sum; optional bounded `dimensions.bucketName`. |
+| `r2StorageAdaptiveGroups` | `max.payloadSize`, `max.objectCount` | Latest complete bucket per bucket; optional bounded `dimensions.bucketName`. |
+| `r2sqlOperationsAdaptiveGroups` | `count` | Sum; optional bounded `dimensions.bucket`; no table name. |
+| `durableObjectsInvocationsAdaptiveGroups` | `sum.requests` | Account sum. |
+| `durableObjectsPeriodicGroups` | `sum.subrequests` | Account sum. |
+| `durableObjectsSqlStorageGroups` | `max.storedBytes` | Maximum across namespaces in latest bucket; no namespace attribute. |
+| `durableObjectsSubrequestsAdaptiveGroups` | `sum.requestBodySizeUncached` | Account sum. |
+| `queueBacklogAdaptiveGroups` | `avg.messages`, `avg.bytes` | Latest-bucket maximum queue averages; `dimensions.queueId` groups internally only. |
+| `queueConsumerMetricsAdaptiveGroups` | `avg.concurrency` | Latest-bucket maximum queue average; `dimensions.queueId` groups internally only. |
+| `queueDelayedBacklogAdaptiveGroups` | `avg.messages` | Latest-bucket maximum queue average; `dimensions.queueId` groups internally only. |
+| `queueMessageOperationsAdaptiveGroups` | `count`, `sum.billableOperations` | Account sums; no queue identifier emitted. |
+
+Read-only type introspection on 2026-09-25 found `queueId` and no `queueName` in all four Queue
+Groups dimension types. Settings for all four were enabled and advertised `dimensions_queueId` and
+`dimensions_datetimeFiveMinutes`. The three Queue gauges require `queueId` internally to establish
+a maximum per queue; no Queue identifier reaches a metric attribute or log. The collectors fail a
+window that saturates at one complete five-minute bucket rather than split that aggregate.
+
+Zone-scoped email presence was rechecked over 30 days on 2026-09-25: routing and sending Groups
+variants had rows; the DMARC dataset had none. The email collectors remain a separate pending build.
