@@ -84,3 +84,21 @@ func TestHTTPMetricControls(t *testing.T) {
 		}
 	}
 }
+
+func TestPlatformMetricSeriesCap(t *testing.T) {
+	if got := Default().Platform.MaxMetricSeriesPerWindow; got != 500 {
+		t.Fatalf("default platform series cap = %d, want 500", got)
+	}
+	t.Setenv("CF2OTEL_PLATFORM__MAX_METRIC_SERIES_PER_WINDOW", "25")
+	loaded, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Platform.MaxMetricSeriesPerWindow != 25 {
+		t.Fatalf("environment platform series cap = %d, want 25", loaded.Platform.MaxMetricSeriesPerWindow)
+	}
+	loaded.Platform.MaxMetricSeriesPerWindow = 0
+	if err := loaded.Validate(); err == nil || !strings.Contains(err.Error(), "platform.max_metric_series_per_window") {
+		t.Fatalf("expected platform cap validation error, got %v", err)
+	}
+}
