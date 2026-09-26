@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/url"
 	"strings"
@@ -51,12 +52,80 @@ func (f fakeAPI) Get(_ context.Context, path string, _ url.Values, out any) erro
 	if f.broken == "api-error" {
 		return errors.New("token-secret account-secret")
 	}
+	if f.broken == "empty-scim" && strings.HasSuffix(path, "/access/logs/scim/updates") {
+		*out.(*[]map[string]any) = nil
+		return nil
+	}
+	entry, found := routeForPath(f.contract, path)
+	if !found {
+		return errors.New("unrecognized test path")
+	}
 	row := map[string]any{"id": "secret-row-id", "name": "example", "status": "active", "domain": "example.com", "collect_logs": true, "created_at": "example", "action": "example", "allowed": true, "app_domain": "example.com", "ray_id": "secret-ray-id", "provider": "example", "model": "example", "status_code": 200, "usage_metadata": map[string]any{}, "timings": map[string]any{}}
-	if f.broken == "rest-field" && strings.HasSuffix(path, "/access/apps") {
+	for _, field := range entry.RequiredFields {
+		setField(row, field, "example")
+	}
+	setField(row, "id", "secret-row-id")
+	if f.broken == "rest-field" && entry.Name == "access-apps" {
 		delete(row, "domain")
 	}
-	*out.(*[]map[string]any) = []map[string]any{row}
+	if entry.Single {
+		*out.(*map[string]any) = row
+	} else {
+		*out.(*[]map[string]any) = []map[string]any{row}
+	}
 	return nil
+}
+
+func (f fakeAPI) GetRaw(_ context.Context, _ string, _ url.Values, out any) error {
+	if f.broken == "body-not-found" {
+		return &cfapi.HTTPError{Status: 404, Code: 7002}
+	}
+	if f.broken == "body-error" {
+		return &cfapi.HTTPError{Status: 500, Code: 9999}
+	}
+	if f.broken == "body-invalid" {
+		*out.(*json.RawMessage) = json.RawMessage("not json")
+		return nil
+	}
+	*out.(*json.RawMessage) = json.RawMessage(`{"ok":true}`)
+	return nil
+}
+
+func routeForPath(c contract, path string) (restContract, bool) {
+	for _, entry := range c.REST {
+		want, got := strings.Split(entry.Path, "/"), strings.Split(path, "/")
+		if len(want) != len(got) {
+			continue
+		}
+		matches := true
+		for index, part := range want {
+			if strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}") {
+				continue
+			}
+			if part != got[index] {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			return entry, true
+		}
+	}
+	return restContract{}, false
+}
+
+func setField(row map[string]any, path string, value any) {
+	parts := strings.Split(path, ".")
+	current := row
+	for _, part := range parts[:len(parts)-1] {
+		next, ok := current[part].(map[string]any)
+		if !ok {
+			next = map[string]any{}
+			current[part] = next
+		}
+		current = next
+	}
+	current[parts[len(parts)-1]] = value
 }
 
 func TestProbeMatchesAndReportsSanitizedDrift(t *testing.T) {
@@ -91,6 +160,17 @@ func TestProbeMatchesAndReportsSanitizedDrift(t *testing.T) {
 	if diffs := probe(context.Background(), fakeAPI{contract: c, broken: "account-error"}, c); len(diffs) != 0 {
 		t.Fatalf("zone-derived account after listing error failed: %v", diffs)
 	}
+	if diffs := probe(context.Background(), fakeAPI{contract: c, broken: "empty-scim"}, c); len(diffs) != 0 {
+		t.Fatalf("empty SCIM window failed: %v", diffs)
+	}
+	if diffs := probe(context.Background(), fakeAPI{contract: c, broken: "body-not-found"}, c); len(diffs) != 0 {
+		t.Fatalf("documented unavailable body failed: %v", diffs)
+	}
+	for _, broken := range []string{"body-error", "body-invalid"} {
+		if diffs := probe(context.Background(), fakeAPI{contract: c, broken: broken}, c); len(diffs) == 0 {
+			t.Fatalf("%s did not fail", broken)
+		}
+	}
 }
 
 func TestContractRejectsUnknownRoute(t *testing.T) {
@@ -101,5 +181,28 @@ func TestContractRejectsUnknownRoute(t *testing.T) {
 	c.REST[0].Path = "/accounts/{account}/secrets"
 	if err := validateContract(c); err == nil {
 		t.Fatal("accepted arbitrary REST path")
+	}
+}
+
+func TestContractRequiresGatewayLogListBeforeDetails(t *testing.T) {
+	c, err := loadContract("../../spec/cloudflare/contract.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listIndex, detailIndex := -1, -1
+	for index, entry := range c.REST {
+		switch entry.Name {
+		case "ai-gateway-logs":
+			listIndex = index
+		case "ai-gateway-log-detail":
+			detailIndex = index
+		}
+	}
+	if listIndex < 0 || detailIndex < 0 {
+		t.Fatal("contract omitted gateway log list or detail route")
+	}
+	c.REST[listIndex], c.REST[detailIndex] = c.REST[detailIndex], c.REST[listIndex]
+	if err := validateContract(c); err == nil {
+		t.Fatal("accepted gateway detail before the log list it depends on")
 	}
 }

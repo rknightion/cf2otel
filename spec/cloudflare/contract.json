@@ -4,36 +4,527 @@
     {
       "scope": "account",
       "dataset": "cf1AccessLoginsRawGroups",
-      "required_fields": ["dimensions_appName", "dimensions_idp", "dimensions_loginType", "dimensions_allowed", "sum_logins"],
+      "required_fields": [
+        "dimensions_appName",
+        "dimensions_idp",
+        "dimensions_loginType",
+        "dimensions_allowed",
+        "sum_logins"
+      ],
       "minimum_max_duration_seconds": 10800,
       "minimum_not_older_than_seconds": 2678400
     },
     {
       "scope": "account",
       "dataset": "accessLoginRequestsAdaptiveGroups",
-      "required_fields": ["count", "dimensions_appId", "dimensions_identityProvider", "dimensions_serviceTokenId", "dimensions_isSuccessfulLogin"],
+      "required_fields": [
+        "count",
+        "dimensions_appId",
+        "dimensions_identityProvider",
+        "dimensions_serviceTokenId",
+        "dimensions_isSuccessfulLogin"
+      ],
       "minimum_max_duration_seconds": 604800,
       "minimum_not_older_than_seconds": 7776000
     },
     {
       "scope": "zone",
       "dataset": "httpRequestsAdaptive",
-      "required_fields": ["datetime", "clientRequestHTTPHost"],
+      "required_fields": [
+        "datetime",
+        "clientRequestHTTPHost"
+      ],
       "minimum_max_duration_seconds": 2592000,
       "minimum_not_older_than_seconds": 2678400
     },
     {
       "scope": "zone",
       "dataset": "httpRequestsAdaptiveGroups",
-      "required_fields": ["count", "dimensions_clientRequestHTTPHost", "dimensions_edgeResponseStatus", "dimensions_cacheStatus", "avg_originResponseDurationMs"],
+      "required_fields": [
+        "count",
+        "dimensions_clientRequestHTTPHost",
+        "dimensions_edgeResponseStatus",
+        "dimensions_cacheStatus",
+        "avg_originResponseDurationMs"
+      ],
       "minimum_max_duration_seconds": 2592000,
       "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "zone",
+      "dataset": "firewallEventsAdaptive",
+      "required_fields": [
+        "datetime"
+      ],
+      "minimum_max_duration_seconds": 2592000,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "zone",
+      "dataset": "firewallEventsAdaptiveGroups",
+      "required_fields": [
+        "count"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 259200
+    },
+    {
+      "scope": "zone",
+      "dataset": "firewallEventsAdaptiveByTimeGroups",
+      "required_fields": [
+        "count"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 1800
+    },
+    {
+      "scope": "zone",
+      "dataset": "dnsAnalyticsAdaptive",
+      "required_fields": [
+        "datetime",
+        "queryName",
+        "queryType",
+        "responseCode",
+        "responseCached",
+        "protocol",
+        "coloName"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "zone",
+      "dataset": "dnsAnalyticsAdaptiveGroups",
+      "required_fields": [
+        "count"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "cf1GatewayDnsRawGroups",
+      "required_fields": [
+        "sum_queries"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "workersOverviewRequestsAdaptiveGroups",
+      "required_fields": [
+        "count",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 604800
+    },
+    {
+      "scope": "account",
+      "dataset": "turnstileAdaptiveGroups",
+      "required_fields": [
+        "count",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 604800
+    },
+    {
+      "scope": "account",
+      "dataset": "logpushHealthAdaptiveGroups",
+      "required_fields": [
+        "sum_uploads",
+        "sum_records",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 604800
+    },
+    {
+      "scope": "account",
+      "dataset": "d1AnalyticsAdaptiveGroups",
+      "required_fields": [
+        "sum_readQueries",
+        "sum_writeQueries",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "d1QueriesAdaptiveGroups",
+      "required_fields": [
+        "count",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "d1StorageAdaptiveGroups",
+      "required_fields": [
+        "max_databaseSizeBytes",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "kvOperationsAdaptiveGroups",
+      "required_fields": [
+        "sum_requests",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "kvStorageAdaptiveGroups",
+      "required_fields": [
+        "max_byteCount",
+        "max_keyCount",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "r2BandwidthUsageAdaptiveGroups",
+      "required_fields": [
+        "sum_bytesDownload",
+        "sum_bytesUpload",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "r2CatalogDataOperationsAdaptiveGroups",
+      "required_fields": [
+        "count",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "r2CatalogTableMaintenanceAdaptiveGroups",
+      "required_fields": [
+        "count",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "r2OperationsAdaptiveGroups",
+      "required_fields": [
+        "sum_requests",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "r2StorageAdaptiveGroups",
+      "required_fields": [
+        "max_payloadSize",
+        "max_objectCount",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "r2sqlOperationsAdaptiveGroups",
+      "required_fields": [
+        "count",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "durableObjectsInvocationsAdaptiveGroups",
+      "required_fields": [
+        "sum_requests",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 7776000
+    },
+    {
+      "scope": "account",
+      "dataset": "durableObjectsPeriodicGroups",
+      "required_fields": [
+        "sum_subrequests",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 7776000
+    },
+    {
+      "scope": "account",
+      "dataset": "durableObjectsSqlStorageGroups",
+      "required_fields": [
+        "max_storedBytes",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 7776000
+    },
+    {
+      "scope": "account",
+      "dataset": "durableObjectsSubrequestsAdaptiveGroups",
+      "required_fields": [
+        "sum_requestBodySizeUncached",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 7776000
+    },
+    {
+      "scope": "account",
+      "dataset": "queueBacklogAdaptiveGroups",
+      "required_fields": [
+        "avg_messages",
+        "avg_bytes",
+        "dimensions_datetimeFiveMinutes",
+        "dimensions_queueId"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "queueConsumerMetricsAdaptiveGroups",
+      "required_fields": [
+        "avg_concurrency",
+        "dimensions_datetimeFiveMinutes",
+        "dimensions_queueId"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "queueDelayedBacklogAdaptiveGroups",
+      "required_fields": [
+        "avg_messages",
+        "dimensions_datetimeFiveMinutes",
+        "dimensions_queueId"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "queueMessageOperationsAdaptiveGroups",
+      "required_fields": [
+        "count",
+        "sum_billableOperations",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "rumPageloadEventsAdaptiveGroups",
+      "required_fields": [
+        "count",
+        "sum_visits",
+        "dimensions_countryName",
+        "dimensions_deviceType"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 15897600
+    },
+    {
+      "scope": "account",
+      "dataset": "rumWebVitalsEventsAdaptiveGroups",
+      "required_fields": [
+        "dimensions_deviceType",
+        "quantiles_largestContentfulPaintP75",
+        "quantiles_interactionToNextPaintP75",
+        "quantiles_firstInputDelayP75",
+        "quantiles_firstContentfulPaintP75",
+        "quantiles_timeToFirstByteP75",
+        "quantiles_cumulativeLayoutShiftP75"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 15897600
+    },
+    {
+      "scope": "zone",
+      "dataset": "emailRoutingAdaptiveGroups",
+      "required_fields": [
+        "count",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2592000
+    },
+    {
+      "scope": "zone",
+      "dataset": "emailSendingAdaptiveGroups",
+      "required_fields": [
+        "count",
+        "dimensions_datetimeFiveMinutes"
+      ],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 2592000
     }
   ],
   "rest": [
-    {"name": "zone-list", "scope": "global", "path": "/zones", "required_fields": ["id", "name", "status"]},
-    {"name": "access-apps", "scope": "account", "path": "/accounts/{account}/access/apps", "required_fields": ["id", "name", "domain"]},
-    {"name": "ai-gateways", "scope": "account", "path": "/accounts/{account}/ai-gateway/gateways", "required_fields": ["id", "collect_logs"]},
-    {"name": "ai-gateway-logs", "scope": "gateway", "path": "/accounts/{account}/ai-gateway/gateways/{gateway}/logs", "required_fields": ["id", "created_at", "provider", "model", "status_code", "usage_metadata", "timings"]}
+    {
+      "name": "zone-list",
+      "scope": "global",
+      "path": "/zones",
+      "required_fields": [
+        "id",
+        "name",
+        "status",
+        "account.id"
+      ],
+      "allow_empty": false
+    },
+    {
+      "name": "access-apps",
+      "scope": "account",
+      "path": "/accounts/{account}/access/apps",
+      "required_fields": [
+        "id",
+        "name",
+        "domain"
+      ],
+      "allow_empty": true
+    },
+    {
+      "name": "access-users",
+      "scope": "account",
+      "path": "/accounts/{account}/access/users",
+      "required_fields": [
+        "id"
+      ],
+      "allow_empty": true
+    },
+    {
+      "name": "access-logins",
+      "scope": "account",
+      "path": "/accounts/{account}/access/logs/access_requests",
+      "required_fields": [
+        "user_email",
+        "user_id",
+        "ip_address",
+        "app_uid",
+        "app_name",
+        "app_domain",
+        "app_type",
+        "action",
+        "connection",
+        "allowed",
+        "created_at",
+        "ray_id",
+        "country"
+      ],
+      "allow_empty": true
+    },
+    {
+      "name": "access-scim",
+      "scope": "account",
+      "path": "/accounts/{account}/access/logs/scim/updates",
+      "required_fields": [
+        "cf_resource_id",
+        "http_method",
+        "idp_id",
+        "logged_at",
+        "resource_type",
+        "resource_user_email",
+        "status"
+      ],
+      "allow_empty": true
+    },
+    {
+      "name": "ai-gateways",
+      "scope": "account",
+      "path": "/accounts/{account}/ai-gateway/gateways",
+      "required_fields": [
+        "id",
+        "collect_logs"
+      ],
+      "allow_empty": true
+    },
+    {
+      "name": "ai-gateway-logs",
+      "scope": "gateway",
+      "path": "/accounts/{account}/ai-gateway/gateways/{gateway}/logs",
+      "required_fields": [
+        "id",
+        "created_at",
+        "provider",
+        "model",
+        "status_code",
+        "usage_metadata",
+        "timings"
+      ],
+      "allow_empty": true
+    },
+    {
+      "name": "ai-gateway-log-detail",
+      "scope": "gateway-log",
+      "path": "/accounts/{account}/ai-gateway/gateways/{gateway}/logs/{id}",
+      "required_fields": [
+        "id",
+        "created_at",
+        "request_head",
+        "response_head",
+        "request_head_complete",
+        "response_head_complete",
+        "request_size",
+        "response_size",
+        "request_content_type"
+      ],
+      "single": true
+    },
+    {
+      "name": "ai-gateway-log-request",
+      "scope": "gateway-log",
+      "path": "/accounts/{account}/ai-gateway/gateways/{gateway}/logs/{id}/request",
+      "required_fields": [],
+      "raw_json": true
+    },
+    {
+      "name": "ai-gateway-log-response",
+      "scope": "gateway-log",
+      "path": "/accounts/{account}/ai-gateway/gateways/{gateway}/logs/{id}/response",
+      "required_fields": [],
+      "raw_json": true
+    },
+    {
+      "name": "audit-logs",
+      "scope": "account",
+      "path": "/accounts/{account}/logs/audit",
+      "required_fields": [
+        "id",
+        "action.time",
+        "action.type",
+        "action.description",
+        "action.result"
+      ],
+      "allow_empty": true
+    }
   ]
 }
