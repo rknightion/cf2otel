@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -129,10 +130,15 @@ var collectorNames = []string{
 	"email.routing", "email.sending", "selfobs",
 }
 
+var disabledCollectorNames = []string{"aigateway.coverage"}
+
 func Default() Config {
 	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{Scope: "access_protected", MaxMetricHostsPerZone: 1000, MaxMetricSeriesPerWindow: 10000}, Platform: PlatformConfig{MaxMetricSeriesPerWindow: 500}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
 	for _, name := range collectorNames {
 		c.Collectors[name] = CollectorConfig{Enabled: true, Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
+	}
+	for _, name := range disabledCollectorNames {
+		c.Collectors[name] = CollectorConfig{Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
 	}
 	// GraphQL AI Gateway Groups showed unbounded ingestion lag in the verified
 	// account. REST logs provide the wave-1 metrics; do not schedule Groups.
@@ -173,6 +179,9 @@ func Load(path string) (*Config, error) {
 		}
 	}
 	if err := k.Load(env.Provider(".", env.Opt{Prefix: EnvPrefix, TransformFunc: func(key, value string) (string, any) {
+		if strings.HasPrefix(key, EnvPrefix+"COLLECTORS__") {
+			return "", nil
+		}
 		return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(key, EnvPrefix)), "__", "."), value
 	}}), nil); err != nil {
 		return nil, fmt.Errorf("environment: %w", err)
@@ -181,7 +190,55 @@ func Load(path string) (*Config, error) {
 	if err := k.UnmarshalWithConf("", &c, koanf.UnmarshalConf{Tag: "yaml", DecoderConfig: &mapstructure.DecoderConfig{Result: &c, WeaklyTypedInput: true, ErrorUnused: true, DecodeHook: mapstructure.StringToTimeDurationHookFunc()}}); err != nil {
 		return nil, fmt.Errorf("decode config: %w", err)
 	}
+	if err := applyCollectorEnvironment(&c); err != nil {
+		return nil, fmt.Errorf("environment: %w", err)
+	}
 	return &c, nil
+}
+
+func applyCollectorEnvironment(c *Config) error {
+	names := make(map[string][]string, len(Default().Collectors))
+	for name := range Default().Collectors {
+		form := strings.ToUpper(strings.ReplaceAll(name, ".", "_"))
+		names[form] = append(names[form], name)
+	}
+	for _, entry := range os.Environ() {
+		key, value, _ := strings.Cut(entry, "=")
+		if !strings.HasPrefix(key, EnvPrefix+"COLLECTORS__") {
+			continue
+		}
+		parts := strings.Split(strings.TrimPrefix(key, EnvPrefix+"COLLECTORS__"), "__")
+		if len(parts) != 2 || len(names[parts[0]]) != 1 {
+			return fmt.Errorf("%s has unknown or ambiguous collector name", key)
+		}
+		name := names[parts[0]][0]
+		cfg := c.Collectors[name]
+		switch parts[1] {
+		case "ENABLED":
+			parsed, err := strconv.ParseBool(value)
+			if err != nil {
+				return fmt.Errorf("%s: %w", key, err)
+			}
+			cfg.Enabled = parsed
+		case "INTERVAL", "INITIAL_LOOKBACK", "MAX_WINDOW":
+			parsed, err := time.ParseDuration(value)
+			if err != nil {
+				return fmt.Errorf("%s: %w", key, err)
+			}
+			switch parts[1] {
+			case "INTERVAL":
+				cfg.Interval = parsed
+			case "INITIAL_LOOKBACK":
+				cfg.InitialLookback = parsed
+			case "MAX_WINDOW":
+				cfg.MaxWindow = parsed
+			}
+		default:
+			return fmt.Errorf("%s has unknown collector setting", key)
+		}
+		c.Collectors[name] = cfg
+	}
+	return nil
 }
 func (c Config) Validate() error {
 	var issues []string

@@ -3,8 +3,10 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadPrecedenceAndRedaction(t *testing.T) {
@@ -29,6 +31,69 @@ func TestLoadPrecedenceAndRedaction(t *testing.T) {
 	c.OTLP.Headers["X-Custom"] = "potential-secret"
 	if strings.Contains(c.String(), "potential-secret") {
 		t.Fatal("header value leaked")
+	}
+}
+
+func TestCollectorEnvironmentOverrides(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("collectors:\n  aigateway.coverage:\n    enabled: false\n    interval: 1m\n    initial_lookback: 2m\n    max_window: 3m\n  r2.catalog_data:\n    enabled: true\n    interval: 2m\n    initial_lookback: 4m\n    max_window: 6m\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range map[string]string{
+		"CF2OTEL_COLLECTORS__AIGATEWAY_COVERAGE__ENABLED":          "true",
+		"CF2OTEL_COLLECTORS__AIGATEWAY_COVERAGE__INTERVAL":         "10m",
+		"CF2OTEL_COLLECTORS__AIGATEWAY_COVERAGE__INITIAL_LOOKBACK": "45m",
+		"CF2OTEL_COLLECTORS__AIGATEWAY_COVERAGE__MAX_WINDOW":       "2h",
+		"CF2OTEL_COLLECTORS__R2_CATALOG_DATA__ENABLED":             "false",
+		"CF2OTEL_COLLECTORS__R2_CATALOG_DATA__INTERVAL":            "7m",
+		"CF2OTEL_COLLECTORS__R2_CATALOG_DATA__INITIAL_LOOKBACK":    "25m",
+		"CF2OTEL_COLLECTORS__R2_CATALOG_DATA__MAX_WINDOW":          "90m",
+	} {
+		t.Setenv(key, value)
+	}
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Collector("aigateway.coverage"); got != (CollectorConfig{Enabled: true, Interval: 10 * time.Minute, InitialLookback: 45 * time.Minute, MaxWindow: 2 * time.Hour}) {
+		t.Fatalf("coverage override = %+v", got)
+	}
+	if got := c.Collector("r2.catalog_data"); got != (CollectorConfig{Enabled: false, Interval: 7 * time.Minute, InitialLookback: 25 * time.Minute, MaxWindow: 90 * time.Minute}) {
+		t.Fatalf("underscore-name override = %+v", got)
+	}
+}
+
+func TestUnknownCollectorEnvironmentName(t *testing.T) {
+	key := "CF2OTEL_COLLECTORS__NOT_A_COLLECTOR__ENABLED"
+	t.Setenv(key, "true")
+	_, err := Load("")
+	if err == nil || !strings.Contains(err.Error(), key) {
+		t.Fatalf("expected %s in load error, got %v", key, err)
+	}
+}
+
+func TestDefaultCollectorNamesHaveDistinctEnvironmentForms(t *testing.T) {
+	seen := map[string]string{}
+	for name := range Default().Collectors {
+		form := strings.ToUpper(strings.ReplaceAll(name, ".", "_"))
+		if previous, ok := seen[form]; ok {
+			t.Errorf("%s and %s share environment form %s", previous, name, form)
+		}
+		seen[form] = name
+	}
+}
+
+func TestDefaultEnabledCollectorsUnchanged(t *testing.T) {
+	const want = "access.login_metrics,access.logins,access.scim,aigateway.logs,audit.logs,d1.analytics,d1.queries,d1.storage,dns.events,dns.metrics,durableobjects.invocations,durableobjects.periodic,durableobjects.sql_storage,durableobjects.subrequests,email.routing,email.sending,firewall.events,firewall.metrics,gateway.dns,httpreq.events,httpreq.metrics,inventory.access,kv.operations,kv.storage,logpush.health,queues.backlog,queues.consumer,queues.delayed_backlog,queues.message_operations,r2.bandwidth,r2.catalog_data,r2.catalog_maintenance,r2.operations,r2.sql,r2.storage,rum.pageloads,rum.web_vitals,selfobs,turnstile.events,workers.overview"
+	var enabled []string
+	for name, cfg := range Default().Collectors {
+		if cfg.Enabled {
+			enabled = append(enabled, name)
+		}
+	}
+	sort.Strings(enabled)
+	if got := strings.Join(enabled, ","); got != want {
+		t.Fatalf("enabled defaults changed:\n%s", got)
 	}
 }
 func TestYAMLSecretRejected(t *testing.T) {

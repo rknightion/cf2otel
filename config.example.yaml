@@ -59,6 +59,8 @@ collectors:
     enabled: true
   aigateway.metrics:
     enabled: false
+  aigateway.coverage:
+    enabled: false
   audit.logs:
     enabled: true
   firewall.events:
