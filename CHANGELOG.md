@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.6.0](https://github.com/rknightion/cf2otel/compare/v0.5.1...v0.6.0) (2026-09-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* **telemetry:** Prometheus series gain seconds or ratio suffixes where the declared units require them; see docs/signals.md for the old-to-new names.
+
+### Features
+
+* add release notes coverage check ([7839573](https://github.com/rknightion/cf2otel/commit/7839573299b9c010c888a9c66c15ffbe53961080))
+* add release notes coverage check ([9ad1dcd](https://github.com/rknightion/cf2otel/commit/9ad1dcd734e5f393a359cd11306f9d6c4035dd9c))
+* **apidrift:** cover Cloudflare dataset and AI Gateway contracts ([1daf4be](https://github.com/rknightion/cf2otel/commit/1daf4be0988d4cb14cb68c374a183beb664bf2ce))
+* collect Email Routing and Sending Groups metrics ([8f2dacf](https://github.com/rknightion/cf2otel/commit/8f2dacf462c712fd67e52dd006abecfd8303dcb7))
+* **telemetry:** declare metric units, descriptions and explicit histogram buckets ([ac8958c](https://github.com/rknightion/cf2otel/commit/ac8958cb7b4f9c69ac91f73c78c5faca88b7287f))
+
+
+### Bug Fixes
+
+* **apidrift:** handle unavailable datasets and log endpoints ([9d17caf](https://github.com/rknightion/cf2otel/commit/9d17caf36ca70454346d652f16163d9577337743))
+* classify email retention gaps ([e19204b](https://github.com/rknightion/cf2otel/commit/e19204bea58c7772e60d11ad6ee54f7bbfa938c6))
+* **email:** fail closed on query retention gaps ([9bb6ff8](https://github.com/rknightion/cf2otel/commit/9bb6ff8d5adb73fd852b159cb35a1121516cc7e7))
+* **email:** fix email retention gap handling ([81ff240](https://github.com/rknightion/cf2otel/commit/81ff240db81959097138694eea04a721880b4e1b))
+* **email:** respect email dataset page size ([e55e851](https://github.com/rknightion/cf2otel/commit/e55e851177094965db945297df298cad9defb606))
+* fail closed on email zone selection gaps ([cd52578](https://github.com/rknightion/cf2otel/commit/cd52578081e302c6cf1caaeb7e45531becf26e92))
+* preserve checkpoint state in dry runs ([13353e2](https://github.com/rknightion/cf2otel/commit/13353e2904833c50614ff9b5f10bb6be3ccc654f))
+* **relnotes:** treat empty restore commits as subject aliases ([198d4dc](https://github.com/rknightion/cf2otel/commit/198d4dc464ef1027bb2a188e0d935dc94b42f6f9))
+* simplify email duration limit check ([5a93044](https://github.com/rknightion/cf2otel/commit/5a93044f88375bfd8e2294659fc31500ec2259a8))
+* **telemetry:** preserve old and new series during unit rollout ([faf46e7](https://github.com/rknightion/cf2otel/commit/faf46e706de9afabf7e667c7995667815ef4e880))
+
 ## [0.5.1](https://github.com/rknightion/cf2otel/compare/v0.5.0...v0.5.1) (2026-09-25)
 
 
