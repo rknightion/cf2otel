@@ -202,6 +202,35 @@ func TestDuplicateNormalizedDescriptionsNeedDistinctEntries(t *testing.T) {
 	}
 }
 
+func TestEmptyRestoreAliasesAnEarlierPatchButSoleEmptyCommitStillNeedsNotes(t *testing.T) {
+	repo := newTestRepo(t)
+	writeRepoFile(t, repo, "base.txt", "base\n")
+	commitAt(t, repo, "chore: start history", "2026-01-01T00:00:00Z")
+	if err := git(t, repo, "tag", "v1.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	writeRepoFile(t, repo, "feature.txt", "feature\n")
+	commitAt(t, repo, "feat(email): collect routing metrics", "2026-01-02T00:00:00Z")
+	if err := git(t, repo, "commit", "--allow-empty", "-m", "feat(email): collect routing metrics"); err != nil {
+		t.Fatal(err)
+	}
+	if code, output := checkNotes(t, repo, "v1.0.0..HEAD", "# Notes\n\n* Collect routing metrics\n"); code != 0 {
+		t.Fatalf("empty restore required a duplicate note, exit %d:\n%s", code, output)
+	}
+	if err := git(t, repo, "commit", "--allow-empty", "-m", "fix(email): collect routing metrics"); err != nil {
+		t.Fatal(err)
+	}
+	if code, output := checkNotes(t, repo, "v1.0.0..HEAD", "# Notes\n\n* Collect routing metrics\n"); code != 1 || !strings.Contains(output, "MISSING ") {
+		t.Fatalf("different conventional type was incorrectly aliased, exit %d:\n%s", code, output)
+	}
+	if err := git(t, repo, "commit", "--allow-empty", "-m", "fix(email): respect page size"); err != nil {
+		t.Fatal(err)
+	}
+	if code, output := checkNotes(t, repo, "v1.0.0..HEAD", "# Notes\n\n* Collect routing metrics\n"); code != 1 || !strings.Contains(output, "fix(email): respect page size") {
+		t.Fatalf("sole empty conventional commit was not required, exit %d:\n%s", code, output)
+	}
+}
+
 func TestEmptyRangeSkipsPatchIDScanning(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("git wrapper uses a POSIX shell")

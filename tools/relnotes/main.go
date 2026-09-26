@@ -33,6 +33,12 @@ type excludedCommit struct {
 	releasedBy string
 }
 
+type emptyRestoreAlias struct {
+	hash      string
+	subject   string
+	coveredBy string
+}
+
 type commitWarning struct {
 	hash    string
 	subject string
@@ -86,6 +92,7 @@ func runAt(args []string, repoDirectory string, stdout, stderr io.Writer) int {
 	}
 	candidates := make([]requiredCommit, 0)
 	excluded := make([]excludedCommit, 0)
+	aliases := make([]emptyRestoreAlias, 0)
 	warnings := make([]commitWarning, 0)
 	for _, hash := range newCommits {
 		subject, subjectErr := gitSubject(repoDirectory, hash)
@@ -148,11 +155,20 @@ func runAt(args []string, repoDirectory string, stdout, stderr io.Writer) int {
 			}
 		}
 
+		patchBearingDescriptions := make(map[string]string)
 		for _, candidate := range candidates {
 			patchID := candidatePatchIDs[candidate.hash]
 			if releasedBy, ok := releasedPatchIDs[patchID]; patchID != "" && ok {
 				excluded = append(excluded, excludedCommit{hash: candidate.hash, subject: candidate.subject, releasedBy: releasedBy})
 				continue
+			}
+			if patchID == "" {
+				if coveredBy := patchBearingDescriptions[normalizeText(candidate.subject)]; coveredBy != "" {
+					aliases = append(aliases, emptyRestoreAlias{hash: candidate.hash, subject: candidate.subject, coveredBy: coveredBy})
+					continue
+				}
+			} else {
+				patchBearingDescriptions[normalizeText(candidate.subject)] = candidate.hash
 			}
 			required = append(required, candidate)
 		}
@@ -195,6 +211,12 @@ func runAt(args []string, repoDirectory string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "Excluded patch-identical commits:")
 		for _, commit := range excluded {
 			fmt.Fprintf(stdout, "  EXCLUDED patch-identical %s %s (matches released commit %s)\n", commit.hash, commit.subject, commit.releasedBy)
+		}
+	}
+	if len(aliases) > 0 {
+		fmt.Fprintln(stdout, "Empty restore commits covered by an earlier patch-bearing subject:")
+		for _, alias := range aliases {
+			fmt.Fprintf(stdout, "  ALIASED %s %s (covered by commit %s)\n", alias.hash, alias.subject, alias.coveredBy)
 		}
 	}
 	if len(warnings) > 0 {
