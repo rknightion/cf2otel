@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"os"
 	"regexp"
-	"slices"
 	"strings"
+	"time"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
 )
@@ -27,6 +27,7 @@ type graphContract struct {
 	RequiredFields   []string    `json:"required_fields"`
 	MinimumDuration  int64       `json:"minimum_max_duration_seconds"`
 	MinimumRetention int64       `json:"minimum_not_older_than_seconds"`
+	AllowDisabled    bool        `json:"allow_disabled,omitempty"`
 }
 
 type restContract struct {
@@ -34,6 +35,9 @@ type restContract struct {
 	Scope          string   `json:"scope"`
 	Path           string   `json:"path"`
 	RequiredFields []string `json:"required_fields"`
+	AllowEmpty     bool     `json:"allow_empty,omitempty"`
+	Single         bool     `json:"single,omitempty"`
+	RawJSON        bool     `json:"raw_json,omitempty"`
 }
 
 type probeAPI interface {
@@ -44,15 +48,24 @@ type probeAPI interface {
 	Get(context.Context, string, url.Values, any) error
 }
 
+type rawProbeAPI interface {
+	GetRaw(context.Context, string, url.Values, any) error
+}
+
 var fieldName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$`)
 var datasetName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 var restPaths = map[string]string{
-	"account-list":    "/accounts",
-	"zone-list":       "/zones",
-	"access-apps":     "/accounts/{account}/access/apps",
-	"access-logins":   "/accounts/{account}/access/logs/access_requests",
-	"ai-gateways":     "/accounts/{account}/ai-gateway/gateways",
-	"ai-gateway-logs": "/accounts/{account}/ai-gateway/gateways/{gateway}/logs",
+	"zone-list":               "/zones",
+	"access-apps":             "/accounts/{account}/access/apps",
+	"access-users":            "/accounts/{account}/access/users",
+	"access-logins":           "/accounts/{account}/access/logs/access_requests",
+	"access-scim":             "/accounts/{account}/access/logs/scim/updates",
+	"ai-gateways":             "/accounts/{account}/ai-gateway/gateways",
+	"ai-gateway-logs":         "/accounts/{account}/ai-gateway/gateways/{gateway}/logs",
+	"ai-gateway-log-detail":   "/accounts/{account}/ai-gateway/gateways/{gateway}/logs/{id}",
+	"ai-gateway-log-request":  "/accounts/{account}/ai-gateway/gateways/{gateway}/logs/{id}/request",
+	"ai-gateway-log-response": "/accounts/{account}/ai-gateway/gateways/{gateway}/logs/{id}/response",
+	"audit-logs":              "/accounts/{account}/logs/audit",
 }
 
 func loadContract(path string) (contract, error) {
@@ -74,29 +87,51 @@ func loadContract(path string) (contract, error) {
 }
 
 func validateContract(c contract) error {
-	if c.Version != 1 || len(c.GraphQL) == 0 || len(c.GraphQL) > 16 || len(c.REST) == 0 || len(c.REST) > len(restPaths) {
+	if c.Version != 1 || len(c.GraphQL) == 0 || len(c.GraphQL) > 64 || len(c.REST) == 0 || len(c.REST) > len(restPaths) {
 		return errors.New("invalid contract version or probe count")
 	}
 	seen := map[string]bool{}
 	for _, g := range c.GraphQL {
 		key := string(g.Scope) + "/" + g.Dataset
-		if (g.Scope != cfapi.AccountScope && g.Scope != cfapi.ZoneScope) || !datasetName.MatchString(g.Dataset) || seen[key] || g.MinimumDuration <= 0 || g.MinimumRetention <= 0 || !validFields(g.RequiredFields) {
+		if (g.Scope != cfapi.AccountScope && g.Scope != cfapi.ZoneScope) || !datasetName.MatchString(g.Dataset) || seen[key] || g.MinimumDuration <= 0 || g.MinimumRetention <= 0 || !validFields(g.RequiredFields) || (g.AllowDisabled && (g.Scope != cfapi.ZoneScope || g.Dataset != "firewallEventsAdaptiveGroups")) {
 			return errors.New("invalid GraphQL contract")
 		}
 		seen[key] = true
 	}
-	for _, r := range c.REST {
+	restSeen := map[string]bool{}
+	gatewayLogListIndex := -1
+	hasGatewayLogPath := false
+	for index, r := range c.REST {
+		if r.Name == "ai-gateway-logs" {
+			gatewayLogListIndex = index
+		}
+		if r.Scope == "gateway-log" {
+			hasGatewayLogPath = true
+			if gatewayLogListIndex < 0 {
+				return errors.New("gateway log list must precede detail and body paths")
+			}
+		}
 		path, ok := restPaths[r.Name]
-		if !ok || r.Path != path || seen[r.Name] || !validFields(r.RequiredFields) || (r.Scope != "global" && r.Scope != "account" && r.Scope != "gateway") {
+		fieldsValid := validFields(r.RequiredFields)
+		if r.RawJSON {
+			fieldsValid = len(r.RequiredFields) == 0
+		}
+		if !ok || r.Path != path || restSeen[r.Name] || !fieldsValid || (r.Scope != "global" && r.Scope != "account" && r.Scope != "gateway" && r.Scope != "gateway-log") {
 			return errors.New("invalid REST contract")
 		}
 		if (r.Scope == "global") != !strings.Contains(r.Path, "{account}") {
 			return errors.New("invalid REST scope")
 		}
-		if (r.Scope == "gateway") != strings.Contains(r.Path, "{gateway}") {
+		if ((r.Scope == "gateway") || (r.Scope == "gateway-log")) != strings.Contains(r.Path, "{gateway}") {
 			return errors.New("invalid gateway scope")
 		}
-		seen[r.Name] = true
+		if (r.Scope == "gateway-log") != strings.Contains(r.Path, "{id}") || (r.RawJSON && r.Scope != "gateway-log") || (r.Single && r.RawJSON) {
+			return errors.New("invalid REST response shape")
+		}
+		restSeen[r.Name] = true
+	}
+	if hasGatewayLogPath && gatewayLogListIndex < 0 {
+		return errors.New("gateway log detail paths require the gateway log list")
 	}
 	return nil
 }
@@ -157,10 +192,13 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 				continue
 			}
 			if !s.Enabled {
+				if g.AllowDisabled {
+					continue
+				}
 				diffs = append(diffs, label+": dataset disabled")
 			}
 			for _, field := range g.RequiredFields {
-				if !slices.Contains(s.AvailableFields, field) {
+				if !hasAvailableField(s.AvailableFields, field) {
 					diffs = append(diffs, label+": missing field "+field)
 				}
 			}
@@ -175,8 +213,10 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 			}
 		}
 	}
+	gatewayLogIDs := map[string]string{}
+	now := time.Now().UTC()
 	for _, r := range c.REST {
-		type target struct{ account, gateway string }
+		type target struct{ account, gateway, id string }
 		targets := []target{{}}
 		if r.Scope != "global" {
 			targets = targets[:0]
@@ -186,26 +226,68 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 					continue
 				}
 				gateways, err := api.Gateways(ctx, account.ID)
-				if err != nil || len(gateways) == 0 || len(gateways) > 4 {
+				if err != nil || len(gateways) > 4 {
 					diffs = append(diffs, "REST "+r.Name+": gateway discovery failed or count outside bound")
 					continue
 				}
 				for _, gateway := range gateways {
+					if r.Scope == "gateway-log" {
+						if id := gatewayLogIDs[account.ID+"/"+gateway.ID]; id != "" {
+							targets = append(targets, target{account: account.ID, gateway: gateway.ID, id: id})
+						}
+						continue
+					}
 					targets = append(targets, target{account: account.ID, gateway: gateway.ID})
 				}
 			}
+		}
+		if len(targets) == 0 && r.AllowEmpty {
+			continue
 		}
 		for index, t := range targets {
 			label := fmt.Sprintf("REST %s scope #%d", r.Name, index+1)
 			path := strings.ReplaceAll(r.Path, "{account}", url.PathEscape(t.account))
 			path = strings.ReplaceAll(path, "{gateway}", url.PathEscape(t.gateway))
+			path = strings.ReplaceAll(path, "{id}", url.PathEscape(t.id))
+			query := restProbeQuery(r.Name, now)
+			if r.RawJSON {
+				getter, ok := api.(rawProbeAPI)
+				if !ok {
+					diffs = append(diffs, label+": raw JSON reader unavailable")
+					continue
+				}
+				var body json.RawMessage
+				err := getter.GetRaw(ctx, path, query, &body)
+				if isUnavailableBody(err) {
+					continue
+				}
+				if err != nil {
+					diffs = append(diffs, label+": read failed")
+					continue
+				}
+				if len(body) == 0 || !json.Valid(body) {
+					diffs = append(diffs, label+": invalid raw JSON response")
+				}
+				continue
+			}
 			var rows []map[string]any
-			if err := api.Get(ctx, path, url.Values{"page": {"1"}, "per_page": {"1"}}, &rows); err != nil {
+			if r.Single {
+				var row map[string]any
+				if err := api.Get(ctx, path, query, &row); err != nil {
+					diffs = append(diffs, label+": read failed")
+					continue
+				}
+				if row != nil {
+					rows = append(rows, row)
+				}
+			} else if err := api.Get(ctx, path, query, &rows); err != nil {
 				diffs = append(diffs, label+": read failed")
 				continue
 			}
 			if len(rows) == 0 {
-				diffs = append(diffs, label+": no row available for shape check")
+				if !r.AllowEmpty {
+					diffs = append(diffs, label+": no row available for shape check")
+				}
 				continue
 			}
 			for _, field := range r.RequiredFields {
@@ -213,9 +295,50 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 					diffs = append(diffs, label+": missing field "+field)
 				}
 			}
+			if r.Name == "ai-gateway-logs" {
+				if id, ok := rows[0]["id"].(string); ok && id != "" {
+					gatewayLogIDs[t.account+"/"+t.gateway] = id
+				}
+			}
 		}
 	}
 	return diffs
+}
+
+func hasAvailableField(available []string, required string) bool {
+	required = strings.ToLower(strings.ReplaceAll(required, ".", "_"))
+	for _, field := range available {
+		field = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(field), ".", "_"))
+		if field == required {
+			return true
+		}
+	}
+	return false
+}
+
+func restProbeQuery(name string, now time.Time) url.Values {
+	if strings.HasPrefix(name, "ai-gateway-log-") {
+		return nil
+	}
+	from := now.Add(-time.Hour).Format(time.RFC3339Nano)
+	to := now.Format(time.RFC3339Nano)
+	switch name {
+	case "access-logins":
+		return url.Values{"since": {from}, "until": {to}, "page": {"1"}, "per_page": {"1"}}
+	case "access-scim":
+		return url.Values{"since": {from}, "until": {to}, "page": {"1"}, "limit": {"1"}, "direction": {"asc"}}
+	case "audit-logs":
+		return url.Values{"since": {from}, "before": {to}, "limit": {"1"}}
+	case "ai-gateway-logs":
+		return url.Values{"page": {"1"}, "per_page": {"50"}, "order_by": {"created_at"}, "order_by_direction": {"desc"}}
+	default:
+		return url.Values{"page": {"1"}, "per_page": {"1"}}
+	}
+}
+
+func isUnavailableBody(err error) bool {
+	var httpErr *cfapi.HTTPError
+	return errors.As(err, &httpErr) && httpErr.Status == 404 && httpErr.Code == 7002
 }
 
 func hasField(row map[string]any, path string) bool {
