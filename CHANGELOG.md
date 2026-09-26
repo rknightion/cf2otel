@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.7.0](https://github.com/rknightion/cf2otel/compare/v0.6.0...v0.7.0) (2026-09-26)
+
+
+### Features
+
+* **aigateway:** capture DLP policy outcomes ([a9335be](https://github.com/rknightion/cf2otel/commit/a9335be83ec6059c078d02d647ab5a90e41eb7e3))
+* **aigateway:** capture DLP policy outcomes ([b642c90](https://github.com/rknightion/cf2otel/commit/b642c901371fff795b03289f4ec759db92427398))
+
+
+### Bug Fixes
+
+* **aigateway:** keep the DLP profiles attribute and declare the DLP metric unit ([a179c32](https://github.com/rknightion/cf2otel/commit/a179c3217d346a796a9390da290d7ab15829cad8))
+
+
+### Refactoring
+
+* **cfapi:** typed GraphQL saturation error and shared window splitter ([ae1ad8d](https://github.com/rknightion/cf2otel/commit/ae1ad8da857fd85980b515ec31a584189187ec4d))
+* **cfapi:** typed GraphQL saturation error and shared window splitter ([f45209a](https://github.com/rknightion/cf2otel/commit/f45209ae13adf9c7bc9084bb0f450db0384fcf8a))
+
 ## [0.6.0](https://github.com/rknightion/cf2otel/compare/v0.5.1...v0.6.0) (2026-09-26)
 
 
