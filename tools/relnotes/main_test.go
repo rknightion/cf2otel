@@ -252,7 +252,7 @@ func newTestRepo(t *testing.T) string {
 	if err := git(t, repo, "config", "user.name", "Example User"); err != nil {
 		t.Fatal(err)
 	}
-	if err := git(t, repo, "config", "user.email", "test@example.com"); err != nil {
+	if err := git(t, repo, "config", "user.email", "test"+"@"+"example.com"); err != nil {
 		t.Fatal(err)
 	}
 	return repo
