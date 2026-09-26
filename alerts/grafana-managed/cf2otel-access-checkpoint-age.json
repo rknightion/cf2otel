@@ -1,0 +1,97 @@
+{
+  "apiVersion": "rules.alerting.grafana.app/v0alpha1",
+  "kind": "AlertRule",
+  "metadata": {
+    "annotations": {
+      "grafana.app/folder": "REPLACE_WITH_FOLDER_UID"
+    },
+    "labels": {
+      "grafana.app/folder": "REPLACE_WITH_FOLDER_UID"
+    },
+    "name": "cf2otel-access-checkpoint-age"
+  },
+  "spec": {
+    "annotations": {
+      "__dashboardUid__": "cf2otel",
+      "__panelId__": "404",
+      "description": "Access logins checkpoint age is over 12 hours, approaching the Access REST log's roughly one-day reach; further delay risks permanent data loss.",
+      "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
+      "summary": "Access logins checkpoint age exceeds 12 hours"
+    },
+    "execErrState": "Error",
+    "expressions": {
+      "A": {
+        "datasourceUID": "grafanacloud-prom",
+        "model": {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "max(cf2otel_checkpoint_age_seconds{service_name=\"cf2otel\",cf2otel_collector=\"access.logins\"})",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        },
+        "queryType": "instant",
+        "relativeTimeRange": {
+          "from": "15m",
+          "to": "0s"
+        }
+      },
+      "B": {
+        "datasourceUID": "__expr__",
+        "model": {
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "reducer": "last",
+          "refId": "B",
+          "type": "reduce"
+        }
+      },
+      "C": {
+        "datasourceUID": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  43200
+                ],
+                "type": "gt"
+              }
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "B",
+          "refId": "C",
+          "type": "threshold"
+        },
+        "source": true
+      }
+    },
+    "for": "5m",
+    "labels": {
+      "category": "collector",
+      "pipeline": "cf2otel",
+      "service": "cf2otel",
+      "severity": "warning",
+      "source": "cf2otel"
+    },
+    "noDataState": "Alerting",
+    "panelRef": {
+      "dashboardUID": "cf2otel",
+      "panelID": 404
+    },
+    "paused": false,
+    "title": "Access logins checkpoint age exceeds 12 hours",
+    "trigger": {
+      "interval": "1m"
+    }
+  }
+}

@@ -18,6 +18,12 @@ RULES = [
      'time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel"})', 900, "Alerting"),
     ("cf2otel-export-failure", "cf2otel export is failing", "OTLP export failures occurred in the last 15 minutes.", 403,
      'sum(increase(cf2otel_export_errors_total{service_name="cf2otel"}[15m])) or on() (0 * sum(increase(cf2otel_export_success_total{service_name="cf2otel"}[15m])))', 0, "Alerting"),
+    ("cf2otel-window-gap", "cf2otel window gap detected", "A retention-gap window was skipped in the last 15 minutes; that window's data is permanently lost.", 405,
+     'sum(increase(cf2otel_window_gap_seconds_total{service_name="cf2otel"}[15m])) or on() (0 * sum(increase(cf2otel_scrape_success_total{service_name="cf2otel"}[15m])))', 0, "Alerting"),
+    ("cf2otel-window-commit-dropped", "cf2otel window commit dropped", "A window's commit failed permanently (dropped outcome) in the last 15 minutes after repeated payload rejection.", 406,
+     'sum(increase(cf2otel_window_commit_failures_total{service_name="cf2otel",outcome="dropped"}[15m])) or on() (0 * sum(increase(cf2otel_scrape_success_total{service_name="cf2otel"}[15m])))', 0, "Alerting"),
+    ("cf2otel-access-checkpoint-age", "Access logins checkpoint age exceeds 12 hours", "Access logins checkpoint age is over 12 hours, approaching the Access REST log's roughly one-day reach; further delay risks permanent data loss.", 404,
+     'max(cf2otel_checkpoint_age_seconds{service_name="cf2otel",cf2otel_collector="access.logins"})', 43200, "Alerting"),
 ]
 
 
