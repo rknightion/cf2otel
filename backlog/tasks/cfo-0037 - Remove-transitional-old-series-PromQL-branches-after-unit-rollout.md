@@ -1,10 +1,10 @@
 ---
 id: CFO-0037
 title: Remove transitional old-series PromQL branches after unit rollout
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-26 11:49'
-updated_date: '2026-09-26 11:49'
+updated_date: '2026-09-26 17:57'
 labels: []
 dependencies:
   - CFO-0029
@@ -23,13 +23,13 @@ CFO-0029 shipped transitional new-or-old PromQL expressions so dashboards and al
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Dashboard and alert expressions for renamed series use only the observed new metric names and preserve the same aggregation and thresholds
-- [ ] #2 just gen-check and just check pass, and grafana-sync read-back shows the updated dashboard and alert rule expressions on m7kni
+- [x] #1 Dashboard and alert expressions for renamed series use only the observed new metric names and preserve the same aggregation and thresholds
+- [x] #2 just gen-check and just check pass, and grafana-sync read-back shows the updated dashboard and alert rule expressions on m7kni
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
+- [x] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
@@ -38,4 +38,6 @@ CFO-0029 shipped transitional new-or-old PromQL expressions so dashboards and al
 
 <!-- SECTION:NOTES:BEGIN -->
 Observed v0.6.0 new-name families: gen_ai_client_operation_duration_seconds, cf2otel_api_duration_seconds, cf2otel_scrape_duration_seconds, cf2otel_window_gap_seconds_total, cf2otel_scrape_last_success_timestamp_seconds, cf2otel_checkpoint_age_seconds, cloudflare_http_origin_duration_seconds, cloudflare_rum_lcp/inp/fid/fcp/ttfb_p75_seconds, cloudflare_access_apps/users_ratio, cloudflare_rum_cls_p75_ratio, cf2otel_build_info_ratio. Histogram bucket/sum/count suffixes follow the duration rename. The root map in codex is machine-local; this note keeps the names in the public task.
+
+Loop 8 LG: chore(grafana) 8592d92 removed the three (new or old) dashboard branches (AI Gateway p95 latency, collector last-success age, checkpoint age) and the collector-stale rule's branch, same aggregation and thresholds, and the unused compatibility helpers; landed in 234b4250eb88387994eecb3fab58495d3f06f8c3 with just check green, CodeRabbit 0 findings. CI 36260205349 success incl ci-success; grafana-sync 36260205342 success. m7kni read-back 2026-09-26 ~17:58Z: dashboard uid cf2otel and all five cf2otel alert rules carry no old-name series or label_replace compatibility branch. Loop 8: implementation 1/4, review-repair 0/3, infrastructure retries 2 (CodeRabbit WebSocket), grant: LG lane; reason Done.
 <!-- SECTION:NOTES:END -->
