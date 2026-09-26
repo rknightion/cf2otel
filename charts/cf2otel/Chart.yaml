@@ -2,8 +2,8 @@ apiVersion: v2
 name: cf2otel
 description: Poll Cloudflare APIs and export logs, metrics and traces over OTLP.
 type: application
-version: 0.5.1
-appVersion: 0.5.1
+version: 0.6.0
+appVersion: 0.6.0
 kubeVersion: '>=1.29.0-0'
 home: https://github.com/rknightion/cf2otel
 sources:
