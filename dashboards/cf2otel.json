@@ -520,7 +520,7 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "expr": "label_replace(histogram_quantile(0.95, sum by (le, gen_ai_request_model) (rate(gen_ai_client_operation_duration_seconds_bucket{service_name=\"cf2otel\"}[$__rate_interval]))), \"cf2otel_compat_source\", \"new\", \"gen_ai_request_model\", \".*\") or label_replace(histogram_quantile(0.95, sum by (le, gen_ai_request_model) (rate(gen_ai_client_operation_duration_bucket{service_name=\"cf2otel\"}[$__rate_interval]))), \"cf2otel_compat_source\", \"old\", \"gen_ai_request_model\", \".*\")",
+                        "expr": "histogram_quantile(0.95, sum by (le, gen_ai_request_model) (rate(gen_ai_client_operation_duration_seconds_bucket{service_name=\"cf2otel\"}[$__rate_interval])))",
                         "format": "time_series",
                         "instant": false,
                         "legendFormat": "",
@@ -662,7 +662,7 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "expr": "time() - max by (cf2otel_collector) (label_replace(cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\"}, \"cf2otel_compat_source\", \"new\", \"service_name\", \".*\") or label_replace(cf2otel_scrape_last_success_timestamp{service_name=\"cf2otel\"}, \"cf2otel_compat_source\", \"old\", \"service_name\", \".*\"))",
+                        "expr": "time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\"})",
                         "format": "time_series",
                         "instant": false,
                         "legendFormat": "",
@@ -836,7 +836,7 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "expr": "max by (cf2otel_collector) (label_replace(cf2otel_checkpoint_age_seconds{service_name=\"cf2otel\"}, \"cf2otel_compat_source\", \"new\", \"service_name\", \".*\") or label_replace(cf2otel_checkpoint_age{service_name=\"cf2otel\"}, \"cf2otel_compat_source\", \"old\", \"service_name\", \".*\"))",
+                        "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_age_seconds{service_name=\"cf2otel\"})",
                         "format": "time_series",
                         "instant": false,
                         "legendFormat": "",

@@ -27,7 +27,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "time() - max by (cf2otel_collector) (label_replace(cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\"}, \"cf2otel_compat_source\", \"new\", \"service_name\", \".*\") or label_replace(cf2otel_scrape_last_success_timestamp{service_name=\"cf2otel\"}, \"cf2otel_compat_source\", \"old\", \"service_name\", \".*\"))",
+          "expr": "time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\"})",
           "instant": true,
           "range": false,
           "refId": "A"
