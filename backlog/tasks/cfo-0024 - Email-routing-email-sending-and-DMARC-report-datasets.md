@@ -5,7 +5,7 @@ status: Parked
 assignee:
   - '@rknightion'
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-26 14:37'
+updated_date: '2026-09-26 15:04'
 labels:
   - 'wave:2'
   - email
@@ -57,4 +57,6 @@ Loop 6 release gate parked: at DEP-ready after P8, release-please PR #20 base 7a
 Loop 7: Release v0.6.0 at merge eb5c2c7 contains the Email Routing and Sending Groups collectors. Camden DEP-1 pinned 0.6.0; its full ten-minute health watcher ended healthy at 2026-09-26T11:40:43Z. Running image RepoDigest matched release index sha256:189929bc183cf483dcd49991383fbf7e72a1040dd4872eba669d7c94f58beed5; all 36 preexisting checkpoint keys were monotonic, email.routing and email.sending appeared, config hash was unchanged, and 69 startup log lines had no registration, field-limit or selection errors. AC4 awaits exact source-to-Mimir proof or the frozen absent-input adjudication.
 
 Loop 7 run-end park: implementation attempts 3/4 and review-repair 5/7 carried, no new implementation or review attempt; infrastructure retries 0; grant: v0.6.0 deploy and one three-hour absent-input extension. AC3 passed after healthy Camden DEP-1. First complete [11:30Z,11:40Z) source window had zero routing and zero sending rows/count on 23 enabled owned zones; prior seven days had a routing row but no sending row. The extended checkpoint target is 2026-09-26T14:30:00Z with root watcher deadline 15:04Z; terminal receipt codex/live-loop7/checkpoint-ready-3h.json was absent at 14:37Z. AC4 remains unchecked; on a ready receipt, query both Groups datasets over [11:30Z,14:30Z), compare any nonzero source exactly with Mimir after delivery, and adjudicate zero input under ship.md. If receipt times out, preserve as pending and repeat from a fresh complete window. No source-to-Mimir equality was claimed.
+
+Loop 7 post-watcher correction: the extended watcher reached both email checkpoints at 14:30Z and finished its delivery wait at 14:43:02Z, after the earlier 14:37Z park note. The exact [11:30Z,14:30Z) Groups source census across 23 enabled owned zones found Routing 13 in six rows and Sending 0 in zero rows; Sending also had no same-selection row in the prior seven days. At 15:00Z Mimir showed one routing counter series value 16 and one sending series value 0. The routing counter includes startup backfill: source [11:00Z,14:30Z) was 16 in eight rows, equal to the observed cumulative counter 16; source [11:20Z,14:30Z) was 14. Therefore the 13 vs 16 difference is window provenance, not claimed same-window equality. Sending remains a defect candidate under ship.md and AC4 stays unchecked. Resume with FIX-E24 on a sanitized failing fixture and independent REV-E24, within remaining implementation attempt 4/4 and review-repair rounds 6-7/7, then release/deploy/live proof; do not treat the zero source as acceptance. Parked status remains.
 <!-- SECTION:NOTES:END -->

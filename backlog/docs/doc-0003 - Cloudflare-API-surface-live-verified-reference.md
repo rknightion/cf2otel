@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-09-26 13:29'
+updated_date: '2026-09-26 15:04'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -216,4 +216,4 @@ variants had rows; the DMARC dataset had none. The Groups-backed routing and sen
 
 - The first scheduled Cloudflare API drift canary after the read-only token permission edit and contract update concluded successfully against the deployed contract. Its probe reported `Cloudflare API contract matched`; the workflow uploaded no artifact, and its downloaded log had zero credential-byte matches. This verifies the canary run, not all future API behavior.
 - AI Gateway DLP was enabled with one Flag policy, three selected profiles and both request/response inspection. Fifty recent gateway log-detail rows had `dlp_action: null` and `dlp_profiles: null`. Six short requests using only published fictional payment-card test values returned gateway log IDs; the five inspected response headers had no `cf-aig-dlp`, and each exact log detail still had both DLP fields null. The first response header was not inspected. No matched Logs API row or exact non-null field shape was observed, so policy ID and request/response direction mapping remain unverified. The retired dashboard's “Data boundaries” panel was static provenance text and “Gateway metadata exceptions” was a grouping of failure and DLP panels, not independent Logs API fields.
-- The first complete post-deploy email Groups window [11:30Z, 11:40Z) had both datasets enabled on all 23 account-owned zones and zero rows/count for both. A same-selection prior-seven-day census found a routing row on day offset zero and no sending row. Zero input in this window cannot prove source-to-Mimir equality; the three-hour post-deploy checkpoint and source census remain pending.
+- The first complete post-deploy email Groups window [11:30Z, 11:40Z) had both datasets enabled on all 23 account-owned zones and zero rows/count for both. A same-selection prior-seven-day census found a routing row on day offset zero and no sending row. The extended [11:30Z, 14:30Z) window, read after both checkpoints and exporter delivery, had routing count 13 in six source rows and sending count zero across 23 enabled owned zones. The routing Mimir counter was 16: a wider [11:00Z, 14:30Z) source read counted 16, explaining the three-event startup backfill before 11:30Z. This is aggregate routing evidence, not an exact same-window delta. Sending had no source row over the prior seven days with the same selection, so its zero remains a defect candidate and source-to-Mimir acceptance is open.
