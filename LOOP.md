@@ -38,6 +38,9 @@ not a signal of anything wrong (loop3 goal).
 - Deploy target is one compose host running one project. A deploy is a version-pin edit plus an
   app-only recreate, verified `healthy` within 10 minutes with an automatic revert of the pin if not
   (loop3 goal, "Root prerequisites"). The host is deliberately not named here.
+- The deploy host's compose file passes named variables only (explicit `environment:` entries, no
+  `env_file:`). A new `CF2OTEL_` variable needs its own compose `environment:` entry; a line added to
+  `.env` alone never reaches the process (loop 9 preparation).
 
 ## Standing route exceptions
 
