@@ -1,10 +1,10 @@
 ---
 id: CFO-0011
 title: Deploy to camden (Docker) and verify end to end
-status: Parked
+status: Done
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-26 16:06'
+updated_date: '2026-09-26 16:17'
 labels:
   - 'wave:1'
   - deploy
@@ -22,7 +22,7 @@ deploy/docker-compose.yaml reference plus the live deployment: compose project u
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 Container healthy on camden running a released ghcr.io/rknightion/cf2otel tag
-- [ ] #2 Every wave-1 collector's signals are observed in the m7kni stack (Loki, Mimir, Tempo) with exact query evidence
+- [x] #2 Every wave-1 collector's signals are observed in the m7kni stack (Loki, Mimir, Tempo) with exact query evidence
 - [x] #3 Restart test: a container restart resumes from checkpoints without gaps or duplicates
 <!-- AC:END -->
 
@@ -57,4 +57,6 @@ Loop 6 opportunistic P6 closeout: Access SCIM updates REST census [2026-09-24T08
 Loop 7 P6 read-only census: implementation/review attempts unchanged, infrastructure retries 0; grant: one natural SCIM source check. Source interval 2026-09-24T08:18:58Z through 2026-09-26T11:41:34Z yielded zero rows, so AC2 remains absent input and unproved. Resume on a natural source row, then compare exact ID in Loki; no synthetic audit mutation.
 
 Loop 8 preparation 2026-09-26, Rob-authorised synthetic SCIM trigger: at 15:42:48Z Entra provision-on-demand exported one USER update to Cloudflare Access (a temporary canary value in a previously empty department attribute). The Access SCIM updates REST log for [15:30Z,16:30Z) returned exactly one USER row, status SUCCESS. Entra skipped the revert push because it does not send a cleared attribute, so Cloudflare's copy keeps the canary department; this is harmless and recorded. Next: compare that exact row in Loki ({service_name="cf2otel"} with the SCIM event_name) and, if it matches, check AC2 (every other wave-1 signal was proven in earlier loops).
+
+Loop 8 P6-SCIM 2026-09-26T16:17Z: the Entra provision-on-demand SCIM update (logged by Cloudflare at 15:42:48Z) was matched in m7kni Loki with {service_name="cf2otel"} | event_name="cloudflare.access.scim_update" over [15:30Z,16:17Z): exactly 1 row, resource id match, resource_type USER, method PATCH, status SUCCESS, no duplicate. With earlier loops' Loki/Mimir/Tempo evidence for the other wave-1 signals, AC2 holds. Loop 8: implementation 0, review-repair 0, infrastructure retries 0; grant: read-only Loki; reason Done.
 <!-- SECTION:NOTES:END -->
