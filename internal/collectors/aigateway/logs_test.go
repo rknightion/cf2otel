@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -336,6 +339,169 @@ func TestOpaqueMetadataRedactsValuesAndKeys(t *testing.T) {
 	got := redactedJSON(json.RawMessage(`{"team":"private value","api_token":"private token","count":2}`), 4096)
 	if strings.Contains(got, "private") || strings.Contains(got, "api_token") || !strings.Contains(got, "[REDACTED]") {
 		t.Fatalf("unexpected metadata redaction: %s", got)
+	}
+}
+
+// TestDLPPolicyOutcomes covers the sanitized fixture shapes observed live on
+// 2026-09-26: request-side and response-side flags, a request carrying both
+// directions, a BLOCK row, a null row, and missing/empty dlp_profiles.
+func TestDLPPolicyOutcomes(t *testing.T) {
+	const profileA = "11111111-1111-4111-8111-111111111111"
+	const profileB = "33333333-3333-4333-8333-333333333333"
+	cases := []struct {
+		name                 string
+		dlpAction            string // raw JSON literal, "" to omit the field
+		dlpProfiles          string // raw JSON literal, "" to omit the field
+		wantEmitted          bool
+		wantAction           string
+		wantDirections       []string
+		wantPolicyIDs        []string
+		wantProfileIDs       []string
+		wantMetricDirections []string
+	}{
+		{
+			name:                 "request-side flag",
+			dlpAction:            `"FLAG"`,
+			dlpProfiles:          fmt.Sprintf(`[{"profile":{"profile_id":%q,"entry_ids":["22222222-2222-4222-8222-222222222222"]},"policy_ids":["example-dlp-policy"],"check":"REQUEST"}]`, profileA),
+			wantEmitted:          true,
+			wantAction:           "flagged",
+			wantDirections:       []string{"request"},
+			wantPolicyIDs:        []string{"example-dlp-policy"},
+			wantProfileIDs:       []string{profileA},
+			wantMetricDirections: []string{"request"},
+		},
+		{
+			name:                 "response-side flag",
+			dlpAction:            `"FLAG"`,
+			dlpProfiles:          fmt.Sprintf(`[{"profile":{"profile_id":%q,"entry_ids":["44444444-4444-4444-8444-444444444444"]},"policy_ids":["example-dlp-policy"],"check":"RESPONSE"}]`, profileB),
+			wantEmitted:          true,
+			wantAction:           "flagged",
+			wantDirections:       []string{"response"},
+			wantPolicyIDs:        []string{"example-dlp-policy"},
+			wantProfileIDs:       []string{profileB},
+			wantMetricDirections: []string{"response"},
+		},
+		{
+			name:      "both directions on one request",
+			dlpAction: `"FLAG"`,
+			dlpProfiles: fmt.Sprintf(`[
+				{"profile":{"profile_id":%q,"entry_ids":["22222222-2222-4222-8222-222222222222"]},"policy_ids":["example-dlp-policy-a"],"check":"REQUEST"},
+				{"profile":{"profile_id":%q,"entry_ids":["44444444-4444-4444-8444-444444444444"]},"policy_ids":["example-dlp-policy-b"],"check":"RESPONSE"}
+			]`, profileA, profileB),
+			wantEmitted:          true,
+			wantAction:           "flagged",
+			wantDirections:       []string{"request", "response"},
+			wantPolicyIDs:        []string{"example-dlp-policy-a", "example-dlp-policy-b"},
+			wantProfileIDs:       []string{profileA, profileB},
+			wantMetricDirections: []string{"request", "response"},
+		},
+		{
+			name:                 "blocked row",
+			dlpAction:            `"BLOCK"`,
+			dlpProfiles:          fmt.Sprintf(`[{"profile":{"profile_id":%q,"entry_ids":["66666666-6666-4666-8666-666666666666"]},"policy_ids":["example-dlp-policy"],"check":"REQUEST"}]`, profileA),
+			wantEmitted:          true,
+			wantAction:           "blocked",
+			wantDirections:       []string{"request"},
+			wantPolicyIDs:        []string{"example-dlp-policy"},
+			wantProfileIDs:       []string{profileA},
+			wantMetricDirections: []string{"request"},
+		},
+		{
+			name:        "null row",
+			dlpAction:   `null`,
+			dlpProfiles: `null`,
+			wantEmitted: false,
+		},
+		{
+			name:                 "action present, dlp_profiles field missing",
+			dlpAction:            `"FLAG"`,
+			wantEmitted:          true,
+			wantAction:           "flagged",
+			wantMetricDirections: []string{"other"},
+		},
+		{
+			name:                 "action present, dlp_profiles empty array",
+			dlpAction:            `"FLAG"`,
+			dlpProfiles:          `[]`,
+			wantEmitted:          true,
+			wantAction:           "flagged",
+			wantMetricDirections: []string{"other"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fields := `"id":"row-1","created_at":"2026-09-23T10:00:00Z","path":"chat/completions","duration":1`
+			if tc.dlpAction != "" {
+				fields += fmt.Sprintf(`,"dlp_action":%s`, tc.dlpAction)
+			}
+			if tc.dlpProfiles != "" {
+				fields += fmt.Sprintf(`,"dlp_profiles":%s`, tc.dlpProfiles)
+			}
+			api := &fakeAPI{list: fmt.Sprintf(`{"result":[{%s}]}`, fields)}
+			cfg := &config.Config{Cloudflare: config.CloudflareConfig{AccountID: "example"}, AIGateway: config.AIGatewayConfig{Gateways: []string{"gateway"}}}
+			out := &fakeEmitter{}
+			from := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+			if _, err := NewLogs(cfg, api).CollectWindow(context.Background(), from, from.Add(time.Minute), out); err != nil {
+				t.Fatal(err)
+			}
+			if len(out.spans) != 1 {
+				t.Fatalf("spans=%d, want 1", len(out.spans))
+			}
+			span := out.spans[0]
+			gotAction := attr(span.Attrs, semconv.AttrAIGatewayDLPAction)
+
+			if !tc.wantEmitted {
+				if gotAction != "" ||
+					attr(span.Attrs, semconv.AttrAIGatewayDLPDirection) != "" ||
+					attr(span.Attrs, semconv.AttrAIGatewayDLPPolicyID) != "" ||
+					attr(span.Attrs, semconv.AttrAIGatewayDLPProfileID) != "" {
+					t.Fatalf("expected no DLP attributes for a null row, got action=%q", gotAction)
+				}
+				for _, m := range out.counters {
+					if m.name == semconv.MetricAIGatewayDLPRequests {
+						t.Fatalf("unexpected DLP metric for a null row: %+v", m)
+					}
+				}
+				return
+			}
+
+			if gotAction != tc.wantAction {
+				t.Fatalf("action=%q, want %q", gotAction, tc.wantAction)
+			}
+			if got, want := attr(span.Attrs, semconv.AttrAIGatewayDLPDirection), jsonStringArray(tc.wantDirections); got != want {
+				t.Fatalf("direction=%q, want %q", got, want)
+			}
+			if got, want := attr(span.Attrs, semconv.AttrAIGatewayDLPPolicyID), jsonStringArray(tc.wantPolicyIDs); got != want {
+				t.Fatalf("policy id=%q, want %q", got, want)
+			}
+			if got, want := attr(span.Attrs, semconv.AttrAIGatewayDLPProfileID), jsonStringArray(tc.wantProfileIDs); got != want {
+				t.Fatalf("profile id=%q, want %q", got, want)
+			}
+
+			var gotMetricDirs []string
+			for _, m := range out.counters {
+				if m.name != semconv.MetricAIGatewayDLPRequests {
+					continue
+				}
+				if got := attr(m.attrs, semconv.AttrAIGatewayName); got != "gateway" {
+					t.Errorf("metric gateway attr=%q", got)
+				}
+				if got := attr(m.attrs, semconv.AttrAIGatewayDLPAction); got != tc.wantAction {
+					t.Errorf("metric action attr=%q, want %q", got, tc.wantAction)
+				}
+				if m.value != 1 {
+					t.Errorf("metric value=%v, want 1", m.value)
+				}
+				gotMetricDirs = append(gotMetricDirs, attr(m.attrs, semconv.AttrAIGatewayDLPDirection))
+			}
+			sort.Strings(gotMetricDirs)
+			wantMetricDirs := append([]string(nil), tc.wantMetricDirections...)
+			sort.Strings(wantMetricDirs)
+			if !reflect.DeepEqual(gotMetricDirs, wantMetricDirs) {
+				t.Fatalf("metric directions=%v, want %v", gotMetricDirs, wantMetricDirs)
+			}
+		})
 	}
 }
 

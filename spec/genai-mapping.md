@@ -46,7 +46,7 @@ Every field below is from doc-0003 §2. "Log" means an OTLP log attribute; span 
 | `authentication` | Deliberately drop the value: may contain credential material. Log `cloudflare.ai_gateway.authentication.present` boolean only. |
 | `wholesale`, `byok` | `cloudflare.ai_gateway.wholesale`, `.byok` booleans on log/span; bounded metric dimensions if needed. Never emit a BYOK key. |
 | `user_agent` | `cloudflare.ai_gateway.user_agent` on log/span only, size capped; never a metric dimension. |
-| `dlp_action`, `dlp_profiles` | `cloudflare.ai_gateway.dlp.action` and `.profiles` on log/span; profiles redacted/capped and never metric dimensions. |
+| `dlp_action`, `dlp_profiles` | `cloudflare.ai_gateway.dlp.action` (`flagged`, `blocked`, `other`) and `.profiles` (redacted/capped) on log/span, plus log/span `.direction`, `.policy.id` and `.profile.id` (sorted distinct arrays, CFO-0036); only `.action` and `.direction` are dimensions, on `cloudflare.ai_gateway.dlp.requests`. |
 | `request`, `response` in list | Deliberately ignore empty strings; they are not evidence of absent content. |
 | `request_head`, `response_head` in detail | `cloudflare.ai_gateway.request.head`, `.response.head` only under content opt-in and cap; parse `traceparent` from request head for a **link** to caller context, never overwrite historical span parent. Do not export auth/cookie headers. |
 | `request_head_complete`, `response_head_complete` | `cloudflare.ai_gateway.request.head_complete`, `.response.head_complete` booleans on log/span. |

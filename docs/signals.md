@@ -78,6 +78,7 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cloudflare.ai_gateway.errors` | `1` | AI Gateway error count. |
 | `cloudflare.ai_gateway.cache_hits` | `1` | AI Gateway cache hits. |
 | `cloudflare.ai_gateway.cost` | `1` | AI Gateway request cost. |
+| `cloudflare.ai_gateway.dlp.requests` | `{request}` | AI Gateway request count with a DLP outcome (flagged, blocked or other), by gateway, action and direction; one count per distinct request/response direction, or `other` when the action carries no findings. |
 | `gen_ai.client.operation.duration` | `s` | GenAI operation duration. |
 | `gen_ai.client.inference.usage.input_tokens` | `{token}` | Input token usage. |
 | `gen_ai.client.inference.usage.output_tokens` | `{token}` | Output token usage. |
@@ -109,7 +110,7 @@ Prometheus compatibility naming adds `_seconds` for `s` when the base name lacks
 
 AI Gateway metrics combine Cloudflare request outcome measurements with GenAI duration and usage conventions.
 
-The retired AI Gateway dashboard's **Data boundaries** panel was static provenance guidance; **Gateway metadata exceptions** was a row grouping failed-request and DLP tables, not a separate API field. The AI Gateway Logs API inventory sampled on 2026-09-26 found no data-boundary or exception fields in 50 log-detail rows. The same sample had only null `dlp_action` and `dlp_profiles` values, so the matched-row shape needed to extract DLP direction and policy ID remains unverified.
+The retired AI Gateway dashboard's **Data boundaries** panel was static provenance guidance; **Gateway metadata exceptions** was a row grouping failed-request and DLP tables, not a separate API field. The AI Gateway Logs API inventory sampled on 2026-09-26 found no data-boundary or exception fields in 50 log-detail rows. Of that sample, 24 rows had a non-null `dlp_action` (`FLAG`), each with one `dlp_profiles` finding checking either the request (23) or the response (1); `dlp_action` maps to `flagged` (`FLAG`), `blocked` (`BLOCK`) or `other` (any other non-empty value), and a request with an action but no findings still counts once on `cloudflare.ai_gateway.dlp.requests` with direction `other`.
 
 ## Attributes
 
@@ -121,6 +122,7 @@ The retired AI Gateway dashboard's **Data boundaries** panel was static provenan
 | Access SCIM | `cloudflare.access.scim.resource_type`, `cloudflare.access.scim.method`, `cloudflare.access.scim.status`, `cloudflare.access.scim.idp_id`, `cloudflare.access.scim.resource_id`, `cloudflare.access.scim.user_email` |
 | HTTP | `cloudflare.http.host`, `cloudflare.http.method`, `cloudflare.http.path`, `cloudflare.http.query`, `cloudflare.http.status_code`, `cloudflare.http.origin_status_code`, `cloudflare.http.client_ip`, `cloudflare.http.user_agent`, `cloudflare.http.ray_id`, `cloudflare.http.zone`, `cloudflare.http.cache_status`, `cloudflare.http.security_action`, `cloudflare.http.colo` |
 | AI Gateway content | `cloudflare.ai_gateway.content.side`, `cloudflare.ai_gateway.content.length` |
+| AI Gateway DLP | `cloudflare.ai_gateway.dlp.action`, `cloudflare.ai_gateway.dlp.direction` are also bounded metric dimensions on `cloudflare.ai_gateway.dlp.requests`; `cloudflare.ai_gateway.dlp.policy.id` and `cloudflare.ai_gateway.dlp.profile.id` are log only. |
 | Audit | `cloudflare.audit.*` attributes are listed individually below; actor email and IP are log only. |
 | Firewall | `cloudflare.firewall.*` attributes are listed individually below; IP, path, query, user agent and ray are log only. |
 | DNS | `cloudflare.dns.*` attributes are listed individually below; query name and IPs are log only. |
@@ -171,6 +173,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cloudflare.access.users` |
 | Metric | `cloudflare.ai_gateway.cache_hits` |
 | Metric | `cloudflare.ai_gateway.cost` |
+| Metric | `cloudflare.ai_gateway.dlp.requests` |
 | Metric | `cloudflare.ai_gateway.errors` |
 | Metric | `cloudflare.ai_gateway.requests` |
 | Metric | `cloudflare.audit.events` |
@@ -274,6 +277,9 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `cloudflare.ai_gateway.created_at` |
 | Attribute | `cloudflare.ai_gateway.custom_cost` |
 | Attribute | `cloudflare.ai_gateway.dlp.action` |
+| Attribute | `cloudflare.ai_gateway.dlp.direction` |
+| Attribute | `cloudflare.ai_gateway.dlp.policy.id` |
+| Attribute | `cloudflare.ai_gateway.dlp.profile.id` |
 | Attribute | `cloudflare.ai_gateway.dlp.profiles` |
 | Attribute | `cloudflare.ai_gateway.duration_ms` |
 | Attribute | `cloudflare.ai_gateway.event.id` |

@@ -228,7 +228,13 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 	}
 	add(semconv.AttrAIGatewayBYOK, safeBoolean(row.BYOK))
 	add(semconv.AttrAIGatewayUserAgent, capString(row.UserAgent, 512))
-	add(semconv.AttrAIGatewayDLPAction, row.DLPAction)
+	dlp, hasDLP := parseDLPOutcome(row.DLPAction, row.DLPProfiles)
+	if hasDLP {
+		add(semconv.AttrAIGatewayDLPAction, dlp.Action)
+		add(semconv.AttrAIGatewayDLPDirection, jsonStringArray(dlp.Directions))
+		add(semconv.AttrAIGatewayDLPPolicyID, jsonStringArray(dlp.PolicyIDs))
+		add(semconv.AttrAIGatewayDLPProfileID, jsonStringArray(dlp.ProfileIDs))
+	}
 	add(semconv.AttrAIGatewayMetadata, redactedJSON(row.Metadata, 4096))
 	add(semconv.AttrAIGatewayGuardrails, redactedJSON(row.Guardrails, 4096))
 	add(semconv.AttrAIGatewayDLPProfiles, redactedJSON(row.DLPProfiles, 4096))
@@ -419,6 +425,22 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 	if row.Cost != nil && *row.Cost >= 0 {
 		if err := out.Counter(ctx, semconv.MetricAIGatewayCost, *row.Cost, dims...); err != nil {
 			return err
+		}
+	}
+	if hasDLP {
+		directions := dlp.Directions
+		if len(directions) == 0 {
+			directions = []string{"other"}
+		}
+		for _, direction := range directions {
+			dlpDims := []telemetry.Attr{
+				{Key: semconv.AttrAIGatewayName, Value: gateway},
+				{Key: semconv.AttrAIGatewayDLPAction, Value: dlp.Action},
+				{Key: semconv.AttrAIGatewayDLPDirection, Value: direction},
+			}
+			if err := out.Counter(ctx, semconv.MetricAIGatewayDLPRequests, 1, dlpDims...); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
