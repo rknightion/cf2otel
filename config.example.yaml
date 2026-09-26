@@ -15,6 +15,8 @@ http:
   zones: []
   max_metric_hosts_per_zone: 1000
   max_metric_series_per_window: 10000
+platform:
+  max_metric_series_per_window: 500
 identity:
   enabled: true
   match_window: 15m
@@ -38,8 +40,8 @@ log:
   level: info
   format: json
 
-# Enabled collector names are fixed by the domain registry. AI Gateway
-# metrics come from aigateway.logs until GraphQL Groups lag is bounded.
+# Collector names are fixed by the domain registry. AI Gateway metrics come
+# from aigateway.logs while GraphQL Groups ingestion lag remains unbounded.
 collectors:
   access.logins:
     enabled: true
@@ -57,5 +59,69 @@ collectors:
     enabled: true
   aigateway.metrics:
     enabled: false
+  audit.logs:
+    enabled: true
+  firewall.events:
+    enabled: true
+  firewall.metrics:
+    enabled: true
+  dns.events:
+    enabled: true
+  dns.metrics:
+    enabled: true
+  rum.pageloads:
+    enabled: true
+  rum.web_vitals:
+    enabled: true
+  gateway.dns:
+    enabled: true
+  workers.overview:
+    enabled: true
+  turnstile.events:
+    enabled: true
+  logpush.health:
+    enabled: true
+  d1.analytics:
+    enabled: true
+  d1.queries:
+    enabled: true
+  d1.storage:
+    enabled: true
+  kv.operations:
+    enabled: true
+  kv.storage:
+    enabled: true
+  r2.bandwidth:
+    enabled: true
+  r2.catalog_data:
+    enabled: true
+  r2.catalog_maintenance:
+    enabled: true
+  r2.operations:
+    enabled: true
+  r2.storage:
+    enabled: true
+  r2.sql:
+    enabled: true
+  durableobjects.invocations:
+    enabled: true
+  durableobjects.periodic:
+    enabled: true
+  durableobjects.sql_storage:
+    enabled: true
+  durableobjects.subrequests:
+    enabled: true
+  queues.backlog:
+    enabled: true
+  queues.consumer:
+    enabled: true
+  queues.delayed_backlog:
+    enabled: true
+  queues.message_operations:
+    enabled: true
+  email.routing:
+    enabled: true
+  email.sending:
+    enabled: true
   selfobs:
     enabled: true
