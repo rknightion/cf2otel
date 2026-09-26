@@ -4,6 +4,7 @@ title: Accept domainless Worker destinations in Access apps drift contract
 status: Parked
 assignee: []
 created_date: '2026-09-26 20:10'
+updated_date: '2026-09-26 23:28'
 labels:
   - access
   - api-drift
@@ -31,3 +32,9 @@ Loop 9 R0 run 36268367867 failed the existing REST access-apps contract: scope #
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Loop 9 R0: 0/4 implementation attempts, 0/3 review cycles, 0 infrastructure retries. The single authorized drift canary failed on an Access Worker destination row without domain; a read-only census found 15 domain-based and two domainless Worker destination apps. No source mutation was admitted. Owner decision remains the resume condition.
+<!-- SECTION:NOTES:END -->

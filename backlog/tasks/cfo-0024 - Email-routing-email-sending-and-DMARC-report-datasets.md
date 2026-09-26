@@ -5,7 +5,7 @@ status: Parked
 assignee:
   - '@rknightion'
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-26 19:08'
+updated_date: '2026-09-26 23:27'
 labels:
   - 'wave:2'
   - email
@@ -65,4 +65,6 @@ Loop 8 preparation re-grade 2026-09-26: loop 7's 'defect candidate' reading of t
 Loop 8 LIVE-24b (2026-09-26): two real Email Sending REST sends (POST /accounts/{account}/email/sending/send, fictional content, sender on an account sending subdomain, recipient a mailbox Rob owns) at 16:19:29Z and 16:21:30Z, both HTTP 200 success, account-key auth accepted (no token minted). Window [16:15Z,16:35Z) after both email checkpoints passed 16:35Z (16:45:46Z) plus 2-min delivery: Routing EXACT: source emailRoutingAdaptiveGroups count 4 (two five-minute buckets, 2+2) across 23 enabled owned zones, baseline [15:50Z,16:15Z) 0; Mimir cloudflare_email_routing_events_total one series flat 18 until the window commits, then 20 and 22 (+4). Sending: emailSendingAdaptiveGroups 0 rows in all 23 zones at 16:49Z and again at 17:05Z; the raw emailSendingAdaptive dataset also had 0 rows in any zone over [16:00Z,17:10Z); Mimir cloudflare_email_sending_events_total one series 0. Real REST API sends did not reach either sending dataset within 50 minutes, so the sending collector has no live input to prove; no FIX (source 0 = Mimir 0). AC4 stays open for sending only. Resume: a send path that populates emailSendingAdaptive (e.g. a Workers send_email binding or SMTP send), or Cloudflare confirmation of which sends the dataset records. Loop 8: implementation 3/4 (unchanged), review-repair 5/7 (unchanged), infrastructure retries 0, grant: up to 5 sends (2 used); reason parked on absent sending source input.
 
 Loop 8 run-end: parked unchanged at AC4 (sending only); implementation 3/4, review-repair 5/7, infrastructure retries 0; 2 of 5 authorised sends used.
+
+Loop 9 LIVE-24c: implementation attempts 3/4 carried, review-repair 5/7 carried, no code attempt or review round used. Infrastructure events: local send watcher restarted once before any send; two Cloudflare edge 1010 transport blocks were retried once per mode using a browser user agent. Grant: one keyed, allow-listed, observable throwaway Worker, one deploy, one secret put, four request attempts at most, one delete. Builder and legacy send_email modes each returned HTTP 200 and ok true on their authorised retries at 20:23Z and 20:25Z. Loki had a canary log; Worker deletion was confirmed absent (10007). After both email checkpoints passed 20:45Z, the exact [20:15Z,20:45Z) source census across 23 enabled owned zones showed Routing 4 and Sending 0. Sending stayed 0 at 21:55Z and 23:25Z rechecks, three hours after the last send; Mimir had one Sending series with increase 0. No nonzero Sending source exists to compare, so AC4 remains unchecked and FIX-E24 was not admitted. Resume with owner decision on amending AC4 or a Cloudflare-confirmed send path that populates emailSendingAdaptiveGroups; any new live proof needs a fresh committed source window and matching Mimir value.
 <!-- SECTION:NOTES:END -->

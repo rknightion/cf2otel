@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-09-26 18:58'
+updated_date: '2026-09-26 23:29'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -205,7 +205,7 @@ a maximum per queue; no Queue identifier reaches a metric attribute or log. The 
 window that saturates at one complete five-minute bucket rather than split that aggregate.
 
 Zone-scoped email presence was rechecked over 30 days on 2026-09-25: routing and sending Groups
-variants had rows; the DMARC dataset had none. The Groups-backed routing and sending collectors shipped in v0.6.0 and the Camden deployment is healthy; source-to-Mimir equality remains unproved. They select only `count` and `dimensions.datetimeFiveMinutes`, sum complete five-minute buckets across account-owned zones, and emit no zone metric attribute. A disabled zone is skipped. No DMARC collector is built.
+variants had rows; the DMARC dataset had none. The Groups-backed routing and sending collectors shipped in v0.6.0. Loop 8 proved exact Email Routing source-to-Mimir equality for one closed window; Email Sending equality remains open because no source row was observed after REST sends. They select only `count` and `dimensions.datetimeFiveMinutes`, sum complete five-minute buckets across account-owned zones, and emit no zone metric attribute. A disabled zone is skipped. No DMARC collector is built.
 
 | Zone dataset | Selected fields | E24-A source finding |
 | --- | --- | --- |
@@ -223,3 +223,8 @@ variants had rows; the DMARC dataset had none. The Groups-backed routing and sen
 - AI Gateway DLP: the loop 7 nulls were a configuration gap. Every entry in the Flag policy's selected predefined profiles was disabled, so nothing could match. With Financial Information entries enabled, matched rows carry `dlp_action` as a string (`FLAG` observed; docs also give `BLOCK`) and `dlp_profiles` as an array of findings `{profile: {profile_id, entry_ids[]}, policy_ids[], check: REQUEST|RESPONSE}`, on both the logs LIST rows and the detail GET. One request can carry findings for both directions (a fictional card in the prompt produced REQUEST and RESPONSE findings). Non-matching rows keep both fields null. The `cf-aig-dlp` response header mirrors it as `{findings, action}`. Custom DLP profile creation returns 403 code 3314 on this plan.
 - AI Gateway logs LIST with `start_date`/`end_date` (RFC3339 UTC), `order_by=created_at`, `order_by_direction=asc`, `per_page=50` returned HTTP 200 for a closed five-minute window, and `result_info.total_count` matched the paged row count (19), including with `per_page=1`. `aiGatewayRequestsAdaptiveGroups` (account scope) returned the same count for that gateway and window; it advertises `count`, `dimensions_gateway` and `dimensions_datetimeFiveMinutes`, maxDuration 2764800 s, notOlderThan 5356800 s, maxNumberOfFields 30. Count REST rows by distinct id rather than trusting `total_count` (see trap above).
 - Email Sending: two real `POST /accounts/{account}/email/sending/send` calls authenticated with the account key headers (no bearer token needed) returned HTTP 200. Neither `emailSendingAdaptiveGroups` nor raw `emailSendingAdaptive` showed any row in any account zone over the following 50 minutes. REST API sends are not evidence of Email Sending dataset input. Email Routing Groups counts matched the exported counter exactly over a 20-minute window.
+
+## 12. Loop 9 observations (2026-09-26)
+
+- The Access apps drift canary failed on a row without `domain`. A read-only census found 17 Access apps: 15 with `domain`, and two `self_hosted` apps with destination types `worker` and `all_preview_workers` that omit it. The canary currently tests only the first returned row and requires `domain` for every app. The failure establishes a conditional-shape gap in the canary, not an API regression.
+- A throwaway keyed Worker with a `send_email` binding accepted both builder and legacy send modes with HTTP 200 and `ok: true`. The Worker was deleted after the two successful sends. For the closed [20:15Z, 20:45Z) window, `emailRoutingAdaptiveGroups` counted four events across account-owned enabled zones; `emailSendingAdaptiveGroups` returned zero rows. The source-only Sending rechecks at about 90 minutes and three hours also returned zero, while Routing remained four. The 30-minute Mimir `increase()` for Routing extrapolated beyond four, so it is not exact window equality evidence. These sends do not establish Email Sending dataset input.
