@@ -113,55 +113,33 @@ func (c *events) queryWindow(ctx context.Context, zone cfapi.Zone, from, to time
 	if limit <= 0 {
 		limit = queryLimit
 	}
-	var rows []map[string]any
-	req := cfapi.GraphQLRequest{
-		Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: rawDataset,
-		WantedFields: rawEventFields, JoinFields: []string{"rayName", "datetime"},
-		From: from, To: to, Limit: limit,
-	}
-	err := c.api.Query(ctx, req, &rows)
-	saturated := isSaturationError(err, rawDataset) || (err == nil && len(rows) >= limit)
-	if err != nil && !saturated {
-		return nil, err
-	}
-	if !saturated {
-		return rows, nil
-	}
-	if to.Sub(from) <= time.Minute {
-		if err == nil {
+	rows, err := collector.Bisect(from, to, time.Second, time.Minute, func(from, to time.Time) ([]map[string]any, bool, error) {
+		var rows []map[string]any
+		req := cfapi.GraphQLRequest{
+			Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: rawDataset,
+			WantedFields: rawEventFields, JoinFields: []string{"rayName", "datetime"},
+			From: from, To: to, Limit: limit,
+		}
+		err := c.api.Query(ctx, req, &rows)
+		saturated := isSaturationError(err, rawDataset) || (err == nil && len(rows) >= limit)
+		if saturated && err == nil {
 			err = fmt.Errorf("row count reached requested limit %d", limit)
 		}
-		return nil, fmt.Errorf("firewall events still saturate a one-minute query window: %w", err)
+		return rows, saturated, err
+	})
+	var window *collector.SaturatedWindowError
+	if errors.As(err, &window) {
+		if errors.Is(window.Reason, collector.ErrWindowIrreducible) {
+			return nil, fmt.Errorf("firewall events still saturate a one-minute query window: %w", window.Cause)
+		}
+		return nil, fmt.Errorf("cannot split saturated firewall event window %s..%s", window.From.Format(time.RFC3339), window.To.Format(time.RFC3339))
 	}
-
-	mid := from.Add(to.Sub(from) / 2).Truncate(time.Second)
-	if !mid.After(from) {
-		mid = from.Add(time.Second)
-	}
-	if !mid.Before(to) {
-		mid = to.Add(-time.Second)
-	}
-	if !from.Before(mid) || !mid.Before(to) {
-		return nil, fmt.Errorf("cannot split saturated firewall event window %s..%s", from.Format(time.RFC3339), to.Format(time.RFC3339))
-	}
-
-	left, err := c.queryWindow(ctx, zone, from, mid)
-	if err != nil {
-		return nil, err
-	}
-	right, err := c.queryWindow(ctx, zone, mid, to)
-	if err != nil {
-		return nil, err
-	}
-	return append(left, right...), nil
+	return rows, err
 }
 
 func isSaturationError(err error, dataset string) bool {
-	if err == nil {
-		return false
-	}
-	message := err.Error()
-	return strings.Contains(message, "GraphQL dataset "+dataset+" window ") && strings.Contains(message, " saturated limit ")
+	sat, ok := cfapi.AsSaturation(err)
+	return ok && sat.Dataset == dataset
 }
 
 func rowTime(row map[string]any) (time.Time, error) {

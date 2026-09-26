@@ -10,17 +10,17 @@ import (
 	"time"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
+	"github.com/rknightion/cf2otel/internal/collector"
 	"github.com/rknightion/cf2otel/internal/config"
 	"github.com/rknightion/cf2otel/internal/semconv"
 	"github.com/rknightion/cf2otel/internal/telemetry"
 )
 
 const (
-	emailBucket             = 5 * time.Minute
-	emailGraphQLMaxLimit    = 10000
-	emailDatasetRouting     = "emailRoutingAdaptiveGroups"
-	emailDatasetSending     = "emailSendingAdaptiveGroups"
-	emailSaturatedErrorText = "saturated limit"
+	emailBucket          = 5 * time.Minute
+	emailGraphQLMaxLimit = 10000
+	emailDatasetRouting  = "emailRoutingAdaptiveGroups"
+	emailDatasetSending  = "emailSendingAdaptiveGroups"
 )
 
 type datasetSettingsReader interface {
@@ -224,43 +224,48 @@ func selectAccountZones(zones []cfapi.Zone, accountID string, configured []strin
 }
 
 func (c *metrics) queryCompleteBuckets(ctx context.Context, zoneID string, from, to time.Time, limit int) (float64, error) {
-	if !from.Before(to) || from != floorEmailBucket(from) || to != floorEmailBucket(to) {
-		return 0, errors.New("email GraphQL query is not aligned to complete buckets")
-	}
-	request := cfapi.GraphQLRequest{
-		Scope:        cfapi.ZoneScope,
-		ScopeID:      zoneID,
-		Dataset:      c.spec.dataset,
-		WantedFields: []string{"count", "dimensions.datetimeFiveMinutes"},
-		From:         from,
-		To:           to,
-		Limit:        limit,
-	}
-	var rows []map[string]any
-	if err := c.api.Query(ctx, request, &rows); err != nil {
-		var gap *cfapi.RetentionGapError
-		if errors.As(err, &gap) {
-			return 0, &emailRetentionError{dataset: c.spec.dataset, floor: gap.Floor}
+	sums, err := collector.Bisect(from, to, emailBucket, emailBucket, func(from, to time.Time) ([]float64, bool, error) {
+		if !from.Before(to) || from != floorEmailBucket(from) || to != floorEmailBucket(to) {
+			return nil, false, errors.New("email GraphQL query is not aligned to complete buckets")
 		}
-		if !strings.Contains(strings.ToLower(err.Error()), emailSaturatedErrorText) {
-			return 0, err
+		request := cfapi.GraphQLRequest{
+			Scope:        cfapi.ZoneScope,
+			ScopeID:      zoneID,
+			Dataset:      c.spec.dataset,
+			WantedFields: []string{"count", "dimensions.datetimeFiveMinutes"},
+			From:         from,
+			To:           to,
+			Limit:        limit,
 		}
-		bucketCount := int(to.Sub(from) / emailBucket)
-		if bucketCount <= 1 {
-			return 0, fmt.Errorf("irreducible saturated five-minute bucket for dataset %s", c.spec.dataset)
+		var rows []map[string]any
+		if err := c.api.Query(ctx, request, &rows); err != nil {
+			var gap *cfapi.RetentionGapError
+			if errors.As(err, &gap) {
+				return nil, false, &emailRetentionError{dataset: c.spec.dataset, floor: gap.Floor}
+			}
+			_, saturated := cfapi.AsSaturation(err)
+			return nil, saturated, err
 		}
-		mid := from.Add(time.Duration(bucketCount/2) * emailBucket)
-		left, err := c.queryCompleteBuckets(ctx, zoneID, from, mid, limit)
+		sum, err := sumEmailRows(rows, from, to)
 		if err != nil {
-			return 0, err
+			return nil, false, err
 		}
-		right, err := c.queryCompleteBuckets(ctx, zoneID, mid, to, limit)
-		if err != nil {
-			return 0, err
-		}
-		return left + right, nil
+		return []float64{sum}, false, nil
+	})
+	var window *collector.SaturatedWindowError
+	if errors.As(err, &window) {
+		return 0, fmt.Errorf("irreducible saturated five-minute bucket for dataset %s", c.spec.dataset)
 	}
-	return sumEmailRows(rows, from, to)
+	if err != nil {
+		return 0, err
+	}
+	// Leaf sums are whole counts (emailCount rejects fractions), so summing
+	// them in time order equals the former pairwise left+right sum exactly.
+	total := float64(0)
+	for _, sum := range sums {
+		total += sum
+	}
+	return total, nil
 }
 
 func sumEmailRows(rows []map[string]any, from, to time.Time) (float64, error) {

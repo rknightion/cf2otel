@@ -165,45 +165,31 @@ func (c *overviewMetrics) CollectWindow(ctx context.Context, from, to time.Time,
 }
 
 func (c *overviewMetrics) queryWindow(ctx context.Context, request cfapi.GraphQLRequest, from, to time.Time, limit int) ([]map[string]any, error) {
-	request.From = from
-	request.To = to
 	request.Limit = limit
-	var rows []map[string]any
-	err := c.api.Query(ctx, request, &rows)
-	saturated := workersIsSaturation(err) || (err == nil && len(rows) >= limit)
-	if !saturated {
-		if err != nil {
-			return nil, err
-		}
-		return rows, nil
-	}
-	if to.Sub(from) <= workersBucket {
-		if err == nil {
+	rows, err := collector.Bisect(from, to, workersBucket, workersBucket, func(from, to time.Time) ([]map[string]any, bool, error) {
+		leaf := request
+		leaf.From, leaf.To = from, to
+		var rows []map[string]any
+		err := c.api.Query(ctx, leaf, &rows)
+		saturated := workersIsSaturation(err) || (err == nil && len(rows) >= limit)
+		if saturated && err == nil {
 			err = fmt.Errorf("GraphQL dataset %s reached requested limit %d", workersDataset, limit)
 		}
-		return nil, fmt.Errorf("workers overview query still saturates a five-minute bucket: %w", err)
+		return rows, saturated, err
+	})
+	var window *collector.SaturatedWindowError
+	if errors.As(err, &window) {
+		if errors.Is(window.Reason, collector.ErrWindowIrreducible) {
+			return nil, fmt.Errorf("workers overview query still saturates a five-minute bucket: %w", window.Cause)
+		}
+		return nil, fmt.Errorf("cannot split saturated Workers overview window %s..%s", window.From.Format(time.RFC3339), window.To.Format(time.RFC3339))
 	}
-	mid := from.Add(to.Sub(from) / 2).Truncate(workersBucket)
-	if !from.Before(mid) || !mid.Before(to) {
-		return nil, fmt.Errorf("cannot split saturated Workers overview window %s..%s", from.Format(time.RFC3339), to.Format(time.RFC3339))
-	}
-	left, err := c.queryWindow(ctx, request, from, mid, limit)
-	if err != nil {
-		return nil, err
-	}
-	right, err := c.queryWindow(ctx, request, mid, to, limit)
-	if err != nil {
-		return nil, err
-	}
-	return append(left, right...), nil
+	return rows, err
 }
 
 func workersIsSaturation(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := err.Error()
-	return strings.Contains(message, "GraphQL dataset "+workersDataset+" window ") && strings.Contains(message, " saturated limit ")
+	sat, ok := cfapi.AsSaturation(err)
+	return ok && sat.Dataset == workersDataset
 }
 
 func workersHasAvailableField(available []string, wanted string) bool {

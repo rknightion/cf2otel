@@ -193,55 +193,33 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 }
 
 func (c *datasetCollector) queryRows(ctx context.Context, request cfapi.GraphQLRequest, from, to time.Time) ([]map[string]any, error) {
-	request.From = from
-	request.To = to
-	var rows []map[string]any
-	err := c.api.Query(ctx, request, &rows)
-	if err == nil && len(rows) < request.Limit {
-		return rows, nil
+	rows, err := collector.Bisect(from, to, durableObjectsBucket, durableObjectsBucket, func(from, to time.Time) ([]map[string]any, bool, error) {
+		leaf := request
+		leaf.From, leaf.To = from, to
+		var rows []map[string]any
+		err := c.api.Query(ctx, leaf, &rows)
+		if err == nil && len(rows) < leaf.Limit {
+			return rows, false, nil
+		}
+		if err == nil {
+			err = saturatedError(leaf)
+		}
+		return nil, isSaturated(err, leaf.Dataset), err
+	})
+	var window *collector.SaturatedWindowError
+	if errors.As(err, &window) {
+		return nil, window.Cause
 	}
-	if err == nil {
-		err = saturatedError(request)
-	}
-	if !isSaturated(err, request.Dataset) {
-		return nil, err
-	}
-	split, ok := splitAtBucket(from, to)
-	if !ok {
-		return nil, err
-	}
-	left, err := c.queryRows(ctx, request, from, split)
-	if err != nil {
-		return nil, err
-	}
-	right, err := c.queryRows(ctx, request, split, to)
-	if err != nil {
-		return nil, err
-	}
-	return append(left, right...), nil
+	return rows, err
 }
 
 func saturatedError(request cfapi.GraphQLRequest) error {
-	return fmt.Errorf("GraphQL dataset %s window %s..%s saturated limit %d", request.Dataset, request.From.Format(time.RFC3339), request.To.Format(time.RFC3339), request.Limit)
+	return &cfapi.SaturationError{Dataset: request.Dataset, From: request.From, To: request.To, Limit: request.Limit}
 }
 
 func isSaturated(err error, dataset string) bool {
-	if err == nil {
-		return false
-	}
-	message := err.Error()
-	return strings.Contains(message, "GraphQL dataset "+dataset+" window ") && strings.Contains(message, " saturated limit ")
-}
-
-func splitAtBucket(from, to time.Time) (time.Time, bool) {
-	if to.Sub(from) <= durableObjectsBucket {
-		return time.Time{}, false
-	}
-	split := from.Add(to.Sub(from) / 2).Truncate(durableObjectsBucket)
-	if !split.Before(to) {
-		return time.Time{}, false
-	}
-	return split, split.After(from)
+	sat, ok := cfapi.AsSaturation(err)
+	return ok && sat.Dataset == dataset
 }
 
 func (c *datasetCollector) aggregate(rows []map[string]any, from, to time.Time) (float64, bool, error) {
