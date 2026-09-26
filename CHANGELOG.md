@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/rknightion/cf2otel/compare/v0.8.0...v0.8.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **config:** allow environment overrides for dotted collector names ([f59ebbf](https://github.com/rknightion/cf2otel/commit/f59ebbf16fb50b2b496957b455e18988bc7ed243))
+* **config:** allow environment overrides for dotted collector names ([d98311c](https://github.com/rknightion/cf2otel/commit/d98311cca2ffe44d78a898e5aa872ab1ce0e54b7))
+
 ## [0.8.0](https://github.com/rknightion/cf2otel/compare/v0.7.0...v0.8.0) (2026-09-26)
 
 
