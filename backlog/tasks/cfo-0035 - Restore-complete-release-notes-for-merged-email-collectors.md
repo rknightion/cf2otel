@@ -4,7 +4,7 @@ title: Restore complete release notes for merged email collectors
 status: Done
 assignee: []
 created_date: '2026-09-25 14:51'
-updated_date: '2026-09-26 11:42'
+updated_date: '2026-09-26 13:30'
 labels: []
 dependencies: []
 references:
@@ -38,6 +38,8 @@ Loop 6 landed the email feature through a reconciled local branch at main 7a7bbd
 
 <!-- SECTION:NOTES:BEGIN -->
 Loop 7: release notes checker landed at 50e1561 and alias repair at 198d4dc. PR #20 at base 1daf4be and head a4a8cff proposed 0.6.0, listed the Email Routing/Sending feature and all 15 required conventional subjects; just relnotes-check passed. CI 36237411272 had ci-success success; required latest base workflows passed. PR #20 merged as eb5c2c7; Release 36238560403 succeeded and published v0.6.0. The earlier superseded auto-rc run 36237432752 was skipped and not counted.
+
+Loop 7 run-end: implementation attempts 1/4, review-repair 1/3 for the empty-commit alias checker correction, infrastructure retries 1 CodeRabbit connection failure; grant: release-note checker and bounded metadata restore commits. Done because PR #20 had 15/15 required subjects, base workflows passed and v0.6.0 Release run 36238560403 succeeded.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

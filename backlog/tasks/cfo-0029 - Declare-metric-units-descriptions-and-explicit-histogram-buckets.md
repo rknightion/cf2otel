@@ -4,7 +4,7 @@ title: 'Declare metric units, descriptions and explicit histogram buckets'
 status: Done
 assignee: []
 created_date: '2026-09-25 12:07'
-updated_date: '2026-09-26 11:48'
+updated_date: '2026-09-26 13:30'
 labels: []
 dependencies: []
 priority: medium
@@ -46,6 +46,8 @@ Local unpushed candidate defbf92a1fffffe1e451d7b9856bb7c3d245ff8f passed just ch
 Loop 7: refreshed candidate faf46e7 passed real-SDK exporter unit and bucket assertions, just check and just gen-check, complete CodeRabbit review and independent REV-L29-R2 PASS. Landed at ac8958c with exact-SHA gate, privacy scan and CI. v0.6.0 deployed healthy on Camden at release merge eb5c2c7; old-to-new Prometheus family map is in private codex/l29-name-map-loop7.md. AC4 awaits exact m7kni Mimir queries after post-deploy delivery.
 
 Loop 7 AC4 at 2026-09-26T11:47:43Z, m7kni Mimir exact queries with service_name=cf2otel: cf2otel_scrape_duration_seconds_count 40 series; cloudflare_r2_storage_payload_bytes 1; gen_ai_client_inference_usage_input_tokens_total 1; cf2otel_api_requests_total 2; cloudflare_rum_cls_p75_ratio 1. Old-to-new families: gen_ai_client_operation_duration -> gen_ai_client_operation_duration_seconds; cf2otel_api_duration -> cf2otel_api_duration_seconds; cf2otel_scrape_duration -> cf2otel_scrape_duration_seconds; cf2otel_window_gap_total -> cf2otel_window_gap_seconds_total; cf2otel_scrape_last_success_timestamp -> cf2otel_scrape_last_success_timestamp_seconds; cf2otel_checkpoint_age -> cf2otel_checkpoint_age_seconds; cloudflare_http_origin_duration -> cloudflare_http_origin_duration_seconds; cloudflare_rum_lcp/inp/fid/fcp/ttfb_p75 -> corresponding _seconds; cloudflare_access_apps/users -> corresponding _ratio; cloudflare_rum_cls_p75 -> cloudflare_rum_cls_p75_ratio; cf2otel_build_info -> cf2otel_build_info_ratio. Histogram bucket/sum/count families follow the duration rename; curly-brace units and counter _total names stay.
+
+Loop 7 run-end: implementation attempts 1/4 carried, no new implementation attempt; review-repair 2/3 total after the bounded PromQL correction; infrastructure retries 0; grant: frozen metric renames and transitional dashboard expressions. Done because exact-SHA tests, independent REV-L29-R2 PASS, healthy v0.6.0 deploy and five unit-kind Mimir series observations proved AC1-4.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

@@ -4,7 +4,7 @@ title: Extend the API drift canary contract to every built dataset
 status: Done
 assignee: []
 created_date: '2026-09-25 12:07'
-updated_date: '2026-09-26 12:13'
+updated_date: '2026-09-26 14:38'
 labels: []
 dependencies:
   - CFO-0024
@@ -38,6 +38,10 @@ spec/cloudflare/contract.json checks 4 GraphQL datasets and 4 REST paths, so the
 Loop 7: contract and AST coverage test landed at 1daf4be; local live canary matched after the bounded firewall/detailed-log correction, just ci passed, and CI 36237411272 had ci-success success. TOKEN-32 added only Access Audit Logs Read, Access SCIM Logs Read, AI Gateway Read and Account Settings Read to the schema-probe token in one PUT, re-GET confirmed the read-only groups and unchanged resources; no runtime token edit. AC2 remains open until the first scheduled Cloudflare API drift run created after both the token edit and 1daf4be push concludes, with artifact/log token-byte inspection.
 
 Loop 7 AC2: first scheduled Cloudflare API drift run after the read-only schema-token edit and L32 push was run 36238824560, created 2026-09-26T11:26:28Z at exact SHA eb5c2c7 (contains L32). The probe job succeeded and its log said Cloudflare API contract matched. The workflow produced zero artifacts; the downloaded run log and artifact directory were scanned against exact bytes of five locally held credentials, including the schema-probe token, with zero hits. No token bytes entered tracked files.
+
+Loop 7 run-end: implementation attempts 2/4 (lane contract plus root live-canary correction), review-repair 0/3, infrastructure retries 0, token-edit grant 1/1 used for four read-only groups. Done because the first post-edit scheduled drift run 36238824560 at eb5c2c7 succeeded, reported contract matched and its downloaded log had zero credential-byte hits; no artifact was produced.
+
+Run-end accounting correction: one CodeRabbit WebSocket connection failure was retried before a complete zero-finding review; infrastructure retries 1, not 0. Implementation 2/4, review-repair 0/3 and token-edit 1/1 are unchanged.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

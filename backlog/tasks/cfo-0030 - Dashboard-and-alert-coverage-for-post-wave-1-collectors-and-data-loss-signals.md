@@ -1,10 +1,10 @@
 ---
 id: CFO-0030
 title: Dashboard and alert coverage for post-wave-1 collectors and data-loss signals
-status: To Do
+status: Parked
 assignee: []
 created_date: '2026-09-25 12:07'
-updated_date: '2026-09-25 12:07'
+updated_date: '2026-09-26 13:30'
 labels: []
 dependencies:
   - CFO-0029
@@ -31,3 +31,9 @@ The dashboard and the two alert rules (grafana/build_rules.py) cover only wave 1
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Loop 7 run-end park: implementation attempts 0/4, review-repair 0/3, infrastructure retries 0; grant: dashboard/alert lane after L29. L30 admitted 11:23:23Z, worktree and frozen brief prepared, but no spawn control completed by 11:53:34Z; root orchestration dispatch stall, not provider outage. Resume with working child dispatch, recheck main and task dependencies, then use the retained l30 brief; no AC is proven.
+<!-- SECTION:NOTES:END -->

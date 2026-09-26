@@ -6,7 +6,7 @@ title: >-
 status: Parked
 assignee: []
 created_date: '2026-09-26 09:24'
-updated_date: '2026-09-26 12:05'
+updated_date: '2026-09-26 13:30'
 labels:
   - dashboard
   - ai-gateway
@@ -39,4 +39,6 @@ The Infinity-based 'Cloudflare AI Gateway' dashboard (uid cloudflare-ai-gateway)
 
 <!-- SECTION:NOTES:BEGIN -->
 Loop 7 AC2: read-only inspection of the retired dashboard backup found Data boundaries was static provenance text and Gateway metadata exceptions was a row grouping failed requests and DLP, not separate Logs API fields. Fifty current log-detail rows had no boundary or exception keys; docs/signals.md records this distinction and the sampled limit. Landed at c229f18 with just check and CI 36240525924 (ci-success success). AC1 and AC3 remain open: all 50 sample details and three fictional-data requests had null DLP fields, and the SDK does not specify the non-null matched-row JSON shape. Resume collector mapping only with an authoritative matched Logs API schema or a sanitized real matched detail row showing action, direction and policy ID location/cardinality; then independent REV-L36 and dashboard L36D.
+
+Loop 7 run-end park: implementation attempts 0/4, review-repair 0/3, infrastructure retries 0; grant: bounded read-only Gateway probe and six fictional-data requests after Rob enabled Flag DLP. All 50 sampled details and all six exact synthetic log details had null dlp_action/dlp_profiles; five inspected response headers had no cf-aig-dlp, with the first header uninspected. The supplied screenshot proves policy configuration only. AC2 is documented; AC1 requires an authoritative matched Logs API schema or sanitized real matched detail with action, direction, policy ID location/cardinality, then independent REV-L36; AC3 needs L30 and L36 followed by L36D/SYNC-30.
 <!-- SECTION:NOTES:END -->

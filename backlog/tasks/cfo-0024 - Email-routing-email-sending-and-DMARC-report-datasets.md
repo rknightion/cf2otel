@@ -1,11 +1,11 @@
 ---
 id: CFO-0024
 title: 'Email routing, email sending and DMARC report datasets'
-status: In Progress
+status: Parked
 assignee:
   - '@rknightion'
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-26 11:43'
+updated_date: '2026-09-26 14:37'
 labels:
   - 'wave:2'
   - email
@@ -55,4 +55,6 @@ Loop 6: candidate 9bb6ff8 passed independent email review; merged and pushed cbc
 Loop 6 release gate parked: at DEP-ready after P8, release-please PR #20 base 7a7bbdd and head 29000c9 proposed v0.5.2 but its generated CHANGELOG omitted the landed Email Routing and Sending feature a4aeb08 and earlier email fixes reachable since v0.5.1. The PR was not merged. CFO-0035 tracks the release-note repair. Resume only when a regenerated release candidate at a named main SHA lists the feature and newly delivered fixes and all required workflows at that SHA pass; then REL-n, Camden DEP-n and LIVE-24 source-to-Mimir proof remain. AC2 stays proven; AC3/4 are unchecked.
 
 Loop 7: Release v0.6.0 at merge eb5c2c7 contains the Email Routing and Sending Groups collectors. Camden DEP-1 pinned 0.6.0; its full ten-minute health watcher ended healthy at 2026-09-26T11:40:43Z. Running image RepoDigest matched release index sha256:189929bc183cf483dcd49991383fbf7e72a1040dd4872eba669d7c94f58beed5; all 36 preexisting checkpoint keys were monotonic, email.routing and email.sending appeared, config hash was unchanged, and 69 startup log lines had no registration, field-limit or selection errors. AC4 awaits exact source-to-Mimir proof or the frozen absent-input adjudication.
+
+Loop 7 run-end park: implementation attempts 3/4 and review-repair 5/7 carried, no new implementation or review attempt; infrastructure retries 0; grant: v0.6.0 deploy and one three-hour absent-input extension. AC3 passed after healthy Camden DEP-1. First complete [11:30Z,11:40Z) source window had zero routing and zero sending rows/count on 23 enabled owned zones; prior seven days had a routing row but no sending row. The extended checkpoint target is 2026-09-26T14:30:00Z with root watcher deadline 15:04Z; terminal receipt codex/live-loop7/checkpoint-ready-3h.json was absent at 14:37Z. AC4 remains unchecked; on a ready receipt, query both Groups datasets over [11:30Z,14:30Z), compare any nonzero source exactly with Mimir after delivery, and adjudicate zero input under ship.md. If receipt times out, preserve as pending and repeat from a fresh complete window. No source-to-Mimir equality was claimed.
 <!-- SECTION:NOTES:END -->

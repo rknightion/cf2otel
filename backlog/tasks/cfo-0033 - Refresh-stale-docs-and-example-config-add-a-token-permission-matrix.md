@@ -4,7 +4,7 @@ title: 'Refresh stale docs and example config, add a token permission matrix'
 status: Done
 assignee: []
 created_date: '2026-09-25 12:07'
-updated_date: '2026-09-26 11:37'
+updated_date: '2026-09-26 13:30'
 labels: []
 dependencies:
   - CFO-0024
@@ -36,6 +36,8 @@ README.md, docs/index.md, docs/comparison.md and docs/getting-started.md still d
 
 <!-- SECTION:NOTES:BEGIN -->
 Loop 7: implementation 8f728eb landed at e917d0c3e55b9b00ed0d3a62169eb619d71bd549. Exact-SHA just check and CI run 36239158717 (ci-success success) passed. No wave-1/planned wording remains in the four overview docs; TestPublishedExamplesCoverConfigSurface compares default collector keys and Config YAML sections; docs/security lists all 41 configured collector keys, with unverified groups marked.
+
+Loop 7 run-end: implementation attempts 1/4, review-repair 0/3, infrastructure retries 0; grant: documentation, example config, chart values and one config-surface test. Done at e917d0c with exact-SHA just check, CodeRabbit complete and CI success.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

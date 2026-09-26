@@ -4,7 +4,7 @@ title: Deploy to camden (Docker) and verify end to end
 status: Parked
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-25 14:54'
+updated_date: '2026-09-26 13:30'
 labels:
   - 'wave:1'
   - deploy
@@ -53,4 +53,6 @@ Loop 4 P6 additional source censuses: Access SCIM updates REST returned zero row
 Loop 5 closeout P6: Access SCIM updates source census [2026-09-24T08:18:58Z,2026-09-25T10:18:05Z) returned zero rows in one page. AC2 remains unchecked; resume on a natural SCIM update and compare its exact Loki signal before checking all wave-1 signals. Implementation attempts 0/4 this loop, review-repair 0/3, infrastructure retries 0; grant: read-only opportunistic census.
 
 Loop 6 opportunistic P6 closeout: Access SCIM updates REST census [2026-09-24T08:18:58Z,2026-09-25T14:52:48Z) returned zero source rows in one page. AC2 remains unchecked; resume on a natural SCIM update and prove its exact Loki signal before checking all wave-1 signals.
+
+Loop 7 P6 read-only census: implementation/review attempts unchanged, infrastructure retries 0; grant: one natural SCIM source check. Source interval 2026-09-24T08:18:58Z through 2026-09-26T11:41:34Z yielded zero rows, so AC2 remains absent input and unproved. Resume on a natural source row, then compare exact ID in Loki; no synthetic audit mutation.
 <!-- SECTION:NOTES:END -->
