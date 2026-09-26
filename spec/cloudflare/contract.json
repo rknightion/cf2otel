@@ -175,6 +175,16 @@
     },
     {
       "scope": "account",
+      "dataset": "aiGatewayRequestsAdaptiveGroups",
+      "required_fields": [
+        "count",
+        "dimensions_gateway"
+      ],
+      "minimum_max_duration_seconds": 300,
+      "minimum_not_older_than_seconds": 2400
+    },
+    {
+      "scope": "account",
       "dataset": "kvOperationsAdaptiveGroups",
       "required_fields": [
         "sum_requests",

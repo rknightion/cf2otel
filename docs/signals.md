@@ -79,6 +79,7 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cloudflare.ai_gateway.cache_hits` | `1` | AI Gateway cache hits. |
 | `cloudflare.ai_gateway.cost` | `1` | AI Gateway request cost. |
 | `cloudflare.ai_gateway.dlp.requests` | `{request}` | AI Gateway request count with a DLP outcome (flagged, blocked or other), by gateway, action and direction; one count per distinct request/response direction, or `other` when the action carries no findings. |
+| `cloudflare.ai_gateway.log_coverage.gap` | `{request}` | Gauge: `aiGatewayRequestsAdaptiveGroups` request count minus REST log count for one closed five-minute window, by `cloudflare.ai_gateway.gateway.name`. A completeness check on the REST log source, not a request rate. Off by default. |
 | `gen_ai.client.operation.duration` | `s` | GenAI operation duration. |
 | `gen_ai.client.inference.usage.input_tokens` | `{token}` | Input token usage. |
 | `gen_ai.client.inference.usage.output_tokens` | `{token}` | Output token usage. |
@@ -109,6 +110,8 @@ Platform gauges select the latest complete five-minute source bucket and emit at
 Prometheus compatibility naming adds `_seconds` for `s` when the base name lacks it and `_ratio` for dimensionless gauges. Names already ending in `_bytes` retain that suffix, and annotated `{token}` and `{request}` units add no suffix. The generated Grafana queries accept both old and new series names during rollout and revert.
 
 AI Gateway metrics combine Cloudflare request outcome measurements with GenAI duration and usage conventions.
+
+`cloudflare.ai_gateway.log_coverage.gap` comes from the separate `aigateway.coverage` collector, which is off by default. REST gateway logs stay the primary AI Gateway source; requests sent with log collection off, or dropped by gateway log limits or retention, never appear there, while `aiGatewayRequestsAdaptiveGroups` still counts them. Each commit compares one closed, aligned five-minute window ending at least 10 minutes before now, held back past the measured 139-365 s Groups ingestion lag, and reports one value per configured gateway: positive means Groups counted requests the REST log lacks, zero means the sources agree, and negative means Groups is behind REST. The Groups selection is `count` and `dimensions.gateway`, checked against the dataset's `availableFields`; a window older than the dataset's `notOlderThan` is skipped as a retention gap. The REST count pages the gateway log list and counts distinct log IDs. A failed commit retries the same window, and the gauge value for a window never accumulates. The collector polls every five minutes and commits five-minute windows whatever `interval` and `max_window` say, so each steady-state poll commits and exports one window; a poll that lands before the next window closes does nothing. During catch-up after an outage or at first start, several windows can commit before one metric export, so the exported gauge carries the newest committed window. An explicit collection range refuses any window that ends inside the 10-minute holdback. Enable it in YAML with `enabled`, `interval`, `initial_lookback` and `max_window` under `collectors.aigateway.coverage`; configuration validation still requires a positive `interval` and `max_window`. A dotted collector name cannot be set through a `CF2OTEL_` environment variable.
 
 The retired AI Gateway dashboard's **Data boundaries** panel was static provenance guidance; **Gateway metadata exceptions** was a row grouping failed-request and DLP tables, not a separate API field. The AI Gateway Logs API inventory sampled on 2026-09-26 found no data-boundary or exception fields in 50 log-detail rows. Of that sample, 24 rows had a non-null `dlp_action` (`FLAG`), each with one `dlp_profiles` finding checking either the request (23) or the response (1); `dlp_action` maps to `flagged` (`FLAG`), `blocked` (`BLOCK`) or `other` (any other non-empty value), and a request with an action but no findings still counts once on `cloudflare.ai_gateway.dlp.requests` with direction `other`.
 
@@ -175,6 +178,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cloudflare.ai_gateway.cost` |
 | Metric | `cloudflare.ai_gateway.dlp.requests` |
 | Metric | `cloudflare.ai_gateway.errors` |
+| Metric | `cloudflare.ai_gateway.log_coverage.gap` |
 | Metric | `cloudflare.ai_gateway.requests` |
 | Metric | `cloudflare.audit.events` |
 | Metric | `cloudflare.dns.queries` |

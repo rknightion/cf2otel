@@ -21,4 +21,9 @@ func Register(deps collector.Deps) {
 		}
 		deps.Registry.RegisterWindow(NewLogs(deps.Config, deps.API), c.Interval, c.InitialLookback, window)
 	}
+	// Off unless configured. The cadence and window are pinned to five minutes
+	// so each tick commits and exports one closed window.
+	if c := deps.Config.Collector("aigateway.coverage"); c.Enabled {
+		deps.Registry.RegisterWindow(NewCoverage(deps.Config, deps.API), coverageWindow, c.InitialLookback, coverageWindow)
+	}
 }

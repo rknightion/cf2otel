@@ -10,6 +10,7 @@ const (
 	MetricAIGatewayCacheHits             = "cloudflare.ai_gateway.cache_hits"
 	MetricAIGatewayCost                  = "cloudflare.ai_gateway.cost"
 	MetricAIGatewayDLPRequests           = "cloudflare.ai_gateway.dlp.requests"
+	MetricAIGatewayLogCoverageGap        = "cloudflare.ai_gateway.log_coverage.gap"
 	MetricGenAIDuration                  = "gen_ai.client.operation.duration"
 	MetricGenAIInputTokens               = "gen_ai.client.inference.usage.input_tokens"
 	MetricGenAIOutputTokens              = "gen_ai.client.inference.usage.output_tokens"

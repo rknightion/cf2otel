@@ -67,6 +67,7 @@ var metricSpecs = map[string]MetricSpec{
 	MetricAIGatewayCacheHits:             {Unit: "1", Description: "AI Gateway cache hits."},
 	MetricAIGatewayCost:                  {Unit: "1", Description: "AI Gateway request cost."},
 	MetricAIGatewayDLPRequests:           {Unit: "{request}", Description: "AI Gateway request count with a DLP outcome, by gateway, action and direction."},
+	MetricAIGatewayLogCoverageGap:        {Unit: "{request}", Description: "GraphQL Groups request count minus REST log count for one closed five-minute window, by gateway; a completeness check, not a request rate."},
 	MetricGenAIDuration:                  {Unit: "s", Description: "GenAI operation duration.", Boundaries: genAIOperationDurationBuckets},
 	MetricGenAIInputTokens:               {Unit: "{token}", Description: "Input token usage."},
 	MetricGenAIOutputTokens:              {Unit: "{token}", Description: "Output token usage."},
