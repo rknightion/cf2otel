@@ -4,7 +4,7 @@ title: Deploy to camden (Docker) and verify end to end
 status: Parked
 assignee: []
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-26 13:30'
+updated_date: '2026-09-26 16:06'
 labels:
   - 'wave:1'
   - deploy
@@ -55,4 +55,6 @@ Loop 5 closeout P6: Access SCIM updates source census [2026-09-24T08:18:58Z,2026
 Loop 6 opportunistic P6 closeout: Access SCIM updates REST census [2026-09-24T08:18:58Z,2026-09-25T14:52:48Z) returned zero source rows in one page. AC2 remains unchecked; resume on a natural SCIM update and prove its exact Loki signal before checking all wave-1 signals.
 
 Loop 7 P6 read-only census: implementation/review attempts unchanged, infrastructure retries 0; grant: one natural SCIM source check. Source interval 2026-09-24T08:18:58Z through 2026-09-26T11:41:34Z yielded zero rows, so AC2 remains absent input and unproved. Resume on a natural source row, then compare exact ID in Loki; no synthetic audit mutation.
+
+Loop 8 preparation 2026-09-26, Rob-authorised synthetic SCIM trigger: at 15:42:48Z Entra provision-on-demand exported one USER update to Cloudflare Access (a temporary canary value in a previously empty department attribute). The Access SCIM updates REST log for [15:30Z,16:30Z) returned exactly one USER row, status SUCCESS. Entra skipped the revert push because it does not send a cleared attribute, so Cloudflare's copy keeps the canary department; this is harmless and recorded. Next: compare that exact row in Loki ({service_name="cf2otel"} with the SCIM event_name) and, if it matches, check AC2 (every other wave-1 signal was proven in earlier loops).
 <!-- SECTION:NOTES:END -->

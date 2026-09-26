@@ -3,10 +3,10 @@ id: CFO-0036
 title: >-
   Cover the retired Cloudflare AI Gateway dashboard: DLP, data boundaries and
   gateway panels
-status: Parked
+status: To Do
 assignee: []
 created_date: '2026-09-26 09:24'
-updated_date: '2026-09-26 13:30'
+updated_date: '2026-09-26 16:09'
 labels:
   - dashboard
   - ai-gateway
@@ -41,4 +41,8 @@ The Infinity-based 'Cloudflare AI Gateway' dashboard (uid cloudflare-ai-gateway)
 Loop 7 AC2: read-only inspection of the retired dashboard backup found Data boundaries was static provenance text and Gateway metadata exceptions was a row grouping failed requests and DLP, not separate Logs API fields. Fifty current log-detail rows had no boundary or exception keys; docs/signals.md records this distinction and the sampled limit. Landed at c229f18 with just check and CI 36240525924 (ci-success success). AC1 and AC3 remain open: all 50 sample details and three fictional-data requests had null DLP fields, and the SDK does not specify the non-null matched-row JSON shape. Resume collector mapping only with an authoritative matched Logs API schema or a sanitized real matched detail row showing action, direction and policy ID location/cardinality; then independent REV-L36 and dashboard L36D.
 
 Loop 7 run-end park: implementation attempts 0/4, review-repair 0/3, infrastructure retries 0; grant: bounded read-only Gateway probe and six fictional-data requests after Rob enabled Flag DLP. All 50 sampled details and all six exact synthetic log details had null dlp_action/dlp_profiles; five inspected response headers had no cf-aig-dlp, with the first header uninspected. The supplied screenshot proves policy configuration only. AC2 is documented; AC1 requires an authoritative matched Logs API schema or sanitized real matched detail with action, direction, policy ID location/cardinality, then independent REV-L36; AC3 needs L30 and L36 followed by L36D/SYNC-30.
+
+Loop 8 preparation 2026-09-26: cause of loop 7's null DLP fields found. Every entry in the gateway policy's selected predefined profiles (Financial Information; Social Security, Insurance, Tax and Identifier Numbers) was disabled, so the Flag policy could never match; it was a configuration gap, not absent input. Custom DLP profile creation returned 403 code 3314 even with the account key. Rob enabled the Financial Information entries at about 15:58Z. At 16:04Z three fictional-data requests (published test card numbers only) were sent: one matched and two did not. Observed matched log-detail shape: dlp_action is the string FLAG (docs: FLAG or BLOCK); dlp_profiles is an array of findings, each {profile: {profile_id: uuid string, entry_ids: [uuid strings]}, policy_ids: [policy name strings, e.g. the default policy name], check: REQUEST or RESPONSE}. The cf-aig-dlp response header mirrors it as {findings: [...], action}. Non-matching rows keep dlp_action and dlp_profiles null. The one match reported check RESPONSE for a card number placed in the prompt. Multiple findings, and several policy ids per finding, are possible. Private sanitized-in-tracker receipt: codex/aigw-36/dlp-match-receipt-loop8.json. AC1 is unblocked: implement against this shape; attempts 0/4 and review-repair 0/3 are unchanged.
+
+Loop 8 preparation, 16:09Z: the gateway logs LIST response (the collector's page source) already carries dlp_action, dlp_profiles and guardrails, alongside the detail GET. Of the newest 50 real list rows (16:03-16:08Z), 24 were flagged: all dlp_action FLAG, each with exactly one finding carrying keys check/policy_ids/profile, profile keys entry_ids/profile_id, one policy id, and check REQUEST (23) or RESPONSE (1). Natural traffic will therefore supply live AC1 proof after deploy.
 <!-- SECTION:NOTES:END -->
