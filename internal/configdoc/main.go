@@ -19,7 +19,7 @@ func main() {
 	fmt.Println("| --- | --- |")
 	writeFields(reflect.TypeOf(config.Config{}), nil)
 	fmt.Println()
-	fmt.Println("The `collectors` map uses collector names such as `access.logins`; set its per-collector settings in YAML. The `otlp.headers` map contains secret values, so set each header through an environment variable, for example `CF2OTEL_OTLP__HEADERS__AUTHORIZATION`.")
+	fmt.Println("For a collector setting, use `CF2OTEL_COLLECTORS__<NAME>__<SETTING>`. Form `<NAME>` by uppercasing the collector name and replacing dots with underscores, while retaining existing underscores: `aigateway.coverage` becomes `AIGATEWAY_COVERAGE` and `r2.catalog_data` becomes `R2_CATALOG_DATA`. `<SETTING>` is `ENABLED`, `INTERVAL`, `INITIAL_LOOKBACK` or `MAX_WINDOW`. For example, `CF2OTEL_COLLECTORS__AIGATEWAY_COVERAGE__ENABLED=true` overrides YAML. The `otlp.headers` map contains secret values, so set each header through an environment variable, for example `CF2OTEL_OTLP__HEADERS__AUTHORIZATION`.")
 	fmt.Println()
 	fmt.Println("Required secret variables are `CF2OTEL_CLOUDFLARE__API_TOKEN` and `CF2OTEL_OTLP__GRAFANA_CLOUD__TOKEN`. The Grafana Cloud instance ID is `CF2OTEL_OTLP__GRAFANA_CLOUD__INSTANCE_ID`.")
 }
