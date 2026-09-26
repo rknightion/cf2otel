@@ -66,7 +66,7 @@ var metricSpecs = map[string]MetricSpec{
 	MetricAIGatewayErrors:                {Unit: "1", Description: "AI Gateway error count."},
 	MetricAIGatewayCacheHits:             {Unit: "1", Description: "AI Gateway cache hits."},
 	MetricAIGatewayCost:                  {Unit: "1", Description: "AI Gateway request cost."},
-	MetricAIGatewayDLPRequests:           {Unit: "{request}", Description: "AI Gateway DLP-flagged or -blocked request count by gateway, action and direction."},
+	MetricAIGatewayDLPRequests:           {Unit: "{request}", Description: "AI Gateway request count with a DLP outcome, by gateway, action and direction."},
 	MetricGenAIDuration:                  {Unit: "s", Description: "GenAI operation duration.", Boundaries: genAIOperationDurationBuckets},
 	MetricGenAIInputTokens:               {Unit: "{token}", Description: "Input token usage."},
 	MetricGenAIOutputTokens:              {Unit: "{token}", Description: "Output token usage."},

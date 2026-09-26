@@ -78,7 +78,7 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cloudflare.ai_gateway.errors` | `1` | AI Gateway error count. |
 | `cloudflare.ai_gateway.cache_hits` | `1` | AI Gateway cache hits. |
 | `cloudflare.ai_gateway.cost` | `1` | AI Gateway request cost. |
-| `cloudflare.ai_gateway.dlp.requests` | `{request}` | AI Gateway DLP-flagged or -blocked request count by gateway, action and direction; one count per distinct request/response direction, or `other` when the action carries no findings. |
+| `cloudflare.ai_gateway.dlp.requests` | `{request}` | AI Gateway request count with a DLP outcome (flagged, blocked or other), by gateway, action and direction; one count per distinct request/response direction, or `other` when the action carries no findings. |
 | `gen_ai.client.operation.duration` | `s` | GenAI operation duration. |
 | `gen_ai.client.inference.usage.input_tokens` | `{token}` | Input token usage. |
 | `gen_ai.client.inference.usage.output_tokens` | `{token}` | Output token usage. |
