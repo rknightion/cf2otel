@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -21,6 +22,46 @@ type FieldLimitError struct {
 type RetentionGapError struct {
 	Dataset string
 	Floor   time.Time
+}
+
+// SaturationError reports a GraphQL query window whose rows reached the
+// requested limit, so the result may be truncated and the window must be split.
+type SaturationError struct {
+	Dataset  string
+	From, To time.Time
+	Limit    int
+}
+
+func (e *SaturationError) Error() string {
+	return fmt.Sprintf("GraphQL dataset %s window %s..%s saturated limit %d", e.Dataset, e.From.Format(time.RFC3339), e.To.Format(time.RFC3339), e.Limit)
+}
+
+// saturationMessage matches the SaturationError text when it reaches a caller
+// as an untyped error. cfapi owns the message, so it alone parses it.
+var saturationMessage = regexp.MustCompile(`(?i)graphql dataset (\w+) window (?:(.*?) )?saturated limit (\d*)`)
+
+// AsSaturation returns the saturation error in err's chain. It matches a
+// *SaturationError with errors.As first and falls back to the canonical
+// message for errors that carry the text without the type.
+func AsSaturation(err error) (*SaturationError, bool) {
+	if err == nil {
+		return nil, false
+	}
+	var sat *SaturationError
+	if errors.As(err, &sat) {
+		return sat, true
+	}
+	match := saturationMessage.FindStringSubmatch(err.Error())
+	if match == nil {
+		return nil, false
+	}
+	sat = &SaturationError{Dataset: match[1]}
+	if from, to, ok := strings.Cut(match[2], ".."); ok {
+		sat.From, _ = time.Parse(time.RFC3339, from)
+		sat.To, _ = time.Parse(time.RFC3339, to)
+	}
+	sat.Limit, _ = strconv.Atoi(match[3])
+	return sat, true
 }
 
 func (e *RetentionGapError) Error() string {
@@ -353,7 +394,7 @@ func (c *HTTPClient) queryWithSettings(ctx context.Context, r GraphQLRequest, ou
 			}
 		}
 		if len(merged) >= limit {
-			return fmt.Errorf("GraphQL dataset %s window %s..%s saturated limit %d", r.Dataset, start.Format(time.RFC3339), end.Format(time.RFC3339), limit)
+			return &SaturationError{Dataset: r.Dataset, From: start, To: end, Limit: limit}
 		}
 		rows = append(rows, merged...)
 		start = end

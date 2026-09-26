@@ -188,58 +188,31 @@ func hasAvailableField(available []string, wanted string) bool {
 }
 
 func (c *groupsCollector) queryRows(ctx context.Context, request cfapi.GraphQLRequest) ([]map[string]any, error) {
-	var rows []map[string]any
-	err := c.api.Query(ctx, request, &rows)
-	saturated := isSaturationError(err, request.Dataset)
-	if err == nil && len(rows) >= request.Limit {
-		saturated = true
-		err = fmt.Errorf("result reached requested limit %d", request.Limit)
+	rows, err := collector.Bisect(request.From, request.To, kvBucketDuration, kvMinimumQueryWindow, func(from, to time.Time) ([]map[string]any, bool, error) {
+		leaf := request
+		leaf.From, leaf.To = from, to
+		var rows []map[string]any
+		err := c.api.Query(ctx, leaf, &rows)
+		saturated := isSaturationError(err, leaf.Dataset)
+		if err == nil && len(rows) >= leaf.Limit {
+			saturated = true
+			err = fmt.Errorf("result reached requested limit %d", leaf.Limit)
+		}
+		return rows, saturated, err
+	})
+	var window *collector.SaturatedWindowError
+	if errors.As(err, &window) {
+		if errors.Is(window.Reason, collector.ErrWindowIrreducible) {
+			return nil, fmt.Errorf("KV Groups query still saturates an irreducible five-minute window: %w", window.Cause)
+		}
+		return nil, fmt.Errorf("cannot split saturated KV Groups window %s..%s: %w", window.From.Format(time.RFC3339), window.To.Format(time.RFC3339), window.Cause)
 	}
-	if err != nil && !saturated {
-		return nil, err
-	}
-	if !saturated {
-		return rows, nil
-	}
-	if request.To.Sub(request.From) <= kvMinimumQueryWindow {
-		return nil, fmt.Errorf("KV Groups query still saturates an irreducible five-minute window: %w", err)
-	}
-	mid, ok := bucketSplit(request.From, request.To)
-	if !ok {
-		return nil, fmt.Errorf("cannot split saturated KV Groups window %s..%s: %w", request.From.Format(time.RFC3339), request.To.Format(time.RFC3339), err)
-	}
-	leftRequest := request
-	leftRequest.To = mid
-	left, err := c.queryRows(ctx, leftRequest)
-	if err != nil {
-		return nil, err
-	}
-	rightRequest := request
-	rightRequest.From = mid
-	right, err := c.queryRows(ctx, rightRequest)
-	if err != nil {
-		return nil, err
-	}
-	return append(left, right...), nil
+	return rows, err
 }
 
 func isSaturationError(err error, dataset string) bool {
-	if err == nil {
-		return false
-	}
-	message := err.Error()
-	return strings.Contains(message, "GraphQL dataset "+dataset+" window ") && strings.Contains(message, " saturated limit ")
-}
-
-func bucketSplit(from, to time.Time) (time.Time, bool) {
-	mid := from.Add(to.Sub(from) / 2).Truncate(5 * time.Minute)
-	if !mid.After(from) {
-		mid = from.Truncate(5 * time.Minute).Add(5 * time.Minute)
-	}
-	if !mid.Before(to) {
-		mid = to.Truncate(5 * time.Minute).Add(-5 * time.Minute)
-	}
-	return mid, from.Before(mid) && mid.Before(to)
+	sat, ok := cfapi.AsSaturation(err)
+	return ok && sat.Dataset == dataset
 }
 
 func (c *groupsCollector) aggregate(rows []map[string]any, from, to time.Time) ([]metricValue, error) {

@@ -258,60 +258,49 @@ func r2FieldAvailable(available []string, wanted string) bool {
 }
 
 func (c *datasetCollector) queryRows(ctx context.Context, from, to time.Time, plan r2QueryPlan) ([]map[string]any, error) {
-	request := cfapi.GraphQLRequest{
-		Scope:        cfapi.AccountScope,
-		ScopeID:      c.cfg.Cloudflare.AccountID,
-		Dataset:      c.spec.dataset,
-		WantedFields: append([]string(nil), plan.fields...),
-		From:         from,
-		To:           to,
-		Limit:        plan.limit,
-	}
-	var rows []map[string]any
-	err := c.api.Query(ctx, request, &rows)
-	saturated := isR2SaturatedError(err, c.spec.dataset)
-	if err == nil && len(rows) >= plan.limit {
-		saturated = true
-	}
-	if !saturated {
-		if err != nil {
-			return nil, err
+	rows, err := collector.Bisect(from, to, r2BucketInterval, r2BucketInterval, func(from, to time.Time) ([]map[string]any, bool, error) {
+		request := cfapi.GraphQLRequest{
+			Scope:        cfapi.AccountScope,
+			ScopeID:      c.cfg.Cloudflare.AccountID,
+			Dataset:      c.spec.dataset,
+			WantedFields: append([]string(nil), plan.fields...),
+			From:         from,
+			To:           to,
+			Limit:        plan.limit,
+		}
+		var rows []map[string]any
+		err := c.api.Query(ctx, request, &rows)
+		saturated := isR2SaturatedError(err, c.spec.dataset)
+		if err == nil && len(rows) >= plan.limit {
+			saturated = true
+		}
+		if saturated || err != nil {
+			return nil, saturated, err
 		}
 		for _, row := range rows {
 			at, parseErr := r2RowTime(row)
 			if parseErr != nil {
-				return nil, parseErr
+				return nil, false, parseErr
 			}
 			if at.Before(from) || !at.Before(to) {
-				return nil, fmt.Errorf("R2 Groups dataset %s returned a bucket outside its half-open query window", c.spec.dataset)
+				return nil, false, fmt.Errorf("R2 Groups dataset %s returned a bucket outside its half-open query window", c.spec.dataset)
 			}
 		}
-		return rows, nil
-	}
-	if to.Sub(from) <= r2BucketInterval {
-		return nil, fmt.Errorf("R2 Groups dataset %s remains saturated at the irreducible five-minute bucket", c.spec.dataset)
-	}
-	mid := from.Add(to.Sub(from) / 2).UTC().Truncate(r2BucketInterval)
-	if !mid.After(from) || !mid.Before(to) {
+		return rows, false, nil
+	})
+	var window *collector.SaturatedWindowError
+	if errors.As(err, &window) {
+		if errors.Is(window.Reason, collector.ErrWindowIrreducible) {
+			return nil, fmt.Errorf("R2 Groups dataset %s remains saturated at the irreducible five-minute bucket", c.spec.dataset)
+		}
 		return nil, fmt.Errorf("R2 Groups dataset %s cannot bisect a saturated interval on five-minute bucket boundaries", c.spec.dataset)
 	}
-	left, err := c.queryRows(ctx, from, mid, plan)
-	if err != nil {
-		return nil, err
-	}
-	right, err := c.queryRows(ctx, mid, to, plan)
-	if err != nil {
-		return nil, err
-	}
-	return append(left, right...), nil
+	return rows, err
 }
 
 func isR2SaturatedError(err error, dataset string) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "graphql dataset "+strings.ToLower(dataset)+" window ") && strings.Contains(message, " saturated limit ")
+	sat, ok := cfapi.AsSaturation(err)
+	return ok && strings.EqualFold(sat.Dataset, dataset)
 }
 
 func (c *datasetCollector) aggregateRows(rows []map[string]any, from, to time.Time, plan r2QueryPlan) (map[r2SeriesKey]*r2MetricPoint, error) {
