@@ -1,11 +1,11 @@
 ---
 id: CFO-0024
 title: 'Email routing, email sending and DMARC report datasets'
-status: Parked
+status: In Progress
 assignee:
   - '@rknightion'
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-25 14:52'
+updated_date: '2026-09-26 11:43'
 labels:
   - 'wave:2'
   - email
@@ -24,7 +24,7 @@ Zone datasets emailRoutingAdaptive, emailSendingAdaptive, dmarcReportsAdaptive.
 <!-- AC:BEGIN -->
 - [x] #1 Check which zones have data before building
 - [x] #2 Collectors for the Groups-backed email datasets E24-A confirmed emit only frozen semconv names and bounded attributes, with tests and docs rows
-- [ ] #3 A release containing them is deployed to camden and healthy
+- [x] #3 A release containing them is deployed to camden and healthy
 - [ ] #4 Each built email dataset is proven live under the same rule as CFO-0023 AC4
 <!-- AC:END -->
 
@@ -53,4 +53,6 @@ Loop 5 owner closeout: E24-B routing and sending Groups candidate 54cb82708afa0a
 Loop 6: candidate 9bb6ff8 passed independent email review; merged and pushed cbc3d0de6a68daf5d645f5613ceb4cb0cde77bf5. just check and just ci passed at exact SHA; nine workflow runs concluded success. Added-line privacy scan found zero hits across 23 zones. AC3 and AC4 still require a release, Camden deployment and source-to-Mimir comparison.
 
 Loop 6 release gate parked: at DEP-ready after P8, release-please PR #20 base 7a7bbdd and head 29000c9 proposed v0.5.2 but its generated CHANGELOG omitted the landed Email Routing and Sending feature a4aeb08 and earlier email fixes reachable since v0.5.1. The PR was not merged. CFO-0035 tracks the release-note repair. Resume only when a regenerated release candidate at a named main SHA lists the feature and newly delivered fixes and all required workflows at that SHA pass; then REL-n, Camden DEP-n and LIVE-24 source-to-Mimir proof remain. AC2 stays proven; AC3/4 are unchecked.
+
+Loop 7: Release v0.6.0 at merge eb5c2c7 contains the Email Routing and Sending Groups collectors. Camden DEP-1 pinned 0.6.0; its full ten-minute health watcher ended healthy at 2026-09-26T11:40:43Z. Running image RepoDigest matched release index sha256:189929bc183cf483dcd49991383fbf7e72a1040dd4872eba669d7c94f58beed5; all 36 preexisting checkpoint keys were monotonic, email.routing and email.sending appeared, config hash was unchanged, and 69 startup log lines had no registration, field-limit or selection errors. AC4 awaits exact source-to-Mimir proof or the frozen absent-input adjudication.
 <!-- SECTION:NOTES:END -->
