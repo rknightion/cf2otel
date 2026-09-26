@@ -109,6 +109,8 @@ Prometheus compatibility naming adds `_seconds` for `s` when the base name lacks
 
 AI Gateway metrics combine Cloudflare request outcome measurements with GenAI duration and usage conventions.
 
+The AI Gateway Logs API inventory sampled on 2026-09-26 contained no data-boundary or exception fields in 50 log-detail rows. Those dashboard fields cannot currently be mapped to cf2otel signals from the exposed log data. The same sample had only null `dlp_action` and `dlp_profiles` values, so the matched-row shape needed to extract DLP direction and policy ID remains unverified.
+
 ## Attributes
 
 | Group | Keys |
