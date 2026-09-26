@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-09-25 03:45'
+updated_date: '2026-09-25 14:50'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -157,6 +157,14 @@ superset of it.
 - Workers observability destinations: two destination objects had identical stable configuration before cutover, after cutover and after rollback. Their `configuration.jobStatus.last_complete` values advanced independently during the readbacks. Comparing the whole destination objects as immutable configuration caused a false rollback; compare the destination configuration while excluding only this operational timestamp. The native AI Gateway export remains enabled after rollback.
 - Audit v2 forward proof: the second complete post-holdback UTC hour had 232 source IDs and 232 matching Loki rows and IDs, with zero missing, extra or duplicate IDs. The prior hour was 248/248.
 
+### Loop 6 AI Gateway cutover (2026-09-25)
+
+The running v0.5.1 collector passed a complete 60-minute source-ID window: six AI Gateway log IDs, six Loki request rows and six direct Tempo spans, one of each per ID and no extras. A fresh Gateway GET had one native `otel` entry and two Workers observability destinations. The no-op PUT returned HTTP 200; re-GET changed only `modified_at`. The cutover PUT returned HTTP 200; re-GET changed only `otel` to `[]` and `modified_at`. Both Workers destinations kept their stable configuration.
+
+The accepted PUT body retained these 23 settable fields: `authentication`, `byok_only`, `cache_invalidate_on_update`, `cache_ttl`, `collect_logs`, `dlp`, `is_default`, `log_classification`, `log_management`, `log_management_strategy`, `logpush`, `logpush_public_key`, `otel`, `rate_limiting_interval`, `rate_limiting_limit`, `rate_limiting_technique`, `retry_backoff`, `retry_delay`, `retry_max_attempts`, `spend_limits`, `store_id`, `workers_ai_billing_mode`, `zdr`. The three null fields (`logpush_public_key`, `rate_limiting_interval`, `rate_limiting_limit`) stayed present. Compare Workers destinations by dropping only the whole `configuration.jobStatus` subtree; its completion timestamp changes independently of configuration.
+
+In the settled post-cutover window [13:59:45Z,14:29:45Z), three source IDs each had one Loki row and one direct cf2otel Tempo span, with no extras. Native AI Gateway Tempo spans were zero; the preceding control window had seven source IDs and six native spans. No rollback PUT was sent. The first read-only watch query used a Tempo limit above the endpoint's 1000-result cap and failed HTTP 400; the corrected bounded query returned six control spans and the watcher passed at 14:48:46Z.
+
 ## 9. Loop 5 platform Groups selections (2026-09-25)
 
 The built platform collectors use account-scoped GraphQL Groups datasets. Every query selects
@@ -197,4 +205,9 @@ a maximum per queue; no Queue identifier reaches a metric attribute or log. The 
 window that saturates at one complete five-minute bucket rather than split that aggregate.
 
 Zone-scoped email presence was rechecked over 30 days on 2026-09-25: routing and sending Groups
-variants had rows; the DMARC dataset had none. The email collectors remain a separate pending build.
+variants had rows; the DMARC dataset had none. Two collectors are implemented locally for the Groups-backed routing and sending datasets; their release and source-to-Mimir proof remain pending. They select only `count` and `dimensions.datetimeFiveMinutes`, sum complete five-minute buckets across account-owned zones, and emit no zone metric attribute. A disabled zone is skipped. No DMARC collector is built.
+
+| Zone dataset | Selected fields | E24-A source finding |
+| --- | --- | --- |
+| `emailRoutingAdaptiveGroups` | `count`, `dimensions.datetimeFiveMinutes` | Enabled Groups variant had rows on two zones in the 30-day census. |
+| `emailSendingAdaptiveGroups` | `count`, `dimensions.datetimeFiveMinutes` | Enabled Groups variant had rows on two zones in the 30-day census. |

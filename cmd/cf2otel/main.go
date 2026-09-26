@@ -5,15 +5,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
+	otellog "go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
@@ -66,6 +70,9 @@ func run(args []string) error {
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
+	if err := validateDatasets(opts.Datasets); err != nil {
+		return err
+	}
 	if opts.Validate {
 		fmt.Println("config valid")
 		return nil
@@ -82,8 +89,10 @@ func run(args []string) error {
 	defer stop()
 	var providers *telemetry.Providers
 	var emitter telemetry.Emitter
+	var dryEmitter *dryRunEmitter
 	if opts.DryRun {
-		emitter = telemetry.NewNoopEmitter()
+		dryEmitter = &dryRunEmitter{writer: os.Stdout, counts: make(map[string]dryRunCounts)}
+		emitter = dryEmitter
 	} else {
 		providers, err = telemetry.NewProviders(ctx, telemetry.ProviderOptions{Endpoint: cfg.OTLP.Endpoint, Protocol: cfg.OTLP.Protocol, InstanceID: cfg.OTLP.GrafanaCloud.InstanceID, Token: cfg.OTLP.GrafanaCloud.Token.Value(), ServiceVersion: version, InstanceUUID: hostname(), Headers: cfg.OTLP.Headers})
 		if err != nil {
@@ -131,6 +140,10 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	var checkpoints collector.CheckpointStore = store
+	if dryEmitter != nil {
+		checkpoints = &dryRunCheckpointStore{base: store, values: make(map[string]time.Time)}
+	}
 	catalog := inventory.NewCatalog()
 	var idx identity.Index
 	if cfg.Identity.Enabled {
@@ -154,7 +167,7 @@ func run(args []string) error {
 		}(memoryIndex)
 	}
 	registry := collector.NewRegistry()
-	deps := collector.Deps{Config: cfg, Emitter: emitter, API: api, Identity: idx, Apps: catalog, SelfObs: selfobs.NewCollector(stats), Checkpoints: store, Registry: registry}
+	deps := collector.Deps{Config: cfg, Emitter: emitter, API: api, Identity: idx, Apps: catalog, SelfObs: selfobs.NewCollector(stats), Checkpoints: checkpoints, Registry: registry}
 	registerCollectors(deps)
 	for _, entry := range registry.Entries() {
 		stats.Expect(entry.Collector.Name())
@@ -169,7 +182,7 @@ func run(args []string) error {
 			return fmt.Errorf("collector %s interval %s is below minimum %s", entry.Collector.Name(), entry.Interval, cli.MinimumInterval)
 		}
 	}
-	scheduler := collector.NewScheduler(registry, emitter, store)
+	scheduler := collector.NewScheduler(registry, emitter, checkpoints)
 	if providers != nil {
 		scheduler.Flusher = providers
 	}
@@ -192,6 +205,31 @@ func run(args []string) error {
 	return nil
 }
 func hostname() string { h, _ := os.Hostname(); return h }
+
+func validateDatasets(datasets []string) error {
+	if len(datasets) == 0 {
+		return nil
+	}
+	configured := config.Default().Collectors
+	valid := make([]string, 0, len(configured))
+	known := make(map[string]struct{}, len(configured))
+	for name := range configured {
+		valid = append(valid, name)
+		known[name] = struct{}{}
+	}
+	sort.Strings(valid)
+	var unknown []string
+	for _, name := range datasets {
+		if _, ok := known[name]; !ok {
+			unknown = append(unknown, name)
+		}
+	}
+	if len(unknown) > 0 {
+		return fmt.Errorf("unknown dataset(s) %s; valid names: %s", strings.Join(unknown, ", "), strings.Join(valid, ", "))
+	}
+	return nil
+}
+
 func selected(name string, names []string) bool {
 	if len(names) == 0 {
 		return true
@@ -205,9 +243,13 @@ func selected(name string, names []string) bool {
 }
 func runOnce(ctx context.Context, s *collector.Scheduler, o cli.Options) error {
 	var errs []error
+	dryEmitter, dryRun := s.Emitter.(*dryRunEmitter)
 	for _, entry := range s.Registry.Entries() {
 		if !selected(entry.Collector.Name(), o.Datasets) {
 			continue
+		}
+		if dryRun {
+			dryEmitter.beginCollector(entry.Collector.Name())
 		}
 		start := time.Now()
 		var err error
@@ -219,6 +261,9 @@ func runOnce(ctx context.Context, s *collector.Scheduler, o cli.Options) error {
 		} else {
 			err = s.RunOnce(ctx, entry)
 		}
+		if dryRun {
+			dryEmitter.finishCollector(entry.Collector.Name())
+		}
 		if s.OnPoll != nil {
 			s.OnPoll(ctx, entry.Collector.Name(), time.Since(start), err, time.Now())
 		}
@@ -228,6 +273,101 @@ func runOnce(ctx context.Context, s *collector.Scheduler, o cli.Options) error {
 	}
 	return errors.Join(errs...)
 }
+
+type dryRunCounts struct {
+	records int
+	metrics int
+}
+
+// dryRunEmitter counts what collectors would have exported without creating OTLP providers.
+type dryRunEmitter struct {
+	mu      sync.Mutex
+	writer  io.Writer
+	current string
+	counts  map[string]dryRunCounts
+}
+
+func (e *dryRunEmitter) beginCollector(name string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.current = name
+	e.counts[name] = dryRunCounts{}
+}
+
+func (e *dryRunEmitter) finishCollector(name string) {
+	e.mu.Lock()
+	counts := e.counts[name]
+	e.current = ""
+	e.mu.Unlock()
+	_, _ = fmt.Fprintf(e.writer, "dry-run %s: records=%d metrics=%d\n", name, counts.records, counts.metrics)
+}
+
+func (e *dryRunEmitter) countRecord() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.current != "" {
+		counts := e.counts[e.current]
+		counts.records++
+		e.counts[e.current] = counts
+	}
+}
+
+func (e *dryRunEmitter) countMetric() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.current != "" {
+		counts := e.counts[e.current]
+		counts.metrics++
+		e.counts[e.current] = counts
+	}
+}
+
+func (e *dryRunEmitter) Gauge(context.Context, string, float64, ...telemetry.Attr) error {
+	e.countMetric()
+	return nil
+}
+func (e *dryRunEmitter) Counter(context.Context, string, float64, ...telemetry.Attr) error {
+	e.countMetric()
+	return nil
+}
+func (e *dryRunEmitter) Histogram(context.Context, string, float64, ...telemetry.Attr) error {
+	e.countMetric()
+	return nil
+}
+func (e *dryRunEmitter) LogEvent(context.Context, string, string, time.Time, otellog.Severity, ...telemetry.Attr) error {
+	e.countRecord()
+	return nil
+}
+func (e *dryRunEmitter) Span(context.Context, telemetry.SpanSpec) error {
+	e.countRecord()
+	return nil
+}
+
+// dryRunCheckpointStore lets a dry-run collector advance its in-memory cursor
+// while preserving the checkpoint file that seeds its collection window.
+type dryRunCheckpointStore struct {
+	mu     sync.RWMutex
+	base   collector.CheckpointStore
+	values map[string]time.Time
+}
+
+func (s *dryRunCheckpointStore) Get(name string) (time.Time, bool) {
+	s.mu.RLock()
+	value, ok := s.values[name]
+	s.mu.RUnlock()
+	if ok {
+		return value, true
+	}
+	return s.base.Get(name)
+}
+
+func (s *dryRunCheckpointStore) Set(name string, value time.Time) error {
+	s.mu.Lock()
+	s.values[name] = value
+	s.mu.Unlock()
+	return nil
+}
+
 func archiveCheckpoint(path string) error {
 	_, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {

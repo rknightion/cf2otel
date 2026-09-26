@@ -3,10 +3,10 @@ id: doc-0001
 title: Agent fan-out protocol (canonical)
 type: other
 created_date: '2026-09-23 09:59'
-updated_date: '2026-09-25 09:49'
+updated_date: '2026-09-26 09:04'
 ---
 > **Generated file — do not edit this copy.** Rendered from `sources/fan-out-protocol.md` in
-> `m7kni/agent-docs` at commit `8993ea4`. This copy is authoritative for `cf2otel`, so an agent
+> `m7kni/agent-docs` at commit `b12f35d`. This copy is authoritative for `cf2otel`, so an agent
 > with only this checkout has the whole document.
 >
 > **To change this document, edit the source in `agent-docs`, commit and push it, then run
@@ -2041,8 +2041,8 @@ agent is holding when it finishes the last lane. Say the same absolute `codex/re
 and say in both that writing it is the run's terminal action.
 
 **The completion ping is the only completion notification a loop sends.** The separate local watchdog
-alerts only on stalls, silence, overrun waits and hook exhaustion. The operator starts a long run and
-walks away; `wave-notify` is how they learn it has ended without watching the terminal. It is an
+pages the phone only for a dead loop or a hook failure, and sends everything else to Grafana. The
+operator starts a long run and walks away; `wave-notify` is how they learn it has ended without watching the terminal. It is an
 explicit run-end step rather than a harness hook because hooks fire on every turn of every session,
 and this must fire once, when the whole loop has finished and its report exists.
 
@@ -2381,12 +2381,12 @@ do not enable the older flag, change models or alter provider routing merely to 
 When async is unavailable, every loop uses its no-answer path.
 
 **Waiting (Codex).** Completion mail does not wake an idle parent, so the root waits in-turn. The
-fleet sets `[features.multi_agent_v2] min_wait_timeout_ms = 120000` and `default_wait_timeout_ms =
-1140000`. With lanes in flight and no local work, the root makes one `wait_agent` call with
-`timeout_ms` = min(1140000, time to the nearest lane, poller or envelope deadline); 1,140,000 ms stays
-under the loop-watchdog's 20-minute silence alert. The call returns early on any child message. Never
-shorten a wait because the previous one returned empty. On timeout, reconcile once (`list_agents`,
-deadlines, watchdog conditions), then wait again.
+fleet sets `[features.multi_agent_v2] min_wait_timeout_ms` and `default_wait_timeout_ms` both to
+1140000, so every `wait_agent` lasts 19 minutes unless a child messages or finishes first; any
+shorter `timeout_ms` is raised to it. 19 minutes stays under the loop-watchdog's 20-minute silence
+alert. With lanes in flight and no local work, the root makes one `wait_agent` call. A lane or poller
+deadline is checked on the next return, up to 19 minutes late. On timeout, reconcile once
+(`list_agents`, deadlines, watchdog conditions), then wait again.
 
 **Process waits (Codex).** Any thread waiting on a process (CI, a gate, CodeRabbit, a release) waits
 in one self-polling exec cell, so the model is woken only when the process ends or the cell yields:
@@ -2410,7 +2410,8 @@ high) carry this cell in their instructions. Spawn them with `agent_type` and `f
 pass no model or effort.
 
 Measured 2026-09-25, Codex 0.157.0: `wait_agent` accepts `timeout_ms` from 10,000 to 3,600,000 ms and
-the harness raises any request below `min_wait_timeout_ms` to it. A cell honours its `@exec`
+the harness raises any request below `min_wait_timeout_ms` to it (a 10 s request against the
+1140000 floor returned `clamped to the minimum of 1140000ms` and still woke on child completion). A cell honours its `@exec`
 `yield_time_ms`; a single `exec_command` or `write_stdin` call returns within 30 s, so a waiting loop
 belongs inside the cell. A 200 s watch cost the poller 2 model calls this way against 9 with one call
 per poll. Full-history forks inherit the parent agent type and fail.
@@ -2711,10 +2712,15 @@ It blocks at most three times in one continuation chain; the fourth Stop is allo
 written for the watchdog. A new launch re-arms it for the new report.
 
 **Watchdog.** A local launchd `loop-watchdog` on each Mac reads Claude and Codex transcripts every 5
-minutes, finds loop roots by their launch message, and sends a Pushover alert when a root's turn ends
-without a report or marker (`stalled`), an open turn is silent for more than 20 minutes (`silent`), a
-`WAITING:` deadline is overrun, or the hook gives up. It never resumes or kills anything. Work alerts
-carry no path, hostname or headline.
+minutes and finds loop roots by their launch message. It sends a Pushover alert only when a loop is
+dead (its latest turn ended without a report or marker, and no newer turn has started for 15 minutes:
+`stalled`) or the hook gives up (`hook-exhausted`, `hook-exception`). Only the Mac whose native home
+owns the alert's context sends a dead-loop alert: MBP16 for Personal, GFMBP for Work. A hook failure
+is recorded only on the Mac that ran the hook, which sends it. Each stalled turn
+(`turn-stalled`), an open turn silent for more than 20 minutes (`silent`), an overrun `WAITING:`
+deadline, short waits, a watchdog gap and the fleet alerts go to Grafana only, as OTLP logs from
+`service.name=loop-watchdog`; the phone alerts go there too. It never resumes or kills anything. Work
+alerts carry no path, hostname or headline.
 
 ### Time-budget signal (trial)
 
