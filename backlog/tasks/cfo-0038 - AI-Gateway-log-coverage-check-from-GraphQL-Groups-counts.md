@@ -1,10 +1,10 @@
 ---
 id: CFO-0038
 title: AI Gateway log-coverage check from GraphQL Groups counts
-status: To Do
+status: Parked
 assignee: []
 created_date: '2026-09-26 16:05'
-updated_date: '2026-09-26 18:34'
+updated_date: '2026-09-26 19:08'
 labels:
   - ai-gateway
 dependencies: []
@@ -36,4 +36,6 @@ REST gateway logs are the primary AI Gateway source. Requests sent with log coll
 
 <!-- SECTION:NOTES:BEGIN -->
 Loop 8: PROBE-38 (read-only, [16:40Z,16:45Z)): REST logs list with start_date/end_date RFC3339 returned 200 and result_info.total_count 19 = paged rows; Groups aiGatewayRequestsAdaptiveGroups count for the gateway 19; dimensions_gateway advertised. L38 de07aa7 added collector aigateway.coverage (gauge cloudflare.ai_gateway.log_coverage.gap {request} per gateway; Groups count minus distinct REST ids for one closed five-minute window at least 10 minutes old; selection checked against availableFields; maxDuration/notOlderThan enforced; retry recomputes the same window). Root added the aiGatewayRequestsAdaptiveGroups API-contract entry (db2875b). REV-L38 round 1 FAIL (interval over 5m lost windows; jitter false scrape errors; -since/-before skipped the holdback; no dedupe test) -> review-repair round 1 b01ed38 (cadence pinned to 5m, boundary-aligned Lag, holdback refusal, dedupe test) -> REV-L38 round 2 PASS. Landed in 8a56011d3520a647458d221fc5d482715a897ba2; CI 36261997229 success incl ci-success after an infrastructure rerun (a fleet Actions allowlist change briefly blocked nested actions). Off by default; enable only in YAML under collectors: aigateway.coverage with enabled, interval, initial_lookback and max_window (the env form fails for dotted names, CFO-0039). AC3 open: live proof needs the collector enabled on camden, which needs a config.yaml edit this loop may not make.
+
+Loop 8 run-end park: AC1-2 done and released in v0.8.0 (deployed to camden 18:57:55Z, healthy); the collector is off by default and camden's config does not enable it. AC3 resume: add collectors: aigateway.coverage (enabled true, interval 5m, initial_lookback 30m, max_window 1h) to the camden config.yaml under a goal that authorises that edit, restart, then compare one window's Groups count, REST count and the emitted gauge on m7kni Mimir. Loop 8: implementation 1/4 (L38-a1), review-repair 1/3 (L38-rr1 after REV-L38 FAIL), infrastructure retries 1 (CodeRabbit WebSocket); grants: PROBE-38 read-only, contract entry by root; reason parked on config authority.
 <!-- SECTION:NOTES:END -->
