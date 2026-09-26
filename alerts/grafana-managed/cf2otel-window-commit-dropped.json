@@ -8,15 +8,15 @@
     "labels": {
       "grafana.app/folder": "REPLACE_WITH_FOLDER_UID"
     },
-    "name": "cf2otel-collector-stale"
+    "name": "cf2otel-window-commit-dropped"
   },
   "spec": {
     "annotations": {
       "__dashboardUid__": "cf2otel",
-      "__panelId__": "401",
-      "description": "Collector last-success timestamp is older than 15 minutes.",
+      "__panelId__": "406",
+      "description": "A window's commit failed permanently (dropped outcome) in the last 15 minutes after repeated payload rejection.",
       "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
-      "summary": "cf2otel collector is stale"
+      "summary": "cf2otel window commit dropped"
     },
     "execErrState": "Error",
     "expressions": {
@@ -27,7 +27,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\"})",
+          "expr": "sum(increase(cf2otel_window_commit_failures_total{service_name=\"cf2otel\",outcome=\"dropped\"}[15m])) or on() (0 * sum(increase(cf2otel_scrape_success_total{service_name=\"cf2otel\"}[15m])))",
           "instant": true,
           "range": false,
           "refId": "A"
@@ -58,7 +58,7 @@
             {
               "evaluator": {
                 "params": [
-                  900
+                  0
                 ],
                 "type": "gt"
               }
@@ -86,10 +86,10 @@
     "noDataState": "Alerting",
     "panelRef": {
       "dashboardUID": "cf2otel",
-      "panelID": 401
+      "panelID": 406
     },
     "paused": false,
-    "title": "cf2otel collector is stale",
+    "title": "cf2otel window commit dropped",
     "trigger": {
       "interval": "1m"
     }

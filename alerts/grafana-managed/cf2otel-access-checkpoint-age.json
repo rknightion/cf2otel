@@ -8,15 +8,15 @@
     "labels": {
       "grafana.app/folder": "REPLACE_WITH_FOLDER_UID"
     },
-    "name": "cf2otel-collector-stale"
+    "name": "cf2otel-access-checkpoint-age"
   },
   "spec": {
     "annotations": {
       "__dashboardUid__": "cf2otel",
-      "__panelId__": "401",
-      "description": "Collector last-success timestamp is older than 15 minutes.",
+      "__panelId__": "404",
+      "description": "Access logins checkpoint age is over 12 hours, approaching the Access REST log's roughly one-day reach; further delay risks permanent data loss.",
       "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
-      "summary": "cf2otel collector is stale"
+      "summary": "Access logins checkpoint age exceeds 12 hours"
     },
     "execErrState": "Error",
     "expressions": {
@@ -27,7 +27,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\"})",
+          "expr": "max(cf2otel_checkpoint_age_seconds{service_name=\"cf2otel\",cf2otel_collector=\"access.logins\"})",
           "instant": true,
           "range": false,
           "refId": "A"
@@ -58,7 +58,7 @@
             {
               "evaluator": {
                 "params": [
-                  900
+                  43200
                 ],
                 "type": "gt"
               }
@@ -86,10 +86,10 @@
     "noDataState": "Alerting",
     "panelRef": {
       "dashboardUID": "cf2otel",
-      "panelID": 401
+      "panelID": 404
     },
     "paused": false,
-    "title": "cf2otel collector is stale",
+    "title": "Access logins checkpoint age exceeds 12 hours",
     "trigger": {
       "interval": "1m"
     }

@@ -8,15 +8,15 @@
     "labels": {
       "grafana.app/folder": "REPLACE_WITH_FOLDER_UID"
     },
-    "name": "cf2otel-collector-stale"
+    "name": "cf2otel-window-gap"
   },
   "spec": {
     "annotations": {
       "__dashboardUid__": "cf2otel",
-      "__panelId__": "401",
-      "description": "Collector last-success timestamp is older than 15 minutes.",
+      "__panelId__": "405",
+      "description": "A retention-gap window was skipped in the last 15 minutes; that window's data is permanently lost.",
       "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
-      "summary": "cf2otel collector is stale"
+      "summary": "cf2otel window gap detected"
     },
     "execErrState": "Error",
     "expressions": {
@@ -27,7 +27,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\"})",
+          "expr": "sum(increase(cf2otel_window_gap_seconds_total{service_name=\"cf2otel\"}[15m])) or on() (0 * sum(increase(cf2otel_scrape_success_total{service_name=\"cf2otel\"}[15m])))",
           "instant": true,
           "range": false,
           "refId": "A"
@@ -58,7 +58,7 @@
             {
               "evaluator": {
                 "params": [
-                  900
+                  0
                 ],
                 "type": "gt"
               }
@@ -86,10 +86,10 @@
     "noDataState": "Alerting",
     "panelRef": {
       "dashboardUID": "cf2otel",
-      "panelID": 401
+      "panelID": 405
     },
     "paused": false,
-    "title": "cf2otel collector is stale",
+    "title": "cf2otel window gap detected",
     "trigger": {
       "interval": "1m"
     }
