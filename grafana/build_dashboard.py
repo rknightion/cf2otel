@@ -13,6 +13,17 @@ LOKI = "${ds_loki}"
 SVC = 'service_name="cf2otel"'
 
 
+def compatibility_union(new: str, old: str, source_label: str = "service_name") -> str:
+    """Keep both exporter versions when their remaining labels are identical."""
+    return (f'label_replace({new}, "cf2otel_compat_source", "new", "{source_label}", ".*")'
+            f' or label_replace({old}, "cf2otel_compat_source", "old", "{source_label}", ".*")')
+
+
+def compatibility_max(new: str, old: str, by: str = "") -> str:
+    aggregation = f"max by ({by})" if by else "max"
+    return f"{aggregation} ({compatibility_union(new, old)})"
+
+
 def datasource(name: str, plugin: str, default: str) -> dict:
     return {"kind": "DatasourceVariable", "spec": {"name": name, "label": plugin.title(), "pluginId": plugin,
         "current": {"text": default, "value": default}, "options": [], "multi": False, "includeAll": False,
@@ -83,18 +94,23 @@ def render() -> dict:
         panel(302, "AI Gateway cost", "Gateway-reported cost values; currency is unverified, so no currency unit is asserted.", PROM,
               'sum(increase(cloudflare_ai_gateway_cost_total{service_name="cf2otel"}[$__range]))', viz="stat", instant=True, unit="none"),
         panel(303, "AI Gateway p95 latency", "Completed request duration from REST rows, converted to seconds.", PROM,
-              'histogram_quantile(0.95, sum by (le, gen_ai_request_model) (rate(gen_ai_client_operation_duration_seconds_bucket{service_name="cf2otel"}[$__rate_interval])) or (sum by (le, gen_ai_request_model) (rate(gen_ai_client_operation_duration_bucket{service_name="cf2otel"}[$__rate_interval])) unless on (gen_ai_request_model) sum by (gen_ai_request_model) (rate(gen_ai_client_operation_duration_seconds_bucket{service_name="cf2otel",le="+Inf"}[$__rate_interval]))))', unit="s"),
+              compatibility_union(
+                  'histogram_quantile(0.95, sum by (le, gen_ai_request_model) (rate(gen_ai_client_operation_duration_seconds_bucket{service_name="cf2otel"}[$__rate_interval])))',
+                  'histogram_quantile(0.95, sum by (le, gen_ai_request_model) (rate(gen_ai_client_operation_duration_bucket{service_name="cf2otel"}[$__rate_interval])))',
+                  "gen_ai_request_model"), unit="s"),
         panel(304, "AI Gateway token usage", "Input and output totals are separate; cached and reasoning subsets are not added to totals.", PROM,
               'sum(rate(gen_ai_client_inference_usage_input_tokens_total{service_name="cf2otel"}[$__rate_interval]))',
               second='sum(rate(gen_ai_client_inference_usage_output_tokens_total{service_name="cf2otel"}[$__rate_interval]))', unit="short"),
         panel(401, "Collector last-success age", "Seconds since each collector last succeeded. An absent series needs investigation too.", PROM,
-              'time() - (max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel"}) or max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp{service_name="cf2otel"}))', unit="s"),
+              'time() - ' + compatibility_max('cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel"}',
+                                             'cf2otel_scrape_last_success_timestamp{service_name="cf2otel"}', "cf2otel_collector"), unit="s"),
         panel(402, "Collector errors", "Errors over the selected range, by collector.", PROM,
               'sum by (cf2otel_collector) (increase(cf2otel_scrape_errors_total{service_name="cf2otel"}[$__range]))', unit="short"),
         panel(403, "Export failures", "Export failures over the selected range; zero is healthy if the exporter reports the series.", PROM,
               'sum(increase(cf2otel_export_errors_total{service_name="cf2otel"}[$__range]))', viz="stat", instant=True),
         panel(404, "Checkpoint age", "Age of each collector checkpoint; compare with its configured interval.", PROM,
-              'max by (cf2otel_collector) (cf2otel_checkpoint_age_seconds{service_name="cf2otel"}) or max by (cf2otel_collector) (cf2otel_checkpoint_age{service_name="cf2otel"})', unit="s"),
+              compatibility_max('cf2otel_checkpoint_age_seconds{service_name="cf2otel"}',
+                                'cf2otel_checkpoint_age{service_name="cf2otel"}', "cf2otel_collector"), unit="s"),
         panel(501, "Workers requests by script", "Request rate from workersOverviewRequestsAdaptiveGroups, grouped by the bounded script name.", PROM,
               'sum by (cloudflare_workers_script_name) (rate(cloudflare_workers_requests_total{service_name="cf2otel"}[$__rate_interval]))', unit="reqps"),
         panel(502, "Turnstile events", "Event rate from turnstileAdaptiveGroups.", PROM,
@@ -116,7 +132,7 @@ def render() -> dict:
         panel(606, "KV storage bytes", "Maximum namespace byte count from kvStorageAdaptiveGroups.", PROM,
               'max(cloudflare_kv_storage_max_namespace_bytes{service_name="cf2otel"})', unit="bytes"),
         panel(607, "KV storage keys", "Maximum namespace key count from kvStorageAdaptiveGroups.", PROM,
-              'max(cloudflare_kv_storage_max_namespace_keys_ratio{service_name="cf2otel"}) or max(cloudflare_kv_storage_max_namespace_keys{service_name="cf2otel"})'),
+              'max(cloudflare_kv_storage_max_namespace_keys{service_name="cf2otel"})'),
         panel(701, "R2 download bandwidth", "Download byte rate from r2BandwidthUsageAdaptiveGroups, grouped by bucket.", PROM,
               'sum by (cloudflare_r2_bucket_name) (rate(cloudflare_r2_bandwidth_download_bytes_total{service_name="cf2otel"}[$__rate_interval]))', unit="Bps"),
         panel(702, "R2 upload bandwidth", "Upload byte rate from r2BandwidthUsageAdaptiveGroups, grouped by bucket.", PROM,
@@ -130,7 +146,7 @@ def render() -> dict:
         panel(706, "R2 storage payload", "Maximum payload bytes from r2StorageAdaptiveGroups, grouped by bucket.", PROM,
               'max by (cloudflare_r2_bucket_name) (cloudflare_r2_storage_payload_bytes{service_name="cf2otel"})', unit="bytes"),
         panel(707, "R2 storage objects", "Maximum object count from r2StorageAdaptiveGroups, grouped by bucket.", PROM,
-              'max by (cloudflare_r2_bucket_name) (cloudflare_r2_storage_objects_ratio{service_name="cf2otel"}) or max by (cloudflare_r2_bucket_name) (cloudflare_r2_storage_objects{service_name="cf2otel"})'),
+              'max by (cloudflare_r2_bucket_name) (cloudflare_r2_storage_objects{service_name="cf2otel"})'),
         panel(708, "R2 SQL queries", "Query rate from r2sqlOperationsAdaptiveGroups, grouped by bucket.", PROM,
               'sum by (cloudflare_r2sql_bucket_name) (rate(cloudflare_r2sql_queries_total{service_name="cf2otel"}[$__rate_interval]))', unit="reqps"),
         panel(801, "Durable Objects requests", "Request rate from durableObjectsInvocationsAdaptiveGroups.", PROM,
@@ -142,13 +158,13 @@ def render() -> dict:
         panel(804, "Durable Objects request body bytes", "Uncached request body byte rate from durableObjectsSubrequestsAdaptiveGroups.", PROM,
               'sum(rate(cloudflare_durableobjects_subrequests_request_body_bytes_total{service_name="cf2otel"}[$__rate_interval]))', unit="Bps"),
         panel(901, "Queues backlog messages", "Maximum queue average from queueBacklogAdaptiveGroups in the latest complete bucket.", PROM,
-              'max(cloudflare_queues_backlog_max_queue_avg_messages_ratio{service_name="cf2otel"}) or max(cloudflare_queues_backlog_max_queue_avg_messages{service_name="cf2otel"})'),
+              'max(cloudflare_queues_backlog_max_queue_avg_messages{service_name="cf2otel"})'),
         panel(902, "Queues backlog bytes", "Maximum queue average from queueBacklogAdaptiveGroups in the latest complete bucket.", PROM,
               'max(cloudflare_queues_backlog_max_queue_avg_bytes{service_name="cf2otel"})', unit="bytes"),
         panel(903, "Queues consumer concurrency", "Maximum queue average from queueConsumerMetricsAdaptiveGroups in the latest complete bucket.", PROM,
-              'max(cloudflare_queues_consumer_max_queue_avg_concurrency_ratio{service_name="cf2otel"}) or max(cloudflare_queues_consumer_max_queue_avg_concurrency{service_name="cf2otel"})'),
+              'max(cloudflare_queues_consumer_max_queue_avg_concurrency{service_name="cf2otel"})'),
         panel(904, "Queues delayed backlog messages", "Maximum queue average from queueDelayedBacklogAdaptiveGroups in the latest complete bucket.", PROM,
-              'max(cloudflare_queues_delayed_backlog_max_queue_avg_messages_ratio{service_name="cf2otel"}) or max(cloudflare_queues_delayed_backlog_max_queue_avg_messages{service_name="cf2otel"})'),
+              'max(cloudflare_queues_delayed_backlog_max_queue_avg_messages{service_name="cf2otel"})'),
         panel(905, "Queues message operations", "Message operation rate from queueMessageOperationsAdaptiveGroups.", PROM,
               'sum(rate(cloudflare_queues_message_operations_total{service_name="cf2otel"}[$__rate_interval]))', unit="reqps"),
         panel(906, "Queues billable operations", "Billable operation rate from queueMessageOperationsAdaptiveGroups.", PROM,

@@ -53,23 +53,23 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cloudflare.d1.storage.max_database_bytes` | `By` | Maximum D1 database size across databases in the latest complete bucket, `By`. |
 | `cloudflare.kv.requests` | `{request}` | KV operation request sum from `kvOperationsAdaptiveGroups`, account aggregate. |
 | `cloudflare.kv.storage.max_namespace_bytes` | `By` | Maximum KV namespace bytes in the latest complete bucket, `By`. |
-| `cloudflare.kv.storage.max_namespace_keys` | `1` | Maximum KV namespace key count in the latest complete bucket. |
+| `cloudflare.kv.storage.max_namespace_keys` | `{key}` | Maximum KV namespace key count in the latest complete bucket. |
 | `cloudflare.r2.bandwidth.download.bytes` | `By` | R2 download byte sum, optionally by bounded bucket name, `By`. |
 | `cloudflare.r2.bandwidth.upload.bytes` | `By` | R2 upload byte sum, optionally by bounded bucket name, `By`. |
 | `cloudflare.r2.catalog.data.operations` | `1` | R2 catalog data operation count, optionally by bounded namespace name. |
 | `cloudflare.r2.catalog.maintenance.jobs` | `1` | R2 catalog maintenance job count, optionally by bounded namespace name. |
 | `cloudflare.r2.requests` | `{request}` | R2 operation request sum, optionally by bounded bucket name. |
 | `cloudflare.r2.storage.payload.bytes` | `By` | R2 payload-size gauge in the latest complete bucket per bucket, `By`. |
-| `cloudflare.r2.storage.objects` | `1` | R2 object-count gauge in the latest complete bucket per bucket. |
+| `cloudflare.r2.storage.objects` | `{object}` | R2 object-count gauge in the latest complete bucket per bucket. |
 | `cloudflare.r2sql.queries` | `1` | R2 SQL query count, optionally by bounded bucket name; table names are omitted. |
 | `cloudflare.durableobjects.requests` | `{request}` | Durable Objects invocation request sum, account aggregate. |
 | `cloudflare.durableobjects.subrequests` | `{request}` | Durable Objects periodic subrequest sum, account aggregate. |
 | `cloudflare.durableobjects.sql_storage.max_namespace_bytes` | `By` | Maximum Durable Objects SQL storage across namespaces in the latest complete bucket, `By`. |
 | `cloudflare.durableobjects.subrequests.request_body.bytes` | `By` | Durable Objects uncached request-body byte sum, account aggregate, `By`. |
-| `cloudflare.queues.backlog.max_queue_avg_messages` | `1` | Maximum per-queue average backlog messages in the latest complete bucket. |
+| `cloudflare.queues.backlog.max_queue_avg_messages` | `{message}` | Maximum per-queue average backlog messages in the latest complete bucket. |
 | `cloudflare.queues.backlog.max_queue_avg_bytes` | `By` | Maximum per-queue average backlog bytes in the latest complete bucket, `By`. |
-| `cloudflare.queues.consumer.max_queue_avg_concurrency` | `1` | Maximum per-queue average consumer concurrency in the latest complete bucket. |
-| `cloudflare.queues.delayed_backlog.max_queue_avg_messages` | `1` | Maximum per-queue average delayed backlog messages in the latest complete bucket. |
+| `cloudflare.queues.consumer.max_queue_avg_concurrency` | `{consumer}` | Maximum per-queue average consumer concurrency in the latest complete bucket. |
+| `cloudflare.queues.delayed_backlog.max_queue_avg_messages` | `{message}` | Maximum per-queue average delayed backlog messages in the latest complete bucket. |
 | `cloudflare.queues.message.operations` | `1` | Queue message operation count, account aggregate. |
 | `cloudflare.queues.message.billable_operations` | `1` | Queue billable operation sum, account aggregate. |
 | `cloudflare.email.routing.events` | `1` | Email Routing Groups count summed across account-owned zones, account aggregate. |
