@@ -59,6 +59,7 @@ const (
 	AttrAIGatewayBYOK                    = "cloudflare.ai_gateway.byok"
 	AttrAIGatewayUserAgent               = "cloudflare.ai_gateway.user_agent"
 	AttrAIGatewayDLPAction               = "cloudflare.ai_gateway.dlp.action"
+	AttrAIGatewayDLPProfiles             = "cloudflare.ai_gateway.dlp.profiles"
 	AttrAIGatewayDLPDirection            = "cloudflare.ai_gateway.dlp.direction"
 	AttrAIGatewayDLPPolicyID             = "cloudflare.ai_gateway.dlp.policy.id"
 	AttrAIGatewayDLPProfileID            = "cloudflare.ai_gateway.dlp.profile.id"

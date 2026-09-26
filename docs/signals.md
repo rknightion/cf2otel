@@ -280,6 +280,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `cloudflare.ai_gateway.dlp.direction` |
 | Attribute | `cloudflare.ai_gateway.dlp.policy.id` |
 | Attribute | `cloudflare.ai_gateway.dlp.profile.id` |
+| Attribute | `cloudflare.ai_gateway.dlp.profiles` |
 | Attribute | `cloudflare.ai_gateway.duration_ms` |
 | Attribute | `cloudflare.ai_gateway.event.id` |
 | Attribute | `cloudflare.ai_gateway.feedback` |

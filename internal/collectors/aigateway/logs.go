@@ -237,6 +237,7 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 	}
 	add(semconv.AttrAIGatewayMetadata, redactedJSON(row.Metadata, 4096))
 	add(semconv.AttrAIGatewayGuardrails, redactedJSON(row.Guardrails, 4096))
+	add(semconv.AttrAIGatewayDLPProfiles, redactedJSON(row.DLPProfiles, 4096))
 	if c.cfg.AIGateway.CaptureBodies {
 		add(semconv.AttrAIGatewayPrompts, redactedJSON(row.Prompts, int(c.cfg.AIGateway.MaxBodyBytes)))
 	}
