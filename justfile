@@ -115,3 +115,8 @@ ci: check snapshot image
 [group('build')]
 clean:
     rm -rf bin dist {{ tools_dir }}
+
+# Check a release notes file against conventional commits since a release tag.
+[group('release')]
+relnotes-check notes_file commit_range="":
+    go run ./tools/relnotes --range "{{ commit_range }}" --notes "{{ notes_file }}"
