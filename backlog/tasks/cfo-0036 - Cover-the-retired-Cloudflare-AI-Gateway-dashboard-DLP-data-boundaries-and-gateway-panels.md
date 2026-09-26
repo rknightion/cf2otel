@@ -3,10 +3,10 @@ id: CFO-0036
 title: >-
   Cover the retired Cloudflare AI Gateway dashboard: DLP, data boundaries and
   gateway panels
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-26 09:24'
-updated_date: '2026-09-26 17:40'
+updated_date: '2026-09-26 18:17'
 labels:
   - dashboard
   - ai-gateway
@@ -25,14 +25,14 @@ The Infinity-based 'Cloudflare AI Gateway' dashboard (uid cloudflare-ai-gateway)
 <!-- AC:BEGIN -->
 - [x] #1 cf2otel captures DLP policy outcomes per gateway request (flagged/blocked, policy id, request vs response) from the gateway logs API, as log attributes, and a flagged-request count metric
 - [x] #2 cf2otel captures the gateway metadata 'data boundaries' / exception fields the old dashboard read, or documents why the API no longer exposes them
-- [ ] #3 The cf2otel dashboard's AI Gateway row adds cache-hit ratio, rate-limited (429) count, cost by provider, a per-model usage table, failed requests and DLP-flagged requests panels
+- [x] #3 The cf2otel dashboard's AI Gateway row adds cache-hit ratio, rate-limited (429) count, cost by provider, a per-model usage table, failed requests and DLP-flagged requests panels
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
+- [x] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
-- [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
+- [x] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
 
 ## Implementation Notes
@@ -47,4 +47,6 @@ Loop 8 preparation 2026-09-26: cause of loop 7's null DLP fields found. Every en
 Loop 8 preparation, 16:09Z: the gateway logs LIST response (the collector's page source) already carries dlp_action, dlp_profiles and guardrails, alongside the detail GET. Of the newest 50 real list rows (16:03-16:08Z), 24 were flagged: all dlp_action FLAG, each with exactly one finding carrying keys check/policy_ids/profile, profile keys entry_ids/profile_id, one policy id, and check REQUEST (23) or RESPONSE (1). Natural traffic will therefore supply live AC1 proof after deploy.
 
 Loop 8 AC1: L36 lane b642c90 plus root correction a179c32 (restored the pre-existing redacted cloudflare.ai_gateway.dlp.profiles attribute, declared the counter's {request} unit) and description fix c71d427, landed in a9335be83ec6059c078d02d647ab5a90e41eb7e3 (CI 36257122932 success incl ci-success), independent REV-L36 PASS, released v0.7.0 (Release 36257702516) and deployed to camden 17:10:35Z, healthy 10 min. Live proof: natural traffic had no flagged row after the restart, so three fictional published-test-card requests were sent 17:30:19-17:30:42Z (one flagged). Window [17:30:35Z,17:35:35Z) between two stable aigateway checkpoints: source 6 REST rows, 1 with dlp_action FLAG whose findings cover both REQUEST and RESPONSE; m7kni Mimir cloudflare_ai_gateway_dlp_requests_total went from no series at checkpoint 17:30:35Z to flagged/request 1 and flagged/response 1 (gateway label present) at 17:35:35Z, exact. Loki: that row's cloudflare.ai_gateway.request event carries dlp.action flagged, dlp.direction [request,response], dlp.policy.id, dlp.profile.id and dlp.profiles (1 of 3 sampled ids: it was the only flagged row in the window). DLP attributes also appear on the AI Gateway span via the shared attribute slice (accepted; question in the loop 8 report). AC3 pending L36D.
+
+Loop 8 AC3: L36D 3fbb557 added AI Gateway panels 305-310 (cache-hit ratio = cache_hits/requests; rate-limited 429 count as a Loki panel on cloudflare_ai_gateway_status_code=429 because no metric carries the exact status, key verified live with six 429 events in 24h; cost by provider; usage-by-model table of requests, input/output tokens and cost; failed requests from errors_total; DLP-flagged requests from cloudflare_ai_gateway_dlp_requests_total action=flagged by direction). Gate green, CodeRabbit 0 findings. Landed in 6019c019c99da5dd32cc25c9a35ce75fe1558fb5; CI 36261454328 success incl ci-success; grafana-sync 36261454267 success; m7kni read-back of dashboard uid cf2otel (version 5) shows all six panel titles and the DLP query. Loop 8 totals: implementation 2/4 (L36-a1, L36D-a1), review-repair 0/3 (root corrections a179c32 and c71d427 before review), infrastructure retries 1 (CodeRabbit WebSocket); grants: DLP capture, 3 of 6 fictional AI Gateway requests; reason Done.
 <!-- SECTION:NOTES:END -->
