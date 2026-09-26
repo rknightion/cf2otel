@@ -62,6 +62,7 @@
     {
       "scope": "zone",
       "dataset": "firewallEventsAdaptiveGroups",
+      "allow_disabled": true,
       "required_fields": [
         "count"
       ],

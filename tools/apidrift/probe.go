@@ -27,6 +27,7 @@ type graphContract struct {
 	RequiredFields   []string    `json:"required_fields"`
 	MinimumDuration  int64       `json:"minimum_max_duration_seconds"`
 	MinimumRetention int64       `json:"minimum_not_older_than_seconds"`
+	AllowDisabled    bool        `json:"allow_disabled,omitempty"`
 }
 
 type restContract struct {
@@ -92,7 +93,7 @@ func validateContract(c contract) error {
 	seen := map[string]bool{}
 	for _, g := range c.GraphQL {
 		key := string(g.Scope) + "/" + g.Dataset
-		if (g.Scope != cfapi.AccountScope && g.Scope != cfapi.ZoneScope) || !datasetName.MatchString(g.Dataset) || seen[key] || g.MinimumDuration <= 0 || g.MinimumRetention <= 0 || !validFields(g.RequiredFields) {
+		if (g.Scope != cfapi.AccountScope && g.Scope != cfapi.ZoneScope) || !datasetName.MatchString(g.Dataset) || seen[key] || g.MinimumDuration <= 0 || g.MinimumRetention <= 0 || !validFields(g.RequiredFields) || (g.AllowDisabled && (g.Scope != cfapi.ZoneScope || g.Dataset != "firewallEventsAdaptiveGroups")) {
 			return errors.New("invalid GraphQL contract")
 		}
 		seen[key] = true
@@ -191,6 +192,9 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 				continue
 			}
 			if !s.Enabled {
+				if g.AllowDisabled {
+					continue
+				}
 				diffs = append(diffs, label+": dataset disabled")
 			}
 			for _, field := range g.RequiredFields {
@@ -313,6 +317,9 @@ func hasAvailableField(available []string, required string) bool {
 }
 
 func restProbeQuery(name string, now time.Time) url.Values {
+	if strings.HasPrefix(name, "ai-gateway-log-") {
+		return nil
+	}
 	from := now.Add(-time.Hour).Format(time.RFC3339Nano)
 	to := now.Format(time.RFC3339Nano)
 	switch name {

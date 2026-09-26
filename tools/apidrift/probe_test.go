@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
 )
@@ -39,6 +40,9 @@ func (f fakeAPI) DatasetSettings(_ context.Context, scope cfapi.Scope, _ string,
 	}
 	for _, g := range f.contract.GraphQL {
 		if g.Scope == scope && g.Dataset == dataset {
+			if f.broken == "unentitled-firewall" && dataset == "firewallEventsAdaptiveGroups" {
+				return cfapi.DatasetSettings{Enabled: false}, nil
+			}
 			fields := append([]string{}, g.RequiredFields...)
 			if f.broken == "field" && dataset == "cf1AccessLoginsRawGroups" {
 				fields = fields[1:]
@@ -47,6 +51,34 @@ func (f fakeAPI) DatasetSettings(_ context.Context, scope cfapi.Scope, _ string,
 		}
 	}
 	return cfapi.DatasetSettings{}, errors.New("unknown dataset")
+}
+
+func TestUnentitledOptionalDatasetDoesNotMaskEnabledDatasetDrift(t *testing.T) {
+	c, err := loadContract("../../spec/cloudflare/contract.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diffs := probe(context.Background(), fakeAPI{contract: c, broken: "unentitled-firewall"}, c); len(diffs) != 0 {
+		t.Fatalf("optional unavailable dataset should not fail: %v", diffs)
+	}
+	changed := c
+	changed.GraphQL = append([]graphContract(nil), c.GraphQL...)
+	for i := range changed.GraphQL {
+		if changed.GraphQL[i].Dataset == "firewallEventsAdaptiveGroups" {
+			changed.GraphQL[i].RequiredFields = append(changed.GraphQL[i].RequiredFields, "newField")
+		}
+	}
+	if diffs := probe(context.Background(), fakeAPI{contract: c}, changed); !strings.Contains(strings.Join(diffs, "\n"), "newField") {
+		t.Fatalf("enabled dataset drift was masked: %v", diffs)
+	}
+}
+
+func TestGatewayLogDetailAndBodiesHaveNoListQuery(t *testing.T) {
+	for _, name := range []string{"ai-gateway-log-detail", "ai-gateway-log-request", "ai-gateway-log-response"} {
+		if query := restProbeQuery(name, time.Now()); len(query) != 0 {
+			t.Fatalf("%s received list pagination: %v", name, query)
+		}
+	}
 }
 func (f fakeAPI) Get(_ context.Context, path string, _ url.Values, out any) error {
 	if f.broken == "api-error" {
