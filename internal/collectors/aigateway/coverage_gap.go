@@ -22,7 +22,8 @@ import (
 const (
 	coverageDataset = "aiGatewayRequestsAdaptiveGroups"
 	// coverageWindow is the closed window compared per commit. The scheduler
-	// entry uses it as MaxWindow so catch-up advances one window per commit.
+	// entry uses it as both cadence and MaxWindow, so a steady-state tick
+	// commits one window and each gauge value is exported.
 	coverageWindow = 5 * time.Minute
 	// Groups reached the REST count 139-365 s after the event in loop 3; hold
 	// every compared window back well past that.
@@ -51,7 +52,13 @@ func NewCoverage(cfg *config.Config, api cfapi.Client) *coverage {
 }
 func (*coverage) Name() string                   { return "aigateway.coverage" }
 func (*coverage) DefaultInterval() time.Duration { return 5 * time.Minute }
-func (*coverage) Lag() time.Duration             { return coverageLag }
+
+// Lag holds back at least coverageLag and ends on a window boundary, so a
+// scheduler tick sees either a closed window or an empty range it skips.
+func (c *coverage) Lag() time.Duration {
+	held := c.now().UTC().Add(-coverageLag)
+	return coverageLag + held.Sub(held.Truncate(coverageWindow))
+}
 
 // CollectWindow commits at most one closed, aligned five-minute window per
 // call and returns its end. The gauge value for a window is a pure function of
@@ -76,6 +83,10 @@ func (c *coverage) CollectWindow(ctx context.Context, from, to time.Time, out te
 			return start, nil
 		}
 		return from, errors.New("aigateway coverage: window contains no closed five-minute window")
+	}
+	// CollectRange calls this without the scheduler lag.
+	if end.After(c.now().UTC().Add(-coverageLag)) {
+		return from, fmt.Errorf("aigateway coverage: window ending %s is inside the %s holdback", end.Format(time.RFC3339), coverageLag)
 	}
 	gateways := make([]string, 0, len(c.cfg.AIGateway.Gateways))
 	for _, gateway := range c.cfg.AIGateway.Gateways {

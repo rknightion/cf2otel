@@ -25,10 +25,17 @@ const coverageFixtureAccount = "account-fixture"
 // A closed five-minute bucket well inside the fixture retention.
 var coverageBucket = time.Date(2026, 9, 26, 16, 40, 0, 0, time.UTC)
 
+type coverageLogRow struct {
+	ID        string    `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type coverageAPI struct {
-	settings    cfapi.DatasetSettings
-	groups      []map[string]any
-	logs        map[string][]time.Time
+	settings cfapi.DatasetSettings
+	groups   []map[string]any
+	logs     map[string][]time.Time
+	// pages, when set for a gateway, is served verbatim by page number.
+	pages       map[string][][]coverageLogRow
 	queries     []cfapi.GraphQLRequest
 	restQueries []string
 }
@@ -53,15 +60,22 @@ func (f *coverageAPI) Get(_ context.Context, path string, q url.Values, out any)
 	if page < 1 || perPage < 1 || perPage > 50 {
 		return fmt.Errorf("invalid paging %q", q.Encode())
 	}
-	// The live endpoint treats both bounds as inclusive.
-	type row struct {
-		ID        string    `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
+	if pages, ok := f.pages[gateway]; ok {
+		served := []coverageLogRow{}
+		if page <= len(pages) {
+			served = pages[page-1]
+		}
+		encoded, err := json.Marshal(served)
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(encoded, out)
 	}
-	rows := make([]row, 0)
+	// The live endpoint treats both bounds as inclusive.
+	rows := make([]coverageLogRow, 0)
 	for i, at := range f.logs[gateway] {
 		if !at.Before(start) && !at.After(end) {
-			rows = append(rows, row{ID: fmt.Sprintf("%s-log-%03d", gateway, i), CreatedAt: at})
+			rows = append(rows, coverageLogRow{ID: fmt.Sprintf("%s-log-%03d", gateway, i), CreatedAt: at})
 		}
 	}
 	sort.SliceStable(rows, func(i, j int) bool { return rows[i].CreatedAt.Before(rows[j].CreatedAt) })
@@ -324,9 +338,12 @@ func TestCoverageRetryRecomputesTheSameWindow(t *testing.T) {
 	if mark, _ := store.Get("aigateway.coverage"); !mark.Equal(b) || len(coverageValues(sink)) != 0 {
 		t.Fatalf("failed commit advanced to %s or emitted %+v", mark, sink.Metrics)
 	}
-	now = now.Add(5 * time.Minute)
-	if err := s.RunOnce(context.Background(), entries[0]); err != nil {
-		t.Fatal(err)
+	// Each later tick commits one window: the retried one, then the next.
+	for tick := 0; tick < 2; tick++ {
+		now = now.Add(5 * time.Minute)
+		if err := s.RunOnce(context.Background(), entries[0]); err != nil {
+			t.Fatal(err)
+		}
 	}
 	var windows []string
 	for _, q := range api.queries {
@@ -352,19 +369,97 @@ func TestRegisterCoverageIsOffByDefault(t *testing.T) {
 			t.Fatal("aigateway.coverage registered with default configuration")
 		}
 	}
-	cfg.Collectors["aigateway.coverage"] = config.CollectorConfig{Enabled: true, Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
+	cfg.Collectors["aigateway.coverage"] = config.CollectorConfig{Enabled: true, Interval: 15 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
 	registry = collector.NewRegistry()
 	Register(collector.Deps{Config: cfg, API: &coverageAPI{}, Registry: registry})
 	var found bool
 	for _, e := range registry.Entries() {
 		if e.Collector.Name() == "aigateway.coverage" {
 			found = true
-			if _, ok := e.Collector.(collector.WindowCollector); !ok || e.MaxWindow != 5*time.Minute || e.InitialLookback != 30*time.Minute {
-				t.Fatalf("coverage entry = %+v, want a five-minute windowed collector keeping the configured lookback", e)
+			if _, ok := e.Collector.(collector.WindowCollector); !ok || e.Interval != 5*time.Minute || e.MaxWindow != 5*time.Minute || e.InitialLookback != 30*time.Minute {
+				t.Fatalf("coverage entry = %+v, want a five-minute cadence and window keeping the configured lookback", e)
 			}
 		}
 	}
 	if !found {
 		t.Fatal("enabled aigateway.coverage was not registered")
+	}
+}
+
+func TestCoverageTickWithoutAClosedWindowIsANoOp(t *testing.T) {
+	b := coverageBucket
+	cfg := coverageConfig("example-gateway")
+	cfg.Collectors["aigateway.logs"] = config.CollectorConfig{}
+	cfg.Collectors["aigateway.coverage"] = config.CollectorConfig{Enabled: true, Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
+	api := &coverageAPI{settings: coverageSettings(), groups: []map[string]any{groupsRow("example-gateway", 1)}}
+	registry := collector.NewRegistry()
+	Register(collector.Deps{Config: cfg, API: api, Registry: registry})
+	entry := registry.Entries()[0]
+	cov := entry.Collector.(*coverage)
+	// Scheduler jitter: the tick lands one second before the next window closes.
+	now := b.Add(19*time.Minute + 59*time.Second)
+	cov.now = func() time.Time { return now }
+	store, err := collector.NewFileStore(filepath.Join(t.TempDir(), "checkpoints.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set("aigateway.coverage", b.Add(5*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	s := collector.NewScheduler(registry, &telemetry.Buffer{}, store)
+	s.Now = func() time.Time { return now }
+	if err := s.RunOnce(context.Background(), entry); err != nil {
+		t.Fatalf("tick before the window closed: %v, want a no-op", err)
+	}
+	if lag := cov.Lag(); lag < 10*time.Minute || !now.Add(-lag).Equal(now.Add(-lag).Truncate(coverageWindow)) {
+		t.Fatalf("lag %s, want at least ten minutes ending on a window boundary", lag)
+	}
+	if mark, _ := store.Get("aigateway.coverage"); !mark.Equal(b.Add(5*time.Minute)) || len(api.queries) != 0 {
+		t.Fatalf("no-op tick moved to %s or queried %d times", mark, len(api.queries))
+	}
+	now = b.Add(20 * time.Minute)
+	if err := s.RunOnce(context.Background(), entry); err != nil {
+		t.Fatal(err)
+	}
+	if mark, _ := store.Get("aigateway.coverage"); !mark.Equal(b.Add(10 * time.Minute)) {
+		t.Fatalf("checkpoint = %s after the window closed, want %s", mark, b.Add(10*time.Minute))
+	}
+}
+
+func TestCoverageRefusesAWindowInsideTheHoldback(t *testing.T) {
+	b := coverageBucket
+	api := &coverageAPI{
+		settings: coverageSettings(),
+		groups:   []map[string]any{groupsRow("example-gateway", 1)},
+		logs:     map[string][]time.Time{"example-gateway": {b}},
+	}
+	// An explicit range bypasses the scheduler lag; the window ends 9m59s ago.
+	c := newTestCoverage(api, b.Add(14*time.Minute+59*time.Second), "example-gateway")
+	out := &telemetry.Buffer{}
+	mark, err := c.CollectWindow(context.Background(), b, b.Add(5*time.Minute), out)
+	if err == nil || !mark.Equal(b) || len(api.queries) != 0 || len(api.restQueries) != 0 || len(out.Metrics) != 0 {
+		t.Fatalf("window inside the holdback: mark=%s err=%v queries=%d rest=%d metrics=%d, want refusal", mark, err, len(api.queries), len(api.restQueries), len(out.Metrics))
+	}
+}
+
+func TestCoverageRESTCountDedupesIDsRepeatedAcrossPages(t *testing.T) {
+	b := coverageBucket
+	first := make([]coverageLogRow, 50)
+	for i := range first {
+		first[i] = coverageLogRow{ID: fmt.Sprintf("example-log-%02d", i), CreatedAt: b.Add(time.Duration(i) * time.Second)}
+	}
+	// A row inserted mid-read shifts the last row of page one onto page two.
+	second := []coverageLogRow{first[49], {ID: "example-log-50", CreatedAt: b.Add(time.Minute)}}
+	api := &coverageAPI{
+		settings: coverageSettings(),
+		groups:   []map[string]any{groupsRow("example-gateway", 51)},
+		pages:    map[string][][]coverageLogRow{"example-gateway": {first, second}},
+	}
+	out := &telemetry.Buffer{}
+	if _, err := newTestCoverage(api, b.Add(20*time.Minute), "example-gateway").CollectWindow(context.Background(), b, b.Add(5*time.Minute), out); err != nil {
+		t.Fatal(err)
+	}
+	if got := gapByGateway(t, out.Metrics)["example-gateway"]; got != 0 {
+		t.Fatalf("gap = %v with 51 distinct REST IDs and one repeat, want 0", got)
 	}
 }
