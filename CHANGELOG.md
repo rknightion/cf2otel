@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.8.0](https://github.com/rknightion/cf2otel/compare/v0.7.0...v0.8.0) (2026-09-26)
+
+
+### Features
+
+* **aigateway:** report REST log coverage against GraphQL request counts ([dacf99b](https://github.com/rknightion/cf2otel/commit/dacf99bd89a560174b7a264c8831e69530793e67))
+* **aigateway:** report REST log coverage against GraphQL request counts ([de07aa7](https://github.com/rknightion/cf2otel/commit/de07aa7688e71c2cc28e539bb3484d33b8342e1e))
+* **grafana:** add AI Gateway parity panels ([6019c01](https://github.com/rknightion/cf2otel/commit/6019c019c99da5dd32cc25c9a35ce75fe1558fb5))
+* **grafana:** add AI Gateway parity panels ([3fbb557](https://github.com/rknightion/cf2otel/commit/3fbb5575f1e2fe1c9ee11dd0e8ae2c943ce4642e))
+* **grafana:** cover post-wave-1 collectors and data-loss alerts ([a253d0b](https://github.com/rknightion/cf2otel/commit/a253d0b4fc463218af8a6c764ab3aa6edc3874d7))
+* **grafana:** cover post-wave-1 collectors and data-loss alerts ([234b425](https://github.com/rknightion/cf2otel/commit/234b4250eb88387994eecb3fab58495d3f06f8c3))
+
+
+### Bug Fixes
+
+* **aigateway:** pin coverage cadence and end each tick on a window boundary ([b01ed38](https://github.com/rknightion/cf2otel/commit/b01ed38b6ba5fdc88aabde70dae41bc92d32c990))
+* **aigateway:** reject a coverage range spanning more than one window ([43b14ee](https://github.com/rknightion/cf2otel/commit/43b14eea9fd9e396afee437caf4d3b4b743a1a99))
+* **aigateway:** skip null DLP findings ([b4b755e](https://github.com/rknightion/cf2otel/commit/b4b755e783298fb327caed300cafbbca293bf2bd))
+* **aigateway:** skip null DLP findings and refuse multi-window coverage ranges ([dfc5de6](https://github.com/rknightion/cf2otel/commit/dfc5de603ee5b3b50937ec319aeda43b0e8778bf))
+
 ## [0.7.0](https://github.com/rknightion/cf2otel/compare/v0.6.0...v0.7.0) (2026-09-26)
 
 
