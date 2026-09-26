@@ -19,11 +19,13 @@ def datasource(name: str, plugin: str, default: str) -> dict:
         "allowCustomValue": True, "hide": "dontHide", "refresh": "onDashboardLoad", "regex": "", "skipUrlSync": False}}
 
 
-def query(ds: str, expr: str, *, ref: str = "A", logs: bool = False, instant: bool = False) -> dict:
+def query(ds: str, expr: str, *, ref: str = "A", logs: bool = False, instant: bool = False, fmt: str | None = None) -> dict:
+    if fmt is None:
+        fmt = "logs" if logs else "time_series"
     return {"kind": "PanelQuery", "spec": {"refId": ref, "hidden": False, "datasource": {"uid": ds}, "query": {
         "kind": "DataQuery", "version": "v0", "group": "loki" if ds == LOKI else "prometheus",
         "datasource": {"name": ds}, "spec": {"expr": expr, "refId": ref, "instant": instant,
-        "range": not instant, "legendFormat": "", "format": "logs" if logs else "time_series"}}}}
+        "range": not instant, "legendFormat": "", "format": fmt}}}}
 
 
 def panel(pid: int, title: str, description: str, ds: str, expr: str, *, viz: str = "timeseries", unit: str = "short", logs: bool = False, instant: bool = False, second: str | None = None) -> tuple[str, dict]:
@@ -34,6 +36,23 @@ def panel(pid: int, title: str, description: str, ds: str, expr: str, *, viz: st
         "links": [], "data": {"kind": "QueryGroup", "spec": {"queries": queries, "queryOptions": {}, "transformations": []}},
         "vizConfig": {"kind": "VizConfig", "group": viz, "version": "12.1.0",
         "spec": {"options": {}, "fieldConfig": {"defaults": {"unit": unit}, "overrides": []}}}}}
+
+
+def table_panel(pid: int, title: str, description: str, ds: str, columns: list[tuple[str, str, str]]) -> tuple[str, dict]:
+    """A table panel merging several instant queries that share the same label set.
+
+    ``columns`` is a list of (refId, promql expr, display name) triples; each query is
+    an instant, table-formatted query, and a ``merge`` transformation joins them into
+    one row per shared label set (gen_ai_request_model, gen_ai_provider_name).
+    """
+    queries = [query(ds, expr, ref=ref, instant=True, fmt="table") for ref, expr, _name in columns]
+    overrides = [{"matcher": {"id": "byName", "options": f"Value #{ref}"},
+                  "properties": [{"id": "displayName", "value": name}]} for ref, _expr, name in columns]
+    return f"panel-{pid}", {"kind": "Panel", "spec": {"id": pid, "title": title, "description": description,
+        "links": [], "data": {"kind": "QueryGroup", "spec": {"queries": queries, "queryOptions": {},
+        "transformations": [{"id": "merge", "options": {}}]}},
+        "vizConfig": {"kind": "VizConfig", "group": "table", "version": "12.1.0",
+        "spec": {"options": {}, "fieldConfig": {"defaults": {"unit": "short"}, "overrides": overrides}}}}}
 
 
 def row(title: str, ids: list[int], *, collapse: bool = False) -> dict:
@@ -111,6 +130,22 @@ def render() -> dict:
         panel(304, "AI Gateway token usage", "Input and output totals are separate; cached and reasoning subsets are not added to totals.", PROM,
               'sum(rate(gen_ai_client_inference_usage_input_tokens_total{service_name="cf2otel"}[$__rate_interval]))',
               second='sum(rate(gen_ai_client_inference_usage_output_tokens_total{service_name="cf2otel"}[$__rate_interval]))', unit="short"),
+        panel(305, "AI Gateway cache-hit ratio", "Requests served from cache (cloudflare.ai_gateway.cached) over all completed requests.", PROM,
+              'sum(rate(cloudflare_ai_gateway_cache_hits_total{service_name="cf2otel"}[$__rate_interval])) / sum(rate(cloudflare_ai_gateway_requests_total{service_name="cf2otel"}[$__rate_interval]))', unit="percentunit"),
+        panel(306, "AI Gateway rate-limited (429) requests", "No metric carries the exact HTTP status; counted from the per-request log's status_code attribute.", LOKI,
+              'sum(count_over_time({service_name="cf2otel"} | event_name="cloudflare.ai_gateway.request" | cloudflare_ai_gateway_status_code="429" [$__range]))', viz="stat", instant=True),
+        panel(307, "AI Gateway cost by provider", "Gateway-reported cost values by provider; currency is unverified, so no currency unit is asserted.", PROM,
+              'sum by (gen_ai_provider_name) (rate(cloudflare_ai_gateway_cost_total{service_name="cf2otel"}[$__rate_interval]))', unit="none"),
+        panel(309, "AI Gateway failed requests", "Requests with a status code >= 400 or an explicit non-success outcome, by status class.", PROM,
+              'sum by (cf2otel_status_class) (rate(cloudflare_ai_gateway_errors_total{service_name="cf2otel"}[$__rate_interval]))', unit="reqps"),
+        panel(310, "AI Gateway DLP-flagged requests", "Requests with a flagged DLP outcome, split by request/response direction; blocked and other outcomes are excluded.", PROM,
+              'sum by (cloudflare_ai_gateway_dlp_direction) (rate(cloudflare_ai_gateway_dlp_requests_total{service_name="cf2otel",cloudflare_ai_gateway_dlp_action="flagged"}[$__rate_interval]))', unit="reqps"),
+        table_panel(308, "AI Gateway usage by model", "Request count, token usage and cost over the dashboard range, by model and provider.", PROM, [
+            ("A", 'sum by (gen_ai_request_model, gen_ai_provider_name) (increase(cloudflare_ai_gateway_requests_total{service_name="cf2otel"}[$__range]))', "Requests"),
+            ("B", 'sum by (gen_ai_request_model, gen_ai_provider_name) (increase(gen_ai_client_inference_usage_input_tokens_total{service_name="cf2otel"}[$__range]))', "Input tokens"),
+            ("C", 'sum by (gen_ai_request_model, gen_ai_provider_name) (increase(gen_ai_client_inference_usage_output_tokens_total{service_name="cf2otel"}[$__range]))', "Output tokens"),
+            ("D", 'sum by (gen_ai_request_model, gen_ai_provider_name) (increase(cloudflare_ai_gateway_cost_total{service_name="cf2otel"}[$__range]))', "Cost"),
+        ]),
         panel(401, "Collector last-success age", "Seconds since each collector last succeeded. An absent series needs investigation too.", PROM,
               'time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel"})', unit="s"),
         panel(402, "Collector errors", "Errors over the selected range, by collector.", PROM,
@@ -215,7 +250,7 @@ def render() -> dict:
         "tags": ["cloudflare", "cf2otel", "generated"], "annotations": [], "links": [], "preload": False, "cursorSync": "Crosshair",
         "timeSettings": {"from": "now-6h", "to": "now", "autoRefresh": "1m", "autoRefreshIntervals": ["1m", "5m", "15m", "1h"], "timezone": "browser", "hideTimepicker": False, "fiscalYearStartMonth": 0},
         "variables": [datasource("ds_prometheus", "prometheus", "grafanacloud-prom"), datasource("ds_loki", "loki", "grafanacloud-logs")],
-        "elements": p, "layout": {"kind": "TabsLayout", "spec": {"tabs": [tab("Access", [101, 102, 103]), tab("Protected HTTP", [201, 202, 203, 204]), tab("AI Gateway", [301, 302, 303, 304]), tab("Collector", [401, 402, 403, 404, 405, 406, 407, 408]), firewall_dns_audit_tab(), rum_tab(), platform_tab()]}}}}
+        "elements": p, "layout": {"kind": "TabsLayout", "spec": {"tabs": [tab("Access", [101, 102, 103]), tab("Protected HTTP", [201, 202, 203, 204]), tab("AI Gateway", [301, 302, 303, 304, 305, 306, 307, 308, 309, 310]), tab("Collector", [401, 402, 403, 404, 405, 406, 407, 408]), firewall_dns_audit_tab(), rum_tab(), platform_tab()]}}}}
 
 
 def main() -> None:

@@ -699,6 +699,486 @@
           }
         }
       },
+      "panel-305": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "uid": "${ds_prometheus}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "expr": "sum(rate(cloudflare_ai_gateway_cache_hits_total{service_name=\"cf2otel\"}[$__rate_interval])) / sum(rate(cloudflare_ai_gateway_requests_total{service_name=\"cf2otel\"}[$__rate_interval]))",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Requests served from cache (cloudflare.ai_gateway.cached) over all completed requests.",
+          "id": 305,
+          "links": [],
+          "title": "AI Gateway cache-hit ratio",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit"
+                },
+                "overrides": []
+              },
+              "options": {}
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-306": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "uid": "${ds_loki}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_loki}"
+                      },
+                      "group": "loki",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "expr": "sum(count_over_time({service_name=\"cf2otel\"} | event_name=\"cloudflare.ai_gateway.request\" | cloudflare_ai_gateway_status_code=\"429\" [$__range]))",
+                        "format": "time_series",
+                        "instant": true,
+                        "legendFormat": "",
+                        "range": false,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "No metric carries the exact HTTP status; counted from the per-request log's status_code attribute.",
+          "id": 306,
+          "links": [],
+          "title": "AI Gateway rate-limited (429) requests",
+          "vizConfig": {
+            "group": "stat",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "options": {}
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-307": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "uid": "${ds_prometheus}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "expr": "sum by (gen_ai_provider_name) (rate(cloudflare_ai_gateway_cost_total{service_name=\"cf2otel\"}[$__rate_interval]))",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Gateway-reported cost values by provider; currency is unverified, so no currency unit is asserted.",
+          "id": 307,
+          "links": [],
+          "title": "AI Gateway cost by provider",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none"
+                },
+                "overrides": []
+              },
+              "options": {}
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-308": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "uid": "${ds_prometheus}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "expr": "sum by (gen_ai_request_model, gen_ai_provider_name) (increase(cloudflare_ai_gateway_requests_total{service_name=\"cf2otel\"}[$__range]))",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "",
+                        "range": false,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "uid": "${ds_prometheus}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "expr": "sum by (gen_ai_request_model, gen_ai_provider_name) (increase(gen_ai_client_inference_usage_input_tokens_total{service_name=\"cf2otel\"}[$__range]))",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "",
+                        "range": false,
+                        "refId": "B"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "B"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "uid": "${ds_prometheus}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "expr": "sum by (gen_ai_request_model, gen_ai_provider_name) (increase(gen_ai_client_inference_usage_output_tokens_total{service_name=\"cf2otel\"}[$__range]))",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "",
+                        "range": false,
+                        "refId": "C"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "C"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "uid": "${ds_prometheus}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "expr": "sum by (gen_ai_request_model, gen_ai_provider_name) (increase(cloudflare_ai_gateway_cost_total{service_name=\"cf2otel\"}[$__range]))",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "",
+                        "range": false,
+                        "refId": "D"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "D"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "id": "merge",
+                  "options": {}
+                }
+              ]
+            }
+          },
+          "description": "Request count, token usage and cost over the dashboard range, by model and provider.",
+          "id": 308,
+          "links": [],
+          "title": "AI Gateway usage by model",
+          "vizConfig": {
+            "group": "table",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value #A"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Requests"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value #B"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Input tokens"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value #C"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Output tokens"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value #D"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Cost"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "options": {}
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-309": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "uid": "${ds_prometheus}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "expr": "sum by (cf2otel_status_class) (rate(cloudflare_ai_gateway_errors_total{service_name=\"cf2otel\"}[$__rate_interval]))",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Requests with a status code >= 400 or an explicit non-success outcome, by status class.",
+          "id": 309,
+          "links": [],
+          "title": "AI Gateway failed requests",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "reqps"
+                },
+                "overrides": []
+              },
+              "options": {}
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-310": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "uid": "${ds_prometheus}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "expr": "sum by (cloudflare_ai_gateway_dlp_direction) (rate(cloudflare_ai_gateway_dlp_requests_total{service_name=\"cf2otel\",cloudflare_ai_gateway_dlp_action=\"flagged\"}[$__rate_interval]))",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Requests with a flagged DLP outcome, split by request/response direction; blocked and other outcomes are excluded.",
+          "id": 310,
+          "links": [],
+          "title": "AI Gateway DLP-flagged requests",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "reqps"
+                },
+                "overrides": []
+              },
+              "options": {}
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
       "panel-401": {
         "kind": "Panel",
         "spec": {
@@ -3756,6 +4236,84 @@
                                   "width": 12,
                                   "x": 12,
                                   "y": 8
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-305"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 16
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-306"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 12,
+                                  "y": 16
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-307"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 24
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-308"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 12,
+                                  "y": 24
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-309"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 32
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-310"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 12,
+                                  "y": 32
                                 }
                               }
                             ]
