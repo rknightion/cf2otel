@@ -18,7 +18,7 @@ docker run --rm --read-only --user 65532:65532 \
 
 Set `cloudflare.account_id`, `otlp.endpoint` and `otlp.grafana_cloud.instance_id` in YAML, or use the matching environment variables. The OTLP endpoint is the root URL of the destination's OTLP gateway. The default protocol is HTTP; gRPC is also supported.
 
-The example enables the wave-1 collectors. Start with the default `http.scope: access_protected` so request events are restricted to hosts found in Access applications. See [Configuration](configuration.md) before using the broader `hosts` or `all` scopes.
+The example enables the registered collectors, with `aigateway.metrics` disabled because GraphQL Groups ingestion lag is unbounded. AI Gateway metrics are supplied by the REST log collector. Start with the default `http.scope: access_protected` so request events are restricted to hosts found in Access applications. See [Configuration](configuration.md) before using the broader `hosts` or `all` scopes.
 
 ## Check output
 

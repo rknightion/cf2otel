@@ -60,8 +60,98 @@ config:
     include_service_tokens: false
   http:
     scope: access_protected
+    metrics_scope: ""
     hosts: []
     zones: []
+    max_metric_hosts_per_zone: 1000
+    max_metric_series_per_window: 10000
+  platform:
+    max_metric_series_per_window: 500
+  # Escape the dot in a collector key when overriding it with Helm --set, e.g.
+  # --set 'config.collectors.audit\.logs.enabled=false'.
+  collectors:
+    access.logins:
+      enabled: true
+    access.login_metrics:
+      enabled: true
+    access.scim:
+      enabled: true
+    inventory.access:
+      enabled: true
+    httpreq.events:
+      enabled: true
+    httpreq.metrics:
+      enabled: true
+    aigateway.logs:
+      enabled: true
+    aigateway.metrics:
+      enabled: false
+    audit.logs:
+      enabled: true
+    firewall.events:
+      enabled: true
+    firewall.metrics:
+      enabled: true
+    dns.events:
+      enabled: true
+    dns.metrics:
+      enabled: true
+    rum.pageloads:
+      enabled: true
+    rum.web_vitals:
+      enabled: true
+    gateway.dns:
+      enabled: true
+    workers.overview:
+      enabled: true
+    turnstile.events:
+      enabled: true
+    logpush.health:
+      enabled: true
+    d1.analytics:
+      enabled: true
+    d1.queries:
+      enabled: true
+    d1.storage:
+      enabled: true
+    kv.operations:
+      enabled: true
+    kv.storage:
+      enabled: true
+    r2.bandwidth:
+      enabled: true
+    r2.catalog_data:
+      enabled: true
+    r2.catalog_maintenance:
+      enabled: true
+    r2.operations:
+      enabled: true
+    r2.storage:
+      enabled: true
+    r2.sql:
+      enabled: true
+    durableobjects.invocations:
+      enabled: true
+    durableobjects.periodic:
+      enabled: true
+    durableobjects.sql_storage:
+      enabled: true
+    durableobjects.subrequests:
+      enabled: true
+    queues.backlog:
+      enabled: true
+    queues.consumer:
+      enabled: true
+    queues.delayed_backlog:
+      enabled: true
+    queues.message_operations:
+      enabled: true
+    email.routing:
+      enabled: true
+    email.sending:
+      enabled: true
+    selfobs:
+      enabled: true
   identity:
     enabled: true
     match_window: 15m

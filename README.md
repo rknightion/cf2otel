@@ -7,9 +7,10 @@ requests (following the OpenTelemetry GenAI semantic conventions), and the wider
 log surface.
 
 It is a single Go binary with a distroless container image, built for Grafana Cloud.
-The first release collects Access, HTTP request, AI Gateway and account inventory signals.
-The AI Gateway GraphQL metrics poller remains disabled while its ingestion lag is measured;
-the REST log poller supplies AI Gateway metrics in the meantime.
+Collectors cover Access, HTTP requests, AI Gateway, audit logs, firewall and DNS events, Web Analytics,
+Gateway DNS, Workers overview, Turnstile, Logpush health, D1, KV, R2, Durable Objects, Queues, Email
+Routing and Sending, and the poller's own health signals. AI Gateway GraphQL metrics remain disabled
+while ingestion lag is unbounded; the REST log collector supplies AI Gateway metrics.
 
 See the [getting started guide](docs/getting-started.md), [configuration](docs/configuration.md)
 and [signal catalogue](docs/signals.md).
