@@ -36,7 +36,7 @@ func TestLoadPrecedenceAndRedaction(t *testing.T) {
 
 func TestCollectorEnvironmentOverrides(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(path, []byte("collectors:\n  aigateway.coverage:\n    enabled: false\n    interval: 1m\n    initial_lookback: 2m\n    max_window: 3m\n  r2.catalog_data:\n    enabled: true\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("collectors:\n  aigateway.coverage:\n    enabled: false\n    interval: 1m\n    initial_lookback: 2m\n    max_window: 3m\n  r2.catalog_data:\n    enabled: true\n    interval: 2m\n    initial_lookback: 4m\n    max_window: 6m\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	for key, value := range map[string]string{
@@ -45,6 +45,9 @@ func TestCollectorEnvironmentOverrides(t *testing.T) {
 		"CF2OTEL_COLLECTORS__AIGATEWAY_COVERAGE__INITIAL_LOOKBACK": "45m",
 		"CF2OTEL_COLLECTORS__AIGATEWAY_COVERAGE__MAX_WINDOW":       "2h",
 		"CF2OTEL_COLLECTORS__R2_CATALOG_DATA__ENABLED":             "false",
+		"CF2OTEL_COLLECTORS__R2_CATALOG_DATA__INTERVAL":            "7m",
+		"CF2OTEL_COLLECTORS__R2_CATALOG_DATA__INITIAL_LOOKBACK":    "25m",
+		"CF2OTEL_COLLECTORS__R2_CATALOG_DATA__MAX_WINDOW":          "90m",
 	} {
 		t.Setenv(key, value)
 	}
@@ -55,7 +58,7 @@ func TestCollectorEnvironmentOverrides(t *testing.T) {
 	if got := c.Collector("aigateway.coverage"); got != (CollectorConfig{Enabled: true, Interval: 10 * time.Minute, InitialLookback: 45 * time.Minute, MaxWindow: 2 * time.Hour}) {
 		t.Fatalf("coverage override = %+v", got)
 	}
-	if got := c.Collector("r2.catalog_data"); got.Enabled || got.Interval != 5*time.Minute {
+	if got := c.Collector("r2.catalog_data"); got != (CollectorConfig{Enabled: false, Interval: 7 * time.Minute, InitialLookback: 25 * time.Minute, MaxWindow: 90 * time.Minute}) {
 		t.Fatalf("underscore-name override = %+v", got)
 	}
 }
