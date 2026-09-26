@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/rknightion/cf2otel/compare/v0.7.0...v0.8.0) (2026-09-26)
+
+
+### Features
+
+* **grafana:** cover post-wave-1 collectors and data-loss alerts ([234b425](https://github.com/rknightion/cf2otel/commit/234b4250eb88387994eecb3fab58495d3f06f8c3))
+
 ## [0.7.0](https://github.com/rknightion/cf2otel/compare/v0.6.0...v0.7.0) (2026-09-26)
 
 
