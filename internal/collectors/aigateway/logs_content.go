@@ -195,16 +195,26 @@ func parseDLPOutcome(action string, profiles json.RawMessage) (dlpOutcome, bool)
 
 // parseDLPFindings tolerates a missing, null, empty or unparseable
 // dlp_profiles field by returning no findings rather than an error; the AI
-// Gateway logs API shape for this field is otherwise unverified.
+// Gateway logs API shape for this field is otherwise unverified. A JSON null
+// array element is skipped rather than counted as a bare finding: decoding
+// into a pointer slice leaves a null element as a nil pointer (encoding/json
+// only zeroes pointer, interface, map and slice kinds on a null literal),
+// which a non-pointer element would silently swallow as a zero-value finding.
 func parseDLPFindings(raw json.RawMessage) []dlpFinding {
 	if len(raw) == 0 || string(raw) == "null" {
 		return nil
 	}
-	var findings []dlpFinding
+	var findings []*dlpFinding
 	if json.Unmarshal(raw, &findings) != nil {
 		return nil
 	}
-	return findings
+	out := make([]dlpFinding, 0, len(findings))
+	for _, f := range findings {
+		if f != nil {
+			out = append(out, *f)
+		}
+	}
+	return out
 }
 
 func dlpAction(action string) string {

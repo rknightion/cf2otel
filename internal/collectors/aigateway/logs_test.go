@@ -123,8 +123,13 @@ type observedMetric struct {
 	value float64
 	attrs []telemetry.Attr
 }
+type observedLogEvent struct {
+	name  string
+	attrs []telemetry.Attr
+}
 type fakeEmitter struct {
 	logs                 int
+	logEvents            []observedLogEvent
 	spans                []telemetry.SpanSpec
 	counters, histograms []observedMetric
 }
@@ -138,8 +143,9 @@ func (e *fakeEmitter) Histogram(_ context.Context, n string, v float64, a ...tel
 	e.histograms = append(e.histograms, observedMetric{n, v, a})
 	return nil
 }
-func (e *fakeEmitter) LogEvent(context.Context, string, string, time.Time, otellog.Severity, ...telemetry.Attr) error {
+func (e *fakeEmitter) LogEvent(_ context.Context, name string, _ string, _ time.Time, _ otellog.Severity, attrs ...telemetry.Attr) error {
 	e.logs++
+	e.logEvents = append(e.logEvents, observedLogEvent{name, attrs})
 	return nil
 }
 func (e *fakeEmitter) Span(_ context.Context, s telemetry.SpanSpec) error {
@@ -358,6 +364,7 @@ func TestDLPPolicyOutcomes(t *testing.T) {
 		wantPolicyIDs        []string
 		wantProfileIDs       []string
 		wantMetricDirections []string
+		wantNoProfilesAttr   bool // dlp_profiles field itself is absent from the row
 	}{
 		{
 			name:                 "request-side flag",
@@ -413,11 +420,48 @@ func TestDLPPolicyOutcomes(t *testing.T) {
 			wantEmitted: false,
 		},
 		{
+			name:      "duplicate direction and duplicate policy id across findings",
+			dlpAction: `"FLAG"`,
+			dlpProfiles: fmt.Sprintf(`[
+				{"profile":{"profile_id":%q,"entry_ids":["22222222-2222-4222-8222-222222222222"]},"policy_ids":["example-dlp-policy"],"check":"REQUEST"},
+				{"profile":{"profile_id":%q,"entry_ids":["55555555-5555-4555-8555-555555555555"]},"policy_ids":["example-dlp-policy"],"check":"REQUEST"}
+			]`, profileA, profileB),
+			wantEmitted:          true,
+			wantAction:           "flagged",
+			wantDirections:       []string{"request"},
+			wantPolicyIDs:        []string{"example-dlp-policy"},
+			wantProfileIDs:       []string{profileA, profileB},
+			wantMetricDirections: []string{"request"},
+		},
+		{
+			name:      "null element alongside a real finding is skipped",
+			dlpAction: `"FLAG"`,
+			dlpProfiles: fmt.Sprintf(`[
+				null,
+				{"profile":{"profile_id":%q,"entry_ids":["22222222-2222-4222-8222-222222222222"]},"policy_ids":["example-dlp-policy"],"check":"REQUEST"}
+			]`, profileA),
+			wantEmitted:          true,
+			wantAction:           "flagged",
+			wantDirections:       []string{"request"},
+			wantPolicyIDs:        []string{"example-dlp-policy"},
+			wantProfileIDs:       []string{profileA},
+			wantMetricDirections: []string{"request"},
+		},
+		{
+			name:                 "every dlp_profiles element is null",
+			dlpAction:            `"FLAG"`,
+			dlpProfiles:          `[null, null]`,
+			wantEmitted:          true,
+			wantAction:           "flagged",
+			wantMetricDirections: []string{"other"},
+		},
+		{
 			name:                 "action present, dlp_profiles field missing",
 			dlpAction:            `"FLAG"`,
 			wantEmitted:          true,
 			wantAction:           "flagged",
 			wantMetricDirections: []string{"other"},
+			wantNoProfilesAttr:   true,
 		},
 		{
 			name:                 "action present, dlp_profiles empty array",
@@ -448,7 +492,11 @@ func TestDLPPolicyOutcomes(t *testing.T) {
 			if len(out.spans) != 1 {
 				t.Fatalf("spans=%d, want 1", len(out.spans))
 			}
+			if len(out.logEvents) != 1 {
+				t.Fatalf("log events=%d, want 1", len(out.logEvents))
+			}
 			span := out.spans[0]
+			logAttrs := out.logEvents[0].attrs
 			gotAction := attr(span.Attrs, semconv.AttrAIGatewayDLPAction)
 
 			if !tc.wantEmitted {
@@ -457,6 +505,9 @@ func TestDLPPolicyOutcomes(t *testing.T) {
 					attr(span.Attrs, semconv.AttrAIGatewayDLPPolicyID) != "" ||
 					attr(span.Attrs, semconv.AttrAIGatewayDLPProfileID) != "" {
 					t.Fatalf("expected no DLP attributes for a null row, got action=%q", gotAction)
+				}
+				if attr(logAttrs, semconv.AttrAIGatewayDLPAction) != "" || attr(logAttrs, semconv.AttrAIGatewayDLPProfiles) != "" {
+					t.Fatalf("expected no DLP log-event attributes for a null row")
 				}
 				for _, m := range out.counters {
 					if m.name == semconv.MetricAIGatewayDLPRequests {
@@ -477,6 +528,32 @@ func TestDLPPolicyOutcomes(t *testing.T) {
 			}
 			if got, want := attr(span.Attrs, semconv.AttrAIGatewayDLPProfileID), jsonStringArray(tc.wantProfileIDs); got != want {
 				t.Fatalf("profile id=%q, want %q", got, want)
+			}
+
+			// The log event carries the same DLP attributes as the span,
+			// including the restored redacted raw dlp.profiles payload.
+			if got := attr(logAttrs, semconv.AttrAIGatewayDLPAction); got != tc.wantAction {
+				t.Fatalf("log event action=%q, want %q", got, tc.wantAction)
+			}
+			if got, want := attr(logAttrs, semconv.AttrAIGatewayDLPDirection), attr(span.Attrs, semconv.AttrAIGatewayDLPDirection); got != want {
+				t.Fatalf("log event direction=%q, want span value %q", got, want)
+			}
+			if got, want := attr(logAttrs, semconv.AttrAIGatewayDLPPolicyID), attr(span.Attrs, semconv.AttrAIGatewayDLPPolicyID); got != want {
+				t.Fatalf("log event policy id=%q, want span value %q", got, want)
+			}
+			if got, want := attr(logAttrs, semconv.AttrAIGatewayDLPProfileID), attr(span.Attrs, semconv.AttrAIGatewayDLPProfileID); got != want {
+				t.Fatalf("log event profile id=%q, want span value %q", got, want)
+			}
+			gotProfiles := attr(logAttrs, semconv.AttrAIGatewayDLPProfiles)
+			if tc.wantNoProfilesAttr {
+				if gotProfiles != "" {
+					t.Fatalf("log event dlp.profiles=%q, want absent", gotProfiles)
+				}
+			} else if gotProfiles == "" {
+				t.Fatalf("log event dlp.profiles absent, want the redacted raw payload")
+			}
+			if want := attr(span.Attrs, semconv.AttrAIGatewayDLPProfiles); gotProfiles != want {
+				t.Fatalf("log event dlp.profiles=%q, want span value %q", gotProfiles, want)
 			}
 
 			var gotMetricDirs []string

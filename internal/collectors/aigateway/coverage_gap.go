@@ -84,6 +84,16 @@ func (c *coverage) CollectWindow(ctx context.Context, from, to time.Time, out te
 		}
 		return from, errors.New("aigateway coverage: window contains no closed five-minute window")
 	}
+	// The scheduler always registers this collector with a MaxWindow of
+	// coverageWindow (Register), so it never asks for more than one closed
+	// window itself; only an explicit CollectRange call (the -since/-before
+	// path, which passes the operator's raw range straight through in one
+	// call) can. Silently exporting the first closed window while reporting
+	// success would hide every later window in the range, so refuse before
+	// reading or emitting anything.
+	if !end.Add(coverageWindow).After(to) {
+		return from, fmt.Errorf("aigateway coverage: range %s to %s spans more than one closed %s window; request one window per call", from.Format(time.RFC3339), to.Format(time.RFC3339), coverageWindow)
+	}
 	// CollectRange calls this without the scheduler lag.
 	if end.After(c.now().UTC().Add(-coverageLag)) {
 		return from, fmt.Errorf("aigateway coverage: window ending %s is inside the %s holdback", end.Format(time.RFC3339), coverageLag)
