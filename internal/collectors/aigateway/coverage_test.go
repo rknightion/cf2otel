@@ -261,14 +261,15 @@ func TestCoverageCommitsOneClosedAlignedBucketPerWindow(t *testing.T) {
 		t.Fatalf("open bucket: mark=%s err=%v queries=%d, want no progress", mark, err, len(api.queries))
 	}
 
-	// A wide window still commits exactly one bucket, and adjacent buckets
-	// count the boundary row once.
+	// Successive one-window calls (as the scheduler's catch-up loop makes,
+	// each capped to the registered five-minute MaxWindow) commit one bucket
+	// each, and adjacent buckets count the boundary row once.
 	first, second := &telemetry.Buffer{}, &telemetry.Buffer{}
-	mark, err = c.CollectWindow(context.Background(), b, b.Add(15*time.Minute), first)
+	mark, err = c.CollectWindow(context.Background(), b, b.Add(5*time.Minute), first)
 	if err != nil || !mark.Equal(b.Add(5*time.Minute)) {
 		t.Fatalf("first bucket mark=%s err=%v", mark, err)
 	}
-	mark, err = c.CollectWindow(context.Background(), mark, b.Add(15*time.Minute), second)
+	mark, err = c.CollectWindow(context.Background(), mark, b.Add(10*time.Minute), second)
 	if err != nil || !mark.Equal(b.Add(10*time.Minute)) {
 		t.Fatalf("second bucket mark=%s err=%v", mark, err)
 	}
@@ -277,6 +278,52 @@ func TestCoverageCommitsOneClosedAlignedBucketPerWindow(t *testing.T) {
 	}
 	if len(api.queries) != 2 || !api.queries[0].To.Equal(api.queries[1].From) || api.queries[1].To.Sub(api.queries[1].From) != 5*time.Minute {
 		t.Fatalf("GraphQL windows = %+v, want two adjacent five-minute buckets", api.queries)
+	}
+}
+
+// TestCoverageRangeSpanningMultipleWindowsIsRejected covers a -since/-before
+// CollectRange call: the scheduler always registers this collector with a
+// five-minute MaxWindow (TestRegisterCoverageIsOffByDefault), so it never
+// asks CollectWindow for more than one closed window itself. CollectRange
+// passes the operator's raw range straight through in one call
+// (internal/collector's CollectRange, frozen), so a range spanning two or
+// more closed windows must be refused rather than silently committing only
+// the first window while reporting success.
+func TestCoverageRangeSpanningMultipleWindowsIsRejected(t *testing.T) {
+	b := coverageBucket
+	for _, tc := range []struct {
+		name    string
+		to      time.Time
+		wantErr bool
+	}{
+		{"exactly one window", b.Add(5 * time.Minute), false},
+		{"one window plus a trailing partial window", b.Add(9 * time.Minute), false},
+		{"exactly two windows", b.Add(10 * time.Minute), true},
+		{"two windows plus a trailing partial window", b.Add(14 * time.Minute), true},
+		{"three windows", b.Add(15 * time.Minute), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := &coverageAPI{
+				settings: coverageSettings(),
+				groups:   []map[string]any{groupsRow("example-gateway", 1)},
+				logs:     map[string][]time.Time{"example-gateway": {b}},
+			}
+			c := newTestCoverage(api, tc.to.Add(20*time.Minute), "example-gateway")
+			out := &telemetry.Buffer{}
+			mark, err := c.CollectWindow(context.Background(), b, tc.to, out)
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "more than one closed") {
+					t.Fatalf("to=%s: err=%v, want a multi-window range refusal", tc.to, err)
+				}
+				if !mark.Equal(b) || len(api.queries) != 0 || len(api.restQueries) != 0 || len(out.Metrics) != 0 {
+					t.Fatalf("to=%s: mark=%s queries=%d rest=%d metrics=%d, want no progress and nothing exported", tc.to, mark, len(api.queries), len(api.restQueries), len(out.Metrics))
+				}
+				return
+			}
+			if err != nil || !mark.Equal(b.Add(5*time.Minute)) {
+				t.Fatalf("to=%s: mark=%s err=%v, want the first window committed", tc.to, mark, err)
+			}
+		})
 	}
 }
 
