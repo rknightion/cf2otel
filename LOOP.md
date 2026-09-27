@@ -79,7 +79,10 @@ None recorded.
   drift (loop 10 preparation, CFO-0041).
 - SCIM update-log rows: `resource_user_email` is absent on every GROUP row and on some USER rows.
   The owner's rule is that it must appear in at least one row of the page, never on every row
-  (Rob, 2026-09-27, CFO-0042).
+  (Rob, 2026-09-27, CFO-0042). A nonempty page with no email on any row, such as a group-only sync
+  hour, is therefore a canary difference by design; do not "fix" it by suppressing the check (Rob
+  kept the rule at loop 12 preparation over a CodeRabbit major). SCIM traffic is sparse: 47 of 48
+  hourly canary windows were empty in the loop 12 preparation census.
 - On an external write's rejection, capture the full response body before deciding whether to roll
   back, and re-GET to confirm a state actually changed before rolling back a write that was itself
   rejected with nothing changed (evidence brief D8).
