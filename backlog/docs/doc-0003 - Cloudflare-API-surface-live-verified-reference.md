@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-09-26 23:29'
+updated_date: '2026-09-27 10:01'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -228,3 +228,9 @@ variants had rows; the DMARC dataset had none. The Groups-backed routing and sen
 
 - The Access apps drift canary failed on a row without `domain`. A read-only census found 17 Access apps: 15 with `domain`, and two `self_hosted` apps with destination types `worker` and `all_preview_workers` that omit it. The canary currently tests only the first returned row and requires `domain` for every app. The failure establishes a conditional-shape gap in the canary, not an API regression.
 - A throwaway keyed Worker with a `send_email` binding accepted both builder and legacy send modes with HTTP 200 and `ok: true`. The Worker was deleted after the two successful sends. For the closed [20:15Z, 20:45Z) window, `emailRoutingAdaptiveGroups` counted four events across account-owned enabled zones; `emailSendingAdaptiveGroups` returned zero rows. The source-only Sending rechecks at about 90 minutes and three hours also returned zero, while Routing remained four. The 30-minute Mimir `increase()` for Routing extrapolated beyond four, so it is not exact window equality evidence. These sends do not establish Email Sending dataset input.
+
+## 13. Loop 10 observations (2026-09-27)
+
+- The Access apps first-page census found 17 rows: 15 domain-based apps with `domain`, and two `self_hosted` apps without `domain` whose destinations are respectively `worker` and `all_preview_workers`. The Access apps drift probe currently requests `per_page=1`, so checking every returned row still inspects only one live app. A candidate conditional contract was withheld after independent review found this gap; the live contract remains unchanged pending an amendment that permits a larger first-page request.
+- The SCIM update-log first page had 12 rows; six lack `resource_user_email` (all five GROUP rows and one USER row). Its drift entry still checks only the first row and needs a separately decided shape rule before all-row checking.
+- Email Routing has exact closed-window source-to-Mimir evidence from loop 8. Email Sending remained absent input after both REST sends and Worker `send_email` builder and legacy sends: no `emailSendingAdaptiveGroups` rows through the three-hour recheck and no Mimir counter increase. The owner amended CFO-0024 AC4 to record that absence and closed the task; this is not positive Sending equality proof.

@@ -4,7 +4,7 @@ title: AI Gateway log-coverage check from GraphQL Groups counts
 status: Parked
 assignee: []
 created_date: '2026-09-26 16:05'
-updated_date: '2026-09-26 23:27'
+updated_date: '2026-09-27 10:01'
 labels:
   - ai-gateway
 dependencies: []
@@ -40,4 +40,6 @@ Loop 8: PROBE-38 (read-only, [16:40Z,16:45Z)): REST logs list with start_date/en
 Loop 8 run-end park: AC1-2 done and released in v0.8.0 (deployed to camden 18:57:55Z, healthy); the collector is off by default and camden's config does not enable it. AC3 resume: add collectors: aigateway.coverage (enabled true, interval 5m, initial_lookback 30m, max_window 1h) to the camden config.yaml under a goal that authorises that edit, restart, then compare one window's Groups count, REST count and the emitted gauge on m7kni Mimir. Loop 8: implementation 1/4 (L38-a1), review-repair 1/3 (L38-rr1 after REV-L38 FAIL), infrastructure retries 1 (CodeRabbit WebSocket); grants: PROBE-38 read-only, contract entry by root; reason parked on config authority.
 
 Loop 9: implementation attempts 1/4 carried, review-repair 1/3 carried; infrastructure events: 1 carried CodeRabbit WebSocket, 1 deploy-health watcher deadline overrun this loop. Grant: release v0.8.1 and enable coverage by four literal Camden compose environment entries after the Email Sending checkpoint receipt. DEP-1 on 0.8.1 passed compose validation and reported healthy with coverage checkpoint 21:00Z, matching image digest and no startup errors, but its receipt arrived 17m03s after watcher start, beyond the 15-minute outer deadline. Per ship contract, restored .env and compose backups and recreated 0.8.0; the full rollback watcher was healthy and matched the previous digest and file hashes. LIVE-38 did not start, so AC3 stays unchecked. Resume with a separately authorised deploy whose 10-minute health receipt finishes within the 15-minute outer deadline, then compare a positive committed Groups window, REST count and Mimir gauge exactly.
+
+Loop 10: implementation 1/4 and review-repair 1/3 carried; infrastructure retries 2 health-watcher unobserved windows. One authorised v0.8.1 forward deploy used the four literal compose environment entries. Both sleep-guarded health watcher launches produced no receipt within 15 minutes; neither supplied the required observation count. Restored both pre-loop10 backups and recreated v0.8.0. Readback healthy, image digest and all three file hashes equal prestate. LIVE-38 was not admitted; AC3 remains open. Resume with a reliable sleep-guarded observation path and a fresh authorised deploy, then exact positive-window source/REST/Mimir comparison.
 <!-- SECTION:NOTES:END -->

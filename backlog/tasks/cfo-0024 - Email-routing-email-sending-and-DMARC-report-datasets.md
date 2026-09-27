@@ -1,11 +1,11 @@
 ---
 id: CFO-0024
 title: 'Email routing, email sending and DMARC report datasets'
-status: Parked
+status: Done
 assignee:
   - '@rknightion'
 created_date: '2026-09-23 10:04'
-updated_date: '2026-09-26 23:27'
+updated_date: '2026-09-27 09:27'
 labels:
   - 'wave:2'
   - email
@@ -25,7 +25,7 @@ Zone datasets emailRoutingAdaptive, emailSendingAdaptive, dmarcReportsAdaptive.
 - [x] #1 Check which zones have data before building
 - [x] #2 Collectors for the Groups-backed email datasets E24-A confirmed emit only frozen semconv names and bounded attributes, with tests and docs rows
 - [x] #3 A release containing them is deployed to camden and healthy
-- [ ] #4 Each built email dataset is proven live under the same rule as CFO-0023 AC4
+- [x] #4 Email Routing is proven live by exact source-to-Mimir equality, and Email Sending is recorded as absent input: REST sends and Worker send_email sends (builder and legacy) produced no emailSendingAdaptiveGroups rows within three hours while the Mimir sending counter stayed 0 (owner amendment 2026-09-27)
 <!-- AC:END -->
 
 ## Definition of Done
@@ -67,4 +67,6 @@ Loop 8 LIVE-24b (2026-09-26): two real Email Sending REST sends (POST /accounts/
 Loop 8 run-end: parked unchanged at AC4 (sending only); implementation 3/4, review-repair 5/7, infrastructure retries 0; 2 of 5 authorised sends used.
 
 Loop 9 LIVE-24c: implementation attempts 3/4 carried, review-repair 5/7 carried, no code attempt or review round used. Infrastructure events: local send watcher restarted once before any send; two Cloudflare edge 1010 transport blocks were retried once per mode using a browser user agent. Grant: one keyed, allow-listed, observable throwaway Worker, one deploy, one secret put, four request attempts at most, one delete. Builder and legacy send_email modes each returned HTTP 200 and ok true on their authorised retries at 20:23Z and 20:25Z. Loki had a canary log; Worker deletion was confirmed absent (10007). After both email checkpoints passed 20:45Z, the exact [20:15Z,20:45Z) source census across 23 enabled owned zones showed Routing 4 and Sending 0. Sending stayed 0 at 21:55Z and 23:25Z rechecks, three hours after the last send; Mimir had one Sending series with increase 0. No nonzero Sending source exists to compare, so AC4 remains unchecked and FIX-E24 was not admitted. Resume with owner decision on amending AC4 or a Cloudflare-confirmed send path that populates emailSendingAdaptiveGroups; any new live proof needs a fresh committed source window and matching Mimir value.
+
+Loop 10: AC4 amended by owner decision 2026-09-27 (loop 10 preparation). Routing exact proof: loop 8 LIVE-24b. Sending absent input: loop 8 REST sends and loop 9 Worker send_email builder and legacy sends, zero source rows at checkpoint, 90 min and 3 h, Mimir increase 0. No code change; attempts implementation 3/4 and review-repair 5/7 final; infrastructure retries 0 this loop.
 <!-- SECTION:NOTES:END -->
