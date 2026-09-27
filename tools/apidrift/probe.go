@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -41,6 +42,30 @@ type restContract struct {
 	CheckAllRows                 bool                `json:"check_all_rows,omitempty"`
 	OptionalWhenDestinationTypes map[string][]string `json:"optional_when_destination_types,omitempty"`
 	RequiredInAnyRow             []string            `json:"required_in_any_row,omitempty"`
+	invalidNullRowRule           bool
+}
+
+func (r *restContract) UnmarshalJSON(data []byte) error {
+	type restContractFields restContract
+	var fields restContractFields
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&fields); err != nil {
+		return err
+	}
+	*r = restContract(fields)
+
+	var rawFields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &rawFields); err != nil {
+		return err
+	}
+	for _, name := range []string{"check_all_rows", "optional_when_destination_types", "required_in_any_row"} {
+		if raw, present := rawFields[name]; present && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			r.invalidNullRowRule = true
+			break
+		}
+	}
+	return nil
 }
 
 type probeAPI interface {
@@ -144,6 +169,9 @@ func validateContract(c contract) error {
 }
 
 func validRESTOptionalRules(r restContract) bool {
+	if r.invalidNullRowRule {
+		return false
+	}
 	if r.RawJSON || r.Single {
 		return !r.CheckAllRows && r.OptionalWhenDestinationTypes == nil && r.RequiredInAnyRow == nil
 	}

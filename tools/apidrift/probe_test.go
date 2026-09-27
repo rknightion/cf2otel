@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
-	"slices"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -152,8 +153,8 @@ func (f fakeAPI) rowsFor(entry restContract) []map[string]any {
 	for _, field := range entry.RequiredFields {
 		setField(row, field, "example")
 	}
-	for _, field := range entry.RequiredInAnyRow {
-		setField(row, field, "example")
+	if entry.Name == "access-scim" {
+		row["resource_user_email"] = "example"
 	}
 	setField(row, "id", "secret-row-id")
 	if f.broken == "rest-field" && entry.Name == "access-apps" {
@@ -326,13 +327,15 @@ func TestContractRequiresGatewayLogListBeforeDetails(t *testing.T) {
 
 func TestAccessAppsContractAllowsOnlyDocumentedDomainlessDestinationTypes(t *testing.T) {
 	c := loadTestContract(t)
-	entry := restEntry(t, &c, "access-apps")
-	if !entry.CheckAllRows {
+	fields := restJSONEntry(t, c, "access-apps")
+	var checkAllRows bool
+	if err := json.Unmarshal(fields["check_all_rows"], &checkAllRows); err != nil || !checkAllRows {
 		t.Fatal("access-apps must check every returned row")
 	}
 	want := map[string][]string{"domain": {"worker", "all_preview_workers"}}
-	if !equalDestinationTypes(entry.OptionalWhenDestinationTypes, want) {
-		t.Fatalf("unexpected domain exceptions: got %v, want %v", entry.OptionalWhenDestinationTypes, want)
+	var got map[string][]string
+	if err := json.Unmarshal(fields["optional_when_destination_types"], &got); err != nil || !equalDestinationTypes(got, want) {
+		t.Fatalf("unexpected domain exceptions: got %v, want %v", got, want)
 	}
 }
 
@@ -404,7 +407,7 @@ func TestAccessSCIMAcceptsMixedGroupAndUserRowsInEitherOrder(t *testing.T) {
 			name = "user-first"
 		}
 		t.Run(name, func(t *testing.T) {
-			c := loadTestContract(t)
+			c := accessSCIMAnyRowContract(t)
 			group := scimUpdateRow("group", "group-row", false)
 			user := scimUpdateRow("user", "user-row", true)
 			rows := []map[string]any{group, user}
@@ -419,20 +422,6 @@ func TestAccessSCIMAcceptsMixedGroupAndUserRowsInEitherOrder(t *testing.T) {
 				t.Fatalf("mixed GROUP and USER rows failed in order %s: %v", name, diffs)
 			}
 		})
-	}
-}
-
-func TestAccessSCIMContractRequiresUserEmailInAnyRow(t *testing.T) {
-	c := loadTestContract(t)
-	entry := restEntry(t, &c, "access-scim")
-	if !entry.CheckAllRows {
-		t.Fatal("access-scim must check every returned row")
-	}
-	if slices.Contains(entry.RequiredFields, "resource_user_email") {
-		t.Fatal("resource_user_email must not be required on every row")
-	}
-	if len(entry.RequiredInAnyRow) != 1 || entry.RequiredInAnyRow[0] != "resource_user_email" {
-		t.Fatalf("unexpected any-row requirements: %v", entry.RequiredInAnyRow)
 	}
 }
 
@@ -454,7 +443,7 @@ func TestAccessSCIMRequestsFiftyRowsAndKeepsTheWindow(t *testing.T) {
 }
 
 func TestAccessSCIMReportsWhenNoRowHasUserEmail(t *testing.T) {
-	c := loadTestContract(t)
+	c := accessSCIMAnyRowContract(t)
 	rows := []map[string]any{
 		scimUpdateRow("group", "group-row", false),
 		scimUpdateRow("user", "user-row", false),
@@ -469,52 +458,38 @@ func TestAccessSCIMReportsWhenNoRowHasUserEmail(t *testing.T) {
 func TestContractRejectsInvalidRequiredInAnyRowRules(t *testing.T) {
 	tests := []struct {
 		name   string
-		mutate func(*contract)
+		entry  string
+		fields map[string]any
 	}{
 		{
-			name: "empty list",
-			mutate: func(c *contract) {
-				restEntry(t, c, "access-scim").RequiredInAnyRow = []string{}
-			},
+			name: "empty list", entry: "access-scim",
+			fields: map[string]any{"required_in_any_row": []string{}},
 		},
 		{
-			name: "empty field",
-			mutate: func(c *contract) {
-				restEntry(t, c, "access-scim").RequiredInAnyRow = []string{""}
-			},
+			name: "empty field", entry: "access-scim",
+			fields: map[string]any{"required_in_any_row": []string{""}},
 		},
 		{
-			name: "duplicate field",
-			mutate: func(c *contract) {
-				restEntry(t, c, "access-scim").RequiredInAnyRow = []string{"extra", "extra"}
-			},
+			name: "duplicate field", entry: "access-scim",
+			fields: map[string]any{"required_in_any_row": []string{"extra", "extra"}},
 		},
 		{
-			name: "overlaps required fields",
-			mutate: func(c *contract) {
-				restEntry(t, c, "access-scim").RequiredInAnyRow = []string{"resource_type"}
-			},
+			name: "overlaps required fields", entry: "access-scim",
+			fields: map[string]any{"required_in_any_row": []string{"resource_type"}},
 		},
 		{
-			name: "raw JSON entry",
-			mutate: func(c *contract) {
-				restEntry(t, c, "ai-gateway-log-request").RequiredInAnyRow = []string{"extra"}
-			},
+			name: "raw JSON entry", entry: "ai-gateway-log-request",
+			fields: map[string]any{"required_in_any_row": []string{"extra"}},
 		},
 		{
-			name: "single entry",
-			mutate: func(c *contract) {
-				entry := restEntry(t, c, "ai-gateway-log-detail")
-				entry.Single = true
-				entry.RequiredInAnyRow = []string{"extra"}
-			},
+			name: "single entry", entry: "ai-gateway-log-detail",
+			fields: map[string]any{"single": true, "required_in_any_row": []string{"extra"}},
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			c := loadTestContract(t)
-			c.REST = append([]restContract(nil), c.REST...)
-			tc.mutate(&c)
+			c = withRESTJSONFields(t, c, tc.entry, tc.fields)
 			if err := validateContract(c); err == nil {
 				t.Fatal("accepted invalid required_in_any_row rule")
 			}
@@ -601,9 +576,7 @@ func TestRESTEntriesWithoutNewRowRulesKeepFirstRowBehaviorAndMessages(t *testing
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := loadTestContract(t)
-			entry := restEntry(t, &c, tc.name)
-			entry.CheckAllRows = false
-			entry.OptionalWhenDestinationTypes = nil
+			c = withRESTJSONFields(t, c, tc.name, nil, "check_all_rows", "optional_when_destination_types")
 
 			missingFirst := map[string]any{"id": "present", "name": "example", "domain": "example.com"}
 			delete(missingFirst, tc.field)
@@ -640,61 +613,42 @@ func scimUpdateRow(resourceType, id string, includeEmail bool) map[string]any {
 func TestContractRejectsInvalidOptionalDestinationRules(t *testing.T) {
 	tests := []struct {
 		name   string
-		mutate func(*contract)
+		entry  string
+		fields map[string]any
 	}{
 		{
-			name: "field outside required fields",
-			mutate: func(c *contract) {
-				restEntry(t, c, "access-apps").OptionalWhenDestinationTypes = map[string][]string{"unused": {"worker"}}
-			},
+			name: "field outside required fields", entry: "access-apps",
+			fields: map[string]any{"optional_when_destination_types": map[string][]string{"unused": {"worker"}}},
 		},
 		{
-			name: "empty allowed type list",
-			mutate: func(c *contract) {
-				restEntry(t, c, "access-apps").OptionalWhenDestinationTypes = map[string][]string{"domain": {}}
-			},
+			name: "empty allowed type list", entry: "access-apps",
+			fields: map[string]any{"optional_when_destination_types": map[string][]string{"domain": {}}},
 		},
 		{
-			name: "empty allowed type string",
-			mutate: func(c *contract) {
-				restEntry(t, c, "access-apps").OptionalWhenDestinationTypes = map[string][]string{"domain": {""}}
-			},
+			name: "empty allowed type string", entry: "access-apps",
+			fields: map[string]any{"optional_when_destination_types": map[string][]string{"domain": {""}}},
 		},
 		{
-			name: "blank allowed type string",
-			mutate: func(c *contract) {
-				restEntry(t, c, "access-apps").OptionalWhenDestinationTypes = map[string][]string{"domain": {"  "}}
-			},
+			name: "blank allowed type string", entry: "access-apps",
+			fields: map[string]any{"optional_when_destination_types": map[string][]string{"domain": {"  "}}},
 		},
 		{
-			name: "single response conditional field",
-			mutate: func(c *contract) {
-				r := restEntry(t, c, "access-apps")
-				r.Single = true
-				r.OptionalWhenDestinationTypes = map[string][]string{"domain": {"worker"}}
-			},
+			name: "single response conditional field", entry: "access-apps",
+			fields: map[string]any{"single": true, "optional_when_destination_types": map[string][]string{"domain": {"worker"}}},
 		},
 		{
-			name: "single response all-row check",
-			mutate: func(c *contract) {
-				r := restEntry(t, c, "access-apps")
-				r.Single = true
-				r.CheckAllRows = true
-			},
+			name: "single response all-row check", entry: "access-apps",
+			fields: map[string]any{"single": true, "check_all_rows": true},
 		},
 		{
-			name: "raw JSON all-row check",
-			mutate: func(c *contract) {
-				r := restEntry(t, c, "ai-gateway-log-request")
-				r.CheckAllRows = true
-			},
+			name: "raw JSON all-row check", entry: "ai-gateway-log-request",
+			fields: map[string]any{"check_all_rows": true},
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			c := loadTestContract(t)
-			c.REST = append([]restContract(nil), c.REST...)
-			tc.mutate(&c)
+			c = withRESTJSONFields(t, c, tc.entry, tc.fields)
 			if err := validateContract(c); err == nil {
 				t.Fatal("accepted invalid optional destination rule")
 			}
@@ -714,10 +668,149 @@ func loadTestContract(t *testing.T) contract {
 func accessAppsExceptionContract(t *testing.T) contract {
 	t.Helper()
 	c := loadTestContract(t)
-	entry := restEntry(t, &c, "access-apps")
-	entry.CheckAllRows = true
-	entry.OptionalWhenDestinationTypes = map[string][]string{"domain": {"worker", "all_preview_workers"}}
-	return c
+	return withRESTJSONFields(t, c, "access-apps", map[string]any{
+		"check_all_rows":                  true,
+		"optional_when_destination_types": map[string][]string{"domain": {"worker", "all_preview_workers"}},
+	})
+}
+
+func accessSCIMAnyRowContract(t *testing.T) contract {
+	t.Helper()
+	c := loadTestContract(t)
+	required := make([]string, 0)
+	for _, field := range restEntry(t, &c, "access-scim").RequiredFields {
+		if field != "resource_user_email" {
+			required = append(required, field)
+		}
+	}
+	return withRESTJSONFields(t, c, "access-scim", map[string]any{
+		"required_fields":     required,
+		"check_all_rows":      true,
+		"required_in_any_row": []string{"resource_user_email"},
+	})
+}
+
+func withRESTJSONFields(t *testing.T, c contract, name string, fields map[string]any, remove ...string) contract {
+	t.Helper()
+	encoded := marshalContractWithRESTFields(t, c, name, fields, remove...)
+	var updated contract
+	if err := json.Unmarshal(encoded, &updated); err != nil {
+		t.Fatal(err)
+	}
+	return updated
+}
+
+func marshalContractWithRESTFields(t *testing.T, c contract, name string, fields map[string]any, remove ...string) []byte {
+	t.Helper()
+	encoded, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &document); err != nil {
+		t.Fatal(err)
+	}
+	var entries []map[string]json.RawMessage
+	if err := json.Unmarshal(document["rest"], &entries); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, entry := range entries {
+		var entryName string
+		if err := json.Unmarshal(entry["name"], &entryName); err != nil {
+			t.Fatal(err)
+		}
+		if entryName != name {
+			continue
+		}
+		found = true
+		for _, key := range remove {
+			delete(entry, key)
+		}
+		for key, value := range fields {
+			encodedValue, err := json.Marshal(value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			entry[key] = encodedValue
+		}
+		break
+	}
+	if !found {
+		t.Fatalf("REST entry %q not found in JSON contract", name)
+	}
+	document["rest"], err = json.Marshal(entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err = json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
+}
+
+func restJSONEntry(t *testing.T, c contract, name string) map[string]json.RawMessage {
+	t.Helper()
+	encoded, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		REST []map[string]json.RawMessage `json:"rest"`
+	}
+	if err := json.Unmarshal(encoded, &document); err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range document.REST {
+		var entryName string
+		if err := json.Unmarshal(entry["name"], &entryName); err != nil {
+			t.Fatal(err)
+		}
+		if entryName == name {
+			return entry
+		}
+	}
+	t.Fatalf("REST entry %q not found in JSON contract", name)
+	return nil
+}
+
+func TestContractRejectsNullRESTRowRules(t *testing.T) {
+	tests := []struct {
+		name  string
+		entry string
+		field string
+	}{
+		{name: "check_all_rows", entry: "access-apps", field: "check_all_rows"},
+		{name: "optional_when_destination_types", entry: "access-apps", field: "optional_when_destination_types"},
+		{name: "required_in_any_row", entry: "access-scim", field: "required_in_any_row"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c := loadTestContract(t)
+			encoded := marshalContractWithRESTFields(t, c, tc.entry, map[string]any{tc.field: nil})
+			if _, err := loadContract(writeContractFixture(t, encoded)); err == nil {
+				t.Fatalf("accepted null %s on %s", tc.field, tc.entry)
+			}
+		})
+	}
+}
+
+func TestContractStillRejectsUnknownRESTFields(t *testing.T) {
+	c := loadTestContract(t)
+	encoded := marshalContractWithRESTFields(t, c, "access-apps", map[string]any{"unknown_contract_field": true})
+	if _, err := loadContract(writeContractFixture(t, encoded)); err == nil {
+		t.Fatal("accepted an unknown REST contract field")
+	}
+}
+
+func writeContractFixture(t *testing.T, content []byte) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "contract.json")
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func restEntry(t *testing.T, c *contract, name string) *restContract {
