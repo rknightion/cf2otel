@@ -421,6 +421,13 @@
         "name",
         "domain"
       ],
+      "check_all_rows": true,
+      "optional_when_destination_types": {
+        "domain": [
+          "worker",
+          "all_preview_workers"
+        ]
+      },
       "allow_empty": true
     },
     {

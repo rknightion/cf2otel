@@ -15,6 +15,7 @@ import (
 type fakeAPI struct {
 	contract contract
 	broken   string
+	restRows map[string][]map[string]any
 }
 
 func (f fakeAPI) Accounts(context.Context) ([]cfapi.Account, error) {
@@ -99,6 +100,16 @@ func (f fakeAPI) Get(_ context.Context, path string, _ url.Values, out any) erro
 	setField(row, "id", "secret-row-id")
 	if f.broken == "rest-field" && entry.Name == "access-apps" {
 		delete(row, "domain")
+	}
+	if rows, ok := f.restRows[entry.Name]; ok {
+		if entry.Single {
+			if len(rows) > 0 {
+				*out.(*map[string]any) = rows[0]
+			}
+		} else {
+			*out.(*[]map[string]any) = rows
+		}
+		return nil
 	}
 	if entry.Single {
 		*out.(*map[string]any) = row
@@ -237,4 +248,246 @@ func TestContractRequiresGatewayLogListBeforeDetails(t *testing.T) {
 	if err := validateContract(c); err == nil {
 		t.Fatal("accepted gateway detail before the log list it depends on")
 	}
+}
+
+func TestAccessAppsContractAllowsOnlyDocumentedDomainlessDestinationTypes(t *testing.T) {
+	c := loadTestContract(t)
+	entry := restEntry(t, &c, "access-apps")
+	if !entry.CheckAllRows {
+		t.Fatal("access-apps must check every returned row")
+	}
+	want := map[string][]string{"domain": {"worker", "all_preview_workers"}}
+	if !equalDestinationTypes(entry.OptionalWhenDestinationTypes, want) {
+		t.Fatalf("unexpected domain exceptions: got %v, want %v", entry.OptionalWhenDestinationTypes, want)
+	}
+}
+
+func TestAccessAppsAcceptsDomainAndPureWorkerRowsInEitherOrder(t *testing.T) {
+	for _, destinationType := range []string{"worker", "all_preview_workers"} {
+		for _, reverse := range []bool{false, true} {
+			name := destinationType + "/domain-first"
+			if reverse {
+				name = destinationType + "/worker-first"
+			}
+			t.Run(name, func(t *testing.T) {
+				c := accessAppsExceptionContract(t)
+				domainRow := map[string]any{"id": "domain", "name": "domain app", "domain": "example.com"}
+				workerRow := map[string]any{
+					"id": "worker", "name": "worker app",
+					"destinations": []any{map[string]any{"type": destinationType}},
+				}
+				rows := []map[string]any{domainRow, workerRow}
+				if reverse {
+					rows[0], rows[1] = rows[1], rows[0]
+				}
+				api := fakeAPI{contract: c, restRows: map[string][]map[string]any{"access-apps": rows}}
+				if diffs := probe(context.Background(), api, c); hasRESTDiff(diffs, "access-apps") {
+					t.Fatalf("valid domain and %s rows failed in order %v: %v", destinationType, reverse, diffs)
+				}
+			})
+		}
+	}
+}
+
+func TestAccessAppsRequiresDomainForPublicMixedAndMalformedDestinations(t *testing.T) {
+	invalidDestinations := []struct {
+		name string
+		row  map[string]any
+	}{
+		{name: "public", row: map[string]any{"destinations": []any{map[string]any{"type": "public"}}}},
+		{name: "mixed", row: map[string]any{"destinations": []any{map[string]any{"type": "worker"}, map[string]any{"type": "public"}}}},
+		{name: "absent", row: map[string]any{"name": "domainless app"}},
+		{name: "empty", row: map[string]any{"destinations": []any{}}},
+		{name: "not-array", row: map[string]any{"destinations": "worker"}},
+		{name: "not-object", row: map[string]any{"destinations": []any{"worker"}}},
+		{name: "missing-type", row: map[string]any{"destinations": []any{map[string]any{"kind": "worker"}}}},
+		{name: "non-string-type", row: map[string]any{"destinations": []any{map[string]any{"type": 7}}}},
+	}
+	for _, invalid := range invalidDestinations {
+		t.Run(invalid.name, func(t *testing.T) {
+			c := accessAppsExceptionContract(t)
+			domainRow := map[string]any{"id": "domain", "name": "domain app", "domain": "example.com"}
+			workerRow := map[string]any{"id": "invalid", "name": "domainless app"}
+			for key, value := range invalid.row {
+				workerRow[key] = value
+			}
+			anotherBadRow := map[string]any{"id": "invalid-again", "name": "another domainless app"}
+			for key, value := range invalid.row {
+				anotherBadRow[key] = value
+			}
+			api := fakeAPI{contract: c, restRows: map[string][]map[string]any{"access-apps": {domainRow, workerRow, anotherBadRow}}}
+			diffs := probe(context.Background(), api, c)
+			want := "REST access-apps scope #1: missing field domain (2 of 3 rows)"
+			count := 0
+			for _, diff := range diffs {
+				if diff == want {
+					count++
+				}
+			}
+			if count != 1 {
+				t.Fatalf("bad row after valid first row did not produce %q: %v", want, diffs)
+			}
+		})
+	}
+}
+
+func TestRESTEntriesWithoutNewRowRulesKeepFirstRowBehaviorAndMessages(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		field string
+	}{
+		{name: "access-apps", field: "domain"},
+		{name: "access-users", field: "id"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := loadTestContract(t)
+			entry := restEntry(t, &c, tc.name)
+			entry.CheckAllRows = false
+			entry.OptionalWhenDestinationTypes = nil
+
+			missingFirst := map[string]any{"id": "present", "name": "example", "domain": "example.com"}
+			delete(missingFirst, tc.field)
+			second := map[string]any{"id": "present", "name": "example", "domain": "example.com"}
+			api := fakeAPI{contract: c, restRows: map[string][]map[string]any{tc.name: {missingFirst, second}}}
+			want := "REST " + tc.name + " scope #1: missing field " + tc.field
+			if diffs := probe(context.Background(), api, c); !containsDiff(diffs, want) {
+				t.Fatalf("first-row behavior/message changed: got %v, want %q", diffs, want)
+			}
+			for _, diff := range probe(context.Background(), fakeAPI{contract: c, restRows: map[string][]map[string]any{tc.name: {second, missingFirst}}}, c) {
+				if strings.HasPrefix(diff, "REST "+tc.name+" ") {
+					t.Fatalf("later row changed default first-row behavior: %v", diff)
+				}
+			}
+		})
+	}
+}
+
+func TestContractRejectsInvalidOptionalDestinationRules(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*contract)
+	}{
+		{
+			name: "field outside required fields",
+			mutate: func(c *contract) {
+				restEntry(t, c, "access-apps").OptionalWhenDestinationTypes = map[string][]string{"unused": {"worker"}}
+			},
+		},
+		{
+			name: "empty allowed type list",
+			mutate: func(c *contract) {
+				restEntry(t, c, "access-apps").OptionalWhenDestinationTypes = map[string][]string{"domain": {}}
+			},
+		},
+		{
+			name: "empty allowed type string",
+			mutate: func(c *contract) {
+				restEntry(t, c, "access-apps").OptionalWhenDestinationTypes = map[string][]string{"domain": {""}}
+			},
+		},
+		{
+			name: "blank allowed type string",
+			mutate: func(c *contract) {
+				restEntry(t, c, "access-apps").OptionalWhenDestinationTypes = map[string][]string{"domain": {"  "}}
+			},
+		},
+		{
+			name: "single response conditional field",
+			mutate: func(c *contract) {
+				r := restEntry(t, c, "access-apps")
+				r.Single = true
+				r.OptionalWhenDestinationTypes = map[string][]string{"domain": {"worker"}}
+			},
+		},
+		{
+			name: "single response all-row check",
+			mutate: func(c *contract) {
+				r := restEntry(t, c, "access-apps")
+				r.Single = true
+				r.CheckAllRows = true
+			},
+		},
+		{
+			name: "raw JSON all-row check",
+			mutate: func(c *contract) {
+				r := restEntry(t, c, "ai-gateway-log-request")
+				r.CheckAllRows = true
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c := loadTestContract(t)
+			c.REST = append([]restContract(nil), c.REST...)
+			tc.mutate(&c)
+			if err := validateContract(c); err == nil {
+				t.Fatal("accepted invalid optional destination rule")
+			}
+		})
+	}
+}
+
+func loadTestContract(t *testing.T) contract {
+	t.Helper()
+	c, err := loadContract("../../spec/cloudflare/contract.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+func accessAppsExceptionContract(t *testing.T) contract {
+	t.Helper()
+	c := loadTestContract(t)
+	entry := restEntry(t, &c, "access-apps")
+	entry.CheckAllRows = true
+	entry.OptionalWhenDestinationTypes = map[string][]string{"domain": {"worker", "all_preview_workers"}}
+	return c
+}
+
+func restEntry(t *testing.T, c *contract, name string) *restContract {
+	t.Helper()
+	for index := range c.REST {
+		if c.REST[index].Name == name {
+			return &c.REST[index]
+		}
+	}
+	t.Fatalf("REST entry %q not found", name)
+	return nil
+}
+
+func hasRESTDiff(diffs []string, name string) bool {
+	for _, diff := range diffs {
+		if strings.HasPrefix(diff, "REST "+name+" ") {
+			return true
+		}
+	}
+	return false
+}
+
+func containsDiff(diffs []string, want string) bool {
+	for _, diff := range diffs {
+		if diff == want {
+			return true
+		}
+	}
+	return false
+}
+
+func equalDestinationTypes(got, want map[string][]string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for field, wantTypes := range want {
+		gotTypes := got[field]
+		if len(gotTypes) != len(wantTypes) {
+			return false
+		}
+		for i := range wantTypes {
+			if gotTypes[i] != wantTypes[i] {
+				return false
+			}
+		}
+	}
+	return true
 }

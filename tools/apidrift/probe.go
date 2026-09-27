@@ -31,13 +31,15 @@ type graphContract struct {
 }
 
 type restContract struct {
-	Name           string   `json:"name"`
-	Scope          string   `json:"scope"`
-	Path           string   `json:"path"`
-	RequiredFields []string `json:"required_fields"`
-	AllowEmpty     bool     `json:"allow_empty,omitempty"`
-	Single         bool     `json:"single,omitempty"`
-	RawJSON        bool     `json:"raw_json,omitempty"`
+	Name                         string              `json:"name"`
+	Scope                        string              `json:"scope"`
+	Path                         string              `json:"path"`
+	RequiredFields               []string            `json:"required_fields"`
+	AllowEmpty                   bool                `json:"allow_empty,omitempty"`
+	Single                       bool                `json:"single,omitempty"`
+	RawJSON                      bool                `json:"raw_json,omitempty"`
+	CheckAllRows                 bool                `json:"check_all_rows,omitempty"`
+	OptionalWhenDestinationTypes map[string][]string `json:"optional_when_destination_types,omitempty"`
 }
 
 type probeAPI interface {
@@ -116,7 +118,7 @@ func validateContract(c contract) error {
 		if r.RawJSON {
 			fieldsValid = len(r.RequiredFields) == 0
 		}
-		if !ok || r.Path != path || restSeen[r.Name] || !fieldsValid || (r.Scope != "global" && r.Scope != "account" && r.Scope != "gateway" && r.Scope != "gateway-log") {
+		if !ok || r.Path != path || restSeen[r.Name] || !fieldsValid || !validRESTOptionalRules(r) || (r.Scope != "global" && r.Scope != "account" && r.Scope != "gateway" && r.Scope != "gateway-log") {
 			return errors.New("invalid REST contract")
 		}
 		if (r.Scope == "global") != !strings.Contains(r.Path, "{account}") {
@@ -134,6 +136,33 @@ func validateContract(c contract) error {
 		return errors.New("gateway log detail paths require the gateway log list")
 	}
 	return nil
+}
+
+func validRESTOptionalRules(r restContract) bool {
+	if r.RawJSON || r.Single {
+		return !r.CheckAllRows && r.OptionalWhenDestinationTypes == nil
+	}
+	if r.OptionalWhenDestinationTypes == nil {
+		return true
+	}
+	if len(r.OptionalWhenDestinationTypes) == 0 {
+		return false
+	}
+	required := make(map[string]bool, len(r.RequiredFields))
+	for _, field := range r.RequiredFields {
+		required[field] = true
+	}
+	for field, destinationTypes := range r.OptionalWhenDestinationTypes {
+		if !required[field] || len(destinationTypes) == 0 {
+			return false
+		}
+		for _, destinationType := range destinationTypes {
+			if strings.TrimSpace(destinationType) == "" {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func validFields(fields []string) bool {
@@ -290,10 +319,29 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 				}
 				continue
 			}
+			rowsToCheck := rows[:1]
+			if r.CheckAllRows {
+				rowsToCheck = rows
+			}
 			for _, field := range r.RequiredFields {
-				if !hasField(rows[0], field) {
-					diffs = append(diffs, label+": missing field "+field)
+				missing := 0
+				for _, row := range rowsToCheck {
+					if hasField(row, field) {
+						continue
+					}
+					if allowedTypes, optional := r.OptionalWhenDestinationTypes[field]; optional && destinationsHaveOnlyTypes(row, allowedTypes) {
+						continue
+					}
+					missing++
 				}
+				if missing == 0 {
+					continue
+				}
+				diff := label + ": missing field " + field
+				if r.CheckAllRows {
+					diff += fmt.Sprintf(" (%d of %d rows)", missing, len(rows))
+				}
+				diffs = append(diffs, diff)
 			}
 			if r.Name == "ai-gateway-logs" {
 				if id, ok := rows[0]["id"].(string); ok && id != "" {
@@ -350,6 +398,32 @@ func hasField(row map[string]any, path string) bool {
 		}
 		current, ok = object[part]
 		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func destinationsHaveOnlyTypes(row map[string]any, allowedTypes []string) bool {
+	destinationsValue, ok := row["destinations"]
+	if !ok {
+		return false
+	}
+	destinations, ok := destinationsValue.([]any)
+	if !ok || len(destinations) == 0 {
+		return false
+	}
+	allowed := make(map[string]bool, len(allowedTypes))
+	for _, destinationType := range allowedTypes {
+		allowed[destinationType] = true
+	}
+	for _, destinationValue := range destinations {
+		destination, ok := destinationValue.(map[string]any)
+		if !ok {
+			return false
+		}
+		destinationType, ok := destination["type"].(string)
+		if !ok || !allowed[destinationType] {
 			return false
 		}
 	}
