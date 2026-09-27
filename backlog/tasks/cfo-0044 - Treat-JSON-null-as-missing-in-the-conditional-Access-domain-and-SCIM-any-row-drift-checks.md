@@ -3,10 +3,10 @@ id: CFO-0044
 title: >-
   Treat JSON null as missing in the conditional Access domain and SCIM any-row
   drift checks
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 18:30'
-updated_date: '2026-09-27 18:33'
+updated_date: '2026-09-27 19:26'
 labels:
   - access
   - api-drift
@@ -23,15 +23,27 @@ Loop 12 review (REV-C2) found that the drift canary counts a present-but-null fi
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A row whose `domain` is JSON null and whose destinations are not all `worker`/`all_preview_workers` is reported missing; a Worker-destination row with null `domain` stays exempt
-- [ ] #2 A nonempty SCIM page whose only `resource_user_email` values are JSON null reports the field absent from all rows; one non-null value on any row satisfies it
-- [ ] #3 Fields in plain `required_fields` keep null-as-present, pinned by a test
-- [ ] #4 The AC1 and AC2 tests fail by assertion on the pre-change base and pass after; the canary matches the live API at the landed SHA
+- [x] #1 A row whose `domain` is JSON null and whose destinations are not all `worker`/`all_preview_workers` is reported missing; a Worker-destination row with null `domain` stays exempt
+- [x] #2 A nonempty SCIM page whose only `resource_user_email` values are JSON null reports the field absent from all rows; one non-null value on any row satisfies it
+- [x] #3 Fields in plain `required_fields` keep null-as-present, pinned by a test
+- [x] #4 The AC1 and AC2 tests fail by assertion on the pre-change base and pass after; the canary matches the live API at the landed SHA
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
+- [x] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Loop 13: L44-a1 (1 implementation attempt), 0 review-repair attempts, 0 infrastructure retries. Grant: scoped null rule in tools/apidrift/probe.go and probe_test.go; reviewed candidate 0aba54402c31a9c0fabb50ca4339a57169229e66. AC1/AC2 failed by assertion on base 14782d2d33000e0e8c5609a45182b711d2c9b19f and passed on candidate; REV PASS; pre-land API contract matched; landing just check and eight workflows succeeded at 7986f331c0567e41eb18cb13089724f101e55736; R0 run 36344241272 probe succeeded. DoD 2 and 3 not applicable: no Dockerfile, goreleaser, image, signal or attribute change.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Scoped JSON null handling for conditional Access domain and SCIM any-row checks. Base assertion witnesses, independent exact-SHA review, just check, landing CI and live R0 passed.
+<!-- SECTION:FINAL_SUMMARY:END -->
