@@ -61,6 +61,14 @@ None recorded.
   is a stream label. Query with `{service_name="cf2otel"} | event_name="..."` (AGENTS.md).
 - Grafana Cloud Tempo on the m7kni stack truncates span attribute values at 2048 characters; a key
   being present proves nothing about its content length (AGENTS.md).
+- The operator's Mac idle-sleeps during overnight loops, which freezes every root-launched watcher
+  mid-observation. A deploy watcher that overran its deadline this way once forced the rollback of a
+  healthy deploy. Launch every watcher under `caffeinate -i`, measure deadlines on the wall clock
+  (not `time.monotonic()`, which stops during sleep on macOS), and treat an observation gap or an SSH
+  error as "not observed", never as unhealthy (loop 10 preparation).
+- The drift canary's Access apps entry: two Worker-destination apps (destination types `worker`
+  and `all_preview_workers`) legitimately have no `domain`. A domainless row of any other shape is
+  drift (loop 10 preparation, CFO-0041).
 - On an external write's rejection, capture the full response body before deciding whether to roll
   back, and re-GET to confirm a state actually changed before rolling back a write that was itself
   rejected with nothing changed (evidence brief D8).
