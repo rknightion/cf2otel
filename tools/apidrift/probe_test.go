@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,9 +14,13 @@ import (
 )
 
 type fakeAPI struct {
-	contract contract
-	broken   string
-	restRows map[string][]map[string]any
+	contract        contract
+	broken          string
+	restRows        map[string][]map[string]any
+	queryLog        map[string][]url.Values
+	resultTotals    map[string]int
+	omitResultTotal map[string]bool
+	pageCaps        map[string]int
 }
 
 func (f fakeAPI) Accounts(context.Context) ([]cfapi.Account, error) {
@@ -81,17 +86,66 @@ func TestGatewayLogDetailAndBodiesHaveNoListQuery(t *testing.T) {
 		}
 	}
 }
-func (f fakeAPI) Get(_ context.Context, path string, _ url.Values, out any) error {
+func (f fakeAPI) Get(_ context.Context, path string, query url.Values, out any) error {
 	if f.broken == "api-error" {
 		return errors.New("token-secret account-secret")
-	}
-	if f.broken == "empty-scim" && strings.HasSuffix(path, "/access/logs/scim/updates") {
-		*out.(*[]map[string]any) = nil
-		return nil
 	}
 	entry, found := routeForPath(f.contract, path)
 	if !found {
 		return errors.New("unrecognized test path")
+	}
+	f.recordQuery(entry.Name, query)
+	rows := f.rowsFor(entry)
+	if entry.Single {
+		if len(rows) > 0 {
+			*out.(*map[string]any) = rows[0]
+		}
+		return nil
+	}
+	*out.(*[]map[string]any) = paginateFakeRows(rows, query, f.pageCaps[entry.Name])
+	return nil
+}
+
+func (f fakeAPI) GetPage(_ context.Context, path string, query url.Values, out any) error {
+	if f.broken == "api-error" {
+		return errors.New("token-secret account-secret")
+	}
+	entry, found := routeForPath(f.contract, path)
+	if !found {
+		return errors.New("unrecognized test path")
+	}
+	f.recordQuery(entry.Name, query)
+	rows := f.rowsFor(entry)
+	rows = paginateFakeRows(rows, query, f.pageCaps[entry.Name])
+	result, err := json.Marshal(rows)
+	if err != nil {
+		return err
+	}
+	page := cfapi.Page{Result: result}
+	if !f.omitResultTotal[entry.Name] {
+		total, ok := f.resultTotals[entry.Name]
+		if !ok {
+			total = len(f.rowsFor(entry))
+		}
+		page.ResultInfo.TotalCount = total
+	}
+	*out.(*cfapi.Page) = page
+	return nil
+}
+
+func (f fakeAPI) recordQuery(name string, query url.Values) {
+	if f.queryLog == nil {
+		return
+	}
+	f.queryLog[name] = append(f.queryLog[name], query.Clone())
+}
+
+func (f fakeAPI) rowsFor(entry restContract) []map[string]any {
+	if f.broken == "empty-scim" && entry.Name == "access-scim" {
+		return nil
+	}
+	if rows, ok := f.restRows[entry.Name]; ok {
+		return rows
 	}
 	row := map[string]any{"id": "secret-row-id", "name": "example", "status": "active", "domain": "example.com", "collect_logs": true, "created_at": "example", "action": "example", "allowed": true, "app_domain": "example.com", "ray_id": "secret-ray-id", "provider": "example", "model": "example", "status_code": 200, "usage_metadata": map[string]any{}, "timings": map[string]any{}}
 	for _, field := range entry.RequiredFields {
@@ -101,22 +155,38 @@ func (f fakeAPI) Get(_ context.Context, path string, _ url.Values, out any) erro
 	if f.broken == "rest-field" && entry.Name == "access-apps" {
 		delete(row, "domain")
 	}
-	if rows, ok := f.restRows[entry.Name]; ok {
-		if entry.Single {
-			if len(rows) > 0 {
-				*out.(*map[string]any) = rows[0]
-			}
-		} else {
-			*out.(*[]map[string]any) = rows
+	return []map[string]any{row}
+}
+
+func paginateFakeRows(rows []map[string]any, query url.Values, serverCap int) []map[string]any {
+	limit := 0
+	for _, key := range []string{"per_page", "limit"} {
+		if value := query.Get(key); value != "" {
+			limit, _ = strconv.Atoi(value)
+			break
 		}
+	}
+	if serverCap > 0 && (limit == 0 || limit > serverCap) {
+		limit = serverCap
+	}
+	if limit <= 0 {
+		return rows
+	}
+	page := 1
+	if value := query.Get("page"); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	start := (page - 1) * limit
+	if start >= len(rows) {
 		return nil
 	}
-	if entry.Single {
-		*out.(*map[string]any) = row
-	} else {
-		*out.(*[]map[string]any) = []map[string]any{row}
+	end := start + limit
+	if end > len(rows) {
+		end = len(rows)
 	}
-	return nil
+	return rows[start:end]
 }
 
 func (f fakeAPI) GetRaw(_ context.Context, _ string, _ url.Values, out any) error {
@@ -259,6 +329,67 @@ func TestAccessAppsContractAllowsOnlyDocumentedDomainlessDestinationTypes(t *tes
 	want := map[string][]string{"domain": {"worker", "all_preview_workers"}}
 	if !equalDestinationTypes(entry.OptionalWhenDestinationTypes, want) {
 		t.Fatalf("unexpected domain exceptions: got %v, want %v", entry.OptionalWhenDestinationTypes, want)
+	}
+}
+
+func TestAccessAppsChecksAThirdPublicRowBeyondTheFirstPage(t *testing.T) {
+	c := loadTestContract(t)
+	rows := []map[string]any{
+		{"id": "domain-1", "name": "domain app", "domain": "one.example"},
+		{"id": "domain-2", "name": "another domain app", "domain": "two.example"},
+		{"id": "public", "name": "public app", "destinations": []any{map[string]any{"type": "public"}}},
+	}
+	api := fakeAPI{
+		contract: c,
+		restRows: map[string][]map[string]any{"access-apps": rows},
+		queryLog: map[string][]url.Values{},
+	}
+	diffs := probe(context.Background(), api, c)
+	want := "REST access-apps scope #1: missing field domain (1 of 3 rows)"
+	if !containsDiff(diffs, want) {
+		t.Fatalf("domainless public row at position 3 was not checked: got %v, want %q", diffs, want)
+	}
+	if queries := api.queryLog["access-apps"]; len(queries) != 1 || queries[0].Get("per_page") != "1000" {
+		t.Fatalf("Access apps query did not request 1000 rows: %v", queries)
+	}
+	if queries := api.queryLog["access-users"]; len(queries) != 1 || queries[0].Get("per_page") != "1" {
+		t.Fatalf("Access users query changed unexpectedly: %v", queries)
+	}
+}
+
+func TestAccessAppsReportsTruncationAndStillChecksReturnedRows(t *testing.T) {
+	c := loadTestContract(t)
+	rows := []map[string]any{
+		{"id": "public", "name": "public app", "destinations": []any{map[string]any{"type": "public"}}},
+		{"id": "domain", "name": "domain app", "domain": "example.com"},
+	}
+	api := fakeAPI{
+		contract:        c,
+		restRows:        map[string][]map[string]any{"access-apps": rows},
+		resultTotals:    map[string]int{"access-apps": 3},
+		pageCaps:        map[string]int{"access-apps": 1},
+		omitResultTotal: map[string]bool{},
+	}
+	diffs := probe(context.Background(), api, c)
+	if !containsDiff(diffs, "REST access-apps scope #1: checked 1 of 3 rows") {
+		t.Fatalf("server truncation was not reported: %v", diffs)
+	}
+	if !containsDiff(diffs, "REST access-apps scope #1: missing field domain (1 of 1 rows)") {
+		t.Fatalf("returned row was not checked after truncation: %v", diffs)
+	}
+}
+
+func TestAccessAppsMissingTotalCountDoesNotReportTruncation(t *testing.T) {
+	c := loadTestContract(t)
+	api := fakeAPI{
+		contract:        c,
+		restRows:        map[string][]map[string]any{"access-apps": {{"id": "domain", "name": "domain app", "domain": "example.com"}}},
+		omitResultTotal: map[string]bool{"access-apps": true},
+	}
+	for _, diff := range probe(context.Background(), api, c) {
+		if strings.HasPrefix(diff, "REST access-apps scope #1: checked ") {
+			t.Fatalf("missing total_count was treated as truncation: %v", diff)
+		}
 	}
 }
 

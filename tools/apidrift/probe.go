@@ -54,6 +54,10 @@ type rawProbeAPI interface {
 	GetRaw(context.Context, string, url.Values, any) error
 }
 
+type pageProbeAPI interface {
+	GetPage(context.Context, string, url.Values, any) error
+}
+
 var fieldName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$`)
 var datasetName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 var restPaths = map[string]string{
@@ -300,6 +304,7 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 				continue
 			}
 			var rows []map[string]any
+			var totalCount int
 			if r.Single {
 				var row map[string]any
 				if err := api.Get(ctx, path, query, &row); err != nil {
@@ -309,9 +314,24 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 				if row != nil {
 					rows = append(rows, row)
 				}
+			} else if r.CheckAllRows {
+				if getter, ok := api.(pageProbeAPI); ok {
+					var page cfapi.Page
+					if err := getter.GetPage(ctx, path, query, &page); err != nil || json.Unmarshal(page.Result, &rows) != nil {
+						diffs = append(diffs, label+": read failed")
+						continue
+					}
+					totalCount = page.ResultInfo.TotalCount
+				} else if err := api.Get(ctx, path, query, &rows); err != nil {
+					diffs = append(diffs, label+": read failed")
+					continue
+				}
 			} else if err := api.Get(ctx, path, query, &rows); err != nil {
 				diffs = append(diffs, label+": read failed")
 				continue
+			}
+			if r.CheckAllRows && totalCount > len(rows) {
+				diffs = append(diffs, fmt.Sprintf("%s: checked %d of %d rows", label, len(rows), totalCount))
 			}
 			if len(rows) == 0 {
 				if !r.AllowEmpty {
@@ -375,6 +395,8 @@ func restProbeQuery(name string, now time.Time) url.Values {
 		return url.Values{"since": {from}, "until": {to}, "page": {"1"}, "per_page": {"1"}}
 	case "access-scim":
 		return url.Values{"since": {from}, "until": {to}, "page": {"1"}, "limit": {"1"}, "direction": {"asc"}}
+	case "access-apps":
+		return url.Values{"page": {"1"}, "per_page": {"1000"}}
 	case "audit-logs":
 		return url.Values{"since": {from}, "before": {to}, "limit": {"1"}}
 	case "ai-gateway-logs":
