@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-27 18:30'
+updated_date: '2026-09-27 18:33'
 labels:
   - access
   - api-drift
@@ -25,7 +26,7 @@ Loop 12 review (REV-C2) found that the drift canary counts a present-but-null fi
 - [ ] #1 A row whose `domain` is JSON null and whose destinations are not all `worker`/`all_preview_workers` is reported missing; a Worker-destination row with null `domain` stays exempt
 - [ ] #2 A nonempty SCIM page whose only `resource_user_email` values are JSON null reports the field absent from all rows; one non-null value on any row satisfies it
 - [ ] #3 Fields in plain `required_fields` keep null-as-present, pinned by a test
-- [ ] #4 Each new test fails by assertion on the pre-change base and passes after, and the canary matches the live API at the landed SHA
+- [ ] #4 The AC1 and AC2 tests fail by assertion on the pre-change base and pass after; the canary matches the live API at the landed SHA
 <!-- AC:END -->
 
 ## Definition of Done
