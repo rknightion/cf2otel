@@ -40,6 +40,7 @@ type restContract struct {
 	RawJSON                      bool                `json:"raw_json,omitempty"`
 	CheckAllRows                 bool                `json:"check_all_rows,omitempty"`
 	OptionalWhenDestinationTypes map[string][]string `json:"optional_when_destination_types,omitempty"`
+	RequiredInAnyRow             []string            `json:"required_in_any_row,omitempty"`
 }
 
 type probeAPI interface {
@@ -144,17 +145,27 @@ func validateContract(c contract) error {
 
 func validRESTOptionalRules(r restContract) bool {
 	if r.RawJSON || r.Single {
-		return !r.CheckAllRows && r.OptionalWhenDestinationTypes == nil
+		return !r.CheckAllRows && r.OptionalWhenDestinationTypes == nil && r.RequiredInAnyRow == nil
+	}
+	required := make(map[string]bool, len(r.RequiredFields))
+	for _, field := range r.RequiredFields {
+		required[field] = true
+	}
+	if r.RequiredInAnyRow != nil {
+		if !validFields(r.RequiredInAnyRow) {
+			return false
+		}
+		for _, field := range r.RequiredInAnyRow {
+			if required[field] {
+				return false
+			}
+		}
 	}
 	if r.OptionalWhenDestinationTypes == nil {
 		return true
 	}
 	if len(r.OptionalWhenDestinationTypes) == 0 {
 		return false
-	}
-	required := make(map[string]bool, len(r.RequiredFields))
-	for _, field := range r.RequiredFields {
-		required[field] = true
 	}
 	for field, destinationTypes := range r.OptionalWhenDestinationTypes {
 		if !required[field] || len(destinationTypes) == 0 {
@@ -363,6 +374,18 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 				}
 				diffs = append(diffs, diff)
 			}
+			for _, field := range r.RequiredInAnyRow {
+				found := false
+				for _, row := range rows {
+					if hasField(row, field) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					diffs = append(diffs, fmt.Sprintf("%s: field %s absent from all %d rows", label, field, len(rows)))
+				}
+			}
 			if r.Name == "ai-gateway-logs" {
 				if id, ok := rows[0]["id"].(string); ok && id != "" {
 					gatewayLogIDs[t.account+"/"+t.gateway] = id
@@ -394,7 +417,7 @@ func restProbeQuery(name string, now time.Time) url.Values {
 	case "access-logins":
 		return url.Values{"since": {from}, "until": {to}, "page": {"1"}, "per_page": {"1"}}
 	case "access-scim":
-		return url.Values{"since": {from}, "until": {to}, "page": {"1"}, "limit": {"1"}, "direction": {"asc"}}
+		return url.Values{"since": {from}, "until": {to}, "page": {"1"}, "limit": {"50"}, "direction": {"asc"}}
 	case "access-apps":
 		return url.Values{"page": {"1"}, "per_page": {"1000"}}
 	case "audit-logs":

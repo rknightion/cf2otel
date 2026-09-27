@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -149,6 +150,9 @@ func (f fakeAPI) rowsFor(entry restContract) []map[string]any {
 	}
 	row := map[string]any{"id": "secret-row-id", "name": "example", "status": "active", "domain": "example.com", "collect_logs": true, "created_at": "example", "action": "example", "allowed": true, "app_domain": "example.com", "ray_id": "secret-ray-id", "provider": "example", "model": "example", "status_code": 200, "usage_metadata": map[string]any{}, "timings": map[string]any{}}
 	for _, field := range entry.RequiredFields {
+		setField(row, field, "example")
+	}
+	for _, field := range entry.RequiredInAnyRow {
 		setField(row, field, "example")
 	}
 	setField(row, "id", "secret-row-id")
@@ -393,6 +397,131 @@ func TestAccessAppsMissingTotalCountDoesNotReportTruncation(t *testing.T) {
 	}
 }
 
+func TestAccessSCIMAcceptsMixedGroupAndUserRowsInEitherOrder(t *testing.T) {
+	for _, userFirst := range []bool{false, true} {
+		name := "group-first"
+		if userFirst {
+			name = "user-first"
+		}
+		t.Run(name, func(t *testing.T) {
+			c := loadTestContract(t)
+			group := scimUpdateRow("group", "group-row", false)
+			user := scimUpdateRow("user", "user-row", true)
+			rows := []map[string]any{group, user}
+			if userFirst {
+				rows[0], rows[1] = rows[1], rows[0]
+			}
+			api := fakeAPI{
+				contract: c,
+				restRows: map[string][]map[string]any{"access-scim": rows},
+			}
+			if diffs := probe(context.Background(), api, c); hasRESTDiff(diffs, "access-scim") {
+				t.Fatalf("mixed GROUP and USER rows failed in order %s: %v", name, diffs)
+			}
+		})
+	}
+}
+
+func TestAccessSCIMContractRequiresUserEmailInAnyRow(t *testing.T) {
+	c := loadTestContract(t)
+	entry := restEntry(t, &c, "access-scim")
+	if !entry.CheckAllRows {
+		t.Fatal("access-scim must check every returned row")
+	}
+	if slices.Contains(entry.RequiredFields, "resource_user_email") {
+		t.Fatal("resource_user_email must not be required on every row")
+	}
+	if len(entry.RequiredInAnyRow) != 1 || entry.RequiredInAnyRow[0] != "resource_user_email" {
+		t.Fatalf("unexpected any-row requirements: %v", entry.RequiredInAnyRow)
+	}
+}
+
+func TestAccessSCIMRequestsFiftyRowsAndKeepsTheWindow(t *testing.T) {
+	now := time.Date(2026, 9, 27, 10, 20, 30, 0, time.UTC)
+	query := restProbeQuery("access-scim", now)
+	want := map[string]string{
+		"since":     now.Add(-time.Hour).Format(time.RFC3339Nano),
+		"until":     now.Format(time.RFC3339Nano),
+		"page":      "1",
+		"limit":     "50",
+		"direction": "asc",
+	}
+	for key, value := range want {
+		if got := query.Get(key); got != value {
+			t.Errorf("SCIM query %s = %q, want %q (query %v)", key, got, value, query)
+		}
+	}
+}
+
+func TestAccessSCIMReportsWhenNoRowHasUserEmail(t *testing.T) {
+	c := loadTestContract(t)
+	rows := []map[string]any{
+		scimUpdateRow("group", "group-row", false),
+		scimUpdateRow("user", "user-row", false),
+	}
+	api := fakeAPI{contract: c, restRows: map[string][]map[string]any{"access-scim": rows}}
+	want := "REST access-scim scope #1: field resource_user_email absent from all 2 rows"
+	if diffs := probe(context.Background(), api, c); !containsDiff(diffs, want) {
+		t.Fatalf("missing email in every row was not reported: got %v, want %q", diffs, want)
+	}
+}
+
+func TestContractRejectsInvalidRequiredInAnyRowRules(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*contract)
+	}{
+		{
+			name: "empty list",
+			mutate: func(c *contract) {
+				restEntry(t, c, "access-scim").RequiredInAnyRow = []string{}
+			},
+		},
+		{
+			name: "empty field",
+			mutate: func(c *contract) {
+				restEntry(t, c, "access-scim").RequiredInAnyRow = []string{""}
+			},
+		},
+		{
+			name: "duplicate field",
+			mutate: func(c *contract) {
+				restEntry(t, c, "access-scim").RequiredInAnyRow = []string{"extra", "extra"}
+			},
+		},
+		{
+			name: "overlaps required fields",
+			mutate: func(c *contract) {
+				restEntry(t, c, "access-scim").RequiredInAnyRow = []string{"resource_type"}
+			},
+		},
+		{
+			name: "raw JSON entry",
+			mutate: func(c *contract) {
+				restEntry(t, c, "ai-gateway-log-request").RequiredInAnyRow = []string{"extra"}
+			},
+		},
+		{
+			name: "single entry",
+			mutate: func(c *contract) {
+				entry := restEntry(t, c, "ai-gateway-log-detail")
+				entry.Single = true
+				entry.RequiredInAnyRow = []string{"extra"}
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c := loadTestContract(t)
+			c.REST = append([]restContract(nil), c.REST...)
+			tc.mutate(&c)
+			if err := validateContract(c); err == nil {
+				t.Fatal("accepted invalid required_in_any_row rule")
+			}
+		})
+	}
+}
+
 func TestAccessAppsAcceptsDomainAndPureWorkerRowsInEitherOrder(t *testing.T) {
 	for _, destinationType := range []string{"worker", "all_preview_workers"} {
 		for _, reverse := range []bool{false, true} {
@@ -491,6 +620,21 @@ func TestRESTEntriesWithoutNewRowRulesKeepFirstRowBehaviorAndMessages(t *testing
 			}
 		})
 	}
+}
+
+func scimUpdateRow(resourceType, id string, includeEmail bool) map[string]any {
+	row := map[string]any{
+		"cf_resource_id": id,
+		"http_method":    "PUT",
+		"idp_id":         "synthetic-idp",
+		"logged_at":      "2026-09-27T10:00:00Z",
+		"resource_type":  resourceType,
+		"status":         "success",
+	}
+	if includeEmail {
+		row["resource_user_email"] = "present"
+	}
+	return row
 }
 
 func TestContractRejectsInvalidOptionalDestinationRules(t *testing.T) {
