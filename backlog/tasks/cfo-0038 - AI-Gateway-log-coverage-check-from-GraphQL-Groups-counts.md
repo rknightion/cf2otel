@@ -1,10 +1,10 @@
 ---
 id: CFO-0038
 title: AI Gateway log-coverage check from GraphQL Groups counts
-status: Parked
+status: Done
 assignee: []
 created_date: '2026-09-26 16:05'
-updated_date: '2026-09-27 10:01'
+updated_date: '2026-09-27 12:22'
 labels:
   - ai-gateway
 dependencies: []
@@ -22,14 +22,14 @@ REST gateway logs are the primary AI Gateway source. Requests sent with log coll
 <!-- AC:BEGIN -->
 - [x] #1 A metric declared in internal/semconv reports GraphQL Groups minus REST request count per gateway for each lag-safe window, with a test covering equal, missing-logs and GraphQL-behind cases
 - [x] #2 Selections come from settings.availableFields; the collector respects maxDuration and notOlderThan and never double-counts a window on replay
-- [ ] #3 Live: after a Camden deploy, one window's GraphQL count, REST count and the emitted value agree on m7kni Mimir
+- [x] #3 Live: after a Camden deploy, one window's GraphQL count, REST count and the emitted value agree on m7kni Mimir
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
-- [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
-- [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
+- [x] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
+- [x] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
+- [x] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
 
 ## Implementation Notes
@@ -42,4 +42,6 @@ Loop 8 run-end park: AC1-2 done and released in v0.8.0 (deployed to camden 18:57
 Loop 9: implementation attempts 1/4 carried, review-repair 1/3 carried; infrastructure events: 1 carried CodeRabbit WebSocket, 1 deploy-health watcher deadline overrun this loop. Grant: release v0.8.1 and enable coverage by four literal Camden compose environment entries after the Email Sending checkpoint receipt. DEP-1 on 0.8.1 passed compose validation and reported healthy with coverage checkpoint 21:00Z, matching image digest and no startup errors, but its receipt arrived 17m03s after watcher start, beyond the 15-minute outer deadline. Per ship contract, restored .env and compose backups and recreated 0.8.0; the full rollback watcher was healthy and matched the previous digest and file hashes. LIVE-38 did not start, so AC3 stays unchecked. Resume with a separately authorised deploy whose 10-minute health receipt finishes within the 15-minute outer deadline, then compare a positive committed Groups window, REST count and Mimir gauge exactly.
 
 Loop 10: implementation 1/4 and review-repair 1/3 carried; infrastructure retries 2 health-watcher unobserved windows. One authorised v0.8.1 forward deploy used the four literal compose environment entries. Both sleep-guarded health watcher launches produced no receipt within 15 minutes; neither supplied the required observation count. Restored both pre-loop10 backups and recreated v0.8.0. Readback healthy, image digest and all three file hashes equal prestate. LIVE-38 was not admitted; AC3 remains open. Resume with a reliable sleep-guarded observation path and a fresh authorised deploy, then exact positive-window source/REST/Mimir comparison.
+
+Loop 11: implementation 1/4 and review-repair 1/3 carried; infrastructure retries 0 this loop. Grant: DEP-1 v0.8.1 with four compose environment entries and revert. DEP-1 health receipt 2026-09-27T11:06:57Z to 11:16:59Z: 11 healthy observations, no gaps/errors, correct image digest, no prior checkpoint regression, clean startup. LIVE-38 positive committed window [2026-09-27T00:25:00Z,00:30:00Z): Groups 12, REST 12, Mimir cloudflare_ai_gateway_log_coverage_gap sample 0 at 11:23Z for the same gateway; historical Mimir read at 12:19Z. Source receipt observed checkpoint advance at 11:22:09Z. DoD 1-3 were satisfied by the earlier L38 landing; this loop performed no collector code or signal change.
 <!-- SECTION:NOTES:END -->
