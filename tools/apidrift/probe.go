@@ -388,10 +388,15 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 			for _, field := range r.RequiredFields {
 				missing := 0
 				for _, row := range rowsToCheck {
-					if hasField(row, field) {
+					allowedTypes, conditional := r.OptionalWhenDestinationTypes[field]
+					present := hasField(row, field)
+					if conditional {
+						present = hasNonNullField(row, field)
+					}
+					if present {
 						continue
 					}
-					if allowedTypes, optional := r.OptionalWhenDestinationTypes[field]; optional && destinationsHaveOnlyTypes(row, allowedTypes) {
+					if conditional && destinationsHaveOnlyTypes(row, allowedTypes) {
 						continue
 					}
 					missing++
@@ -408,7 +413,7 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 			for _, field := range r.RequiredInAnyRow {
 				found := false
 				for _, row := range rows {
-					if hasField(row, field) {
+					if hasNonNullField(row, field) {
 						found = true
 						break
 					}
@@ -466,18 +471,28 @@ func isUnavailableBody(err error) bool {
 }
 
 func hasField(row map[string]any, path string) bool {
+	_, ok := fieldValue(row, path)
+	return ok
+}
+
+func hasNonNullField(row map[string]any, path string) bool {
+	value, ok := fieldValue(row, path)
+	return ok && value != nil
+}
+
+func fieldValue(row map[string]any, path string) (any, bool) {
 	var current any = row
 	for _, part := range strings.Split(path, ".") {
 		object, ok := current.(map[string]any)
 		if !ok {
-			return false
+			return nil, false
 		}
 		current, ok = object[part]
 		if !ok {
-			return false
+			return nil, false
 		}
 	}
-	return true
+	return current, true
 }
 
 func destinationsHaveOnlyTypes(row map[string]any, allowedTypes []string) bool {
