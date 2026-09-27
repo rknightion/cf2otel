@@ -76,13 +76,21 @@ None recorded.
   does not show what the canary sees (loop 10 REV-41).
 - The drift canary's Access apps entry: two Worker-destination apps (destination types `worker`
   and `all_preview_workers`) legitimately have no `domain`. A domainless row of any other shape is
-  drift (loop 10 preparation, CFO-0041).
+  drift (loop 10 preparation, CFO-0041). An explicit JSON null `domain` counts as missing on a
+  domain-based row (Rob, 2026-09-27, CFO-0044).
 - SCIM update-log rows: `resource_user_email` is absent on every GROUP row and on some USER rows.
   The owner's rule is that it must appear in at least one row of the page, never on every row
   (Rob, 2026-09-27, CFO-0042). A nonempty page with no email on any row, such as a group-only sync
   hour, is therefore a canary difference by design; do not "fix" it by suppressing the check (Rob
   kept the rule at loop 12 preparation over a CodeRabbit major). SCIM traffic is sparse: 47 of 48
   hourly canary windows were empty in the loop 12 preparation census.
+- JSON null counts as missing only for fields named in `optional_when_destination_types` or
+  `required_in_any_row`; plain `required_fields` checks keep null-as-present, and empty strings are
+  not covered (Rob, 2026-09-27, CFO-0044).
+- The exact-SHA CI watcher is `codex/watch-ci.py <full-sha> <receipt-dir>`, verified against a
+  completed SHA at loop 13 preparation. Loop 12's hand-edited copy dropped `for x in runs` from its
+  `all()`, and the swallowed NameError ran every wait to its 60-minute deadline. A receipt holding
+  only error observations means "not observed": read the run back with `gh run view`.
 - On an external write's rejection, capture the full response body before deciding whether to roll
   back, and re-GET to confirm a state actually changed before rolling back a write that was itself
   rejected with nothing changed (evidence brief D8).
