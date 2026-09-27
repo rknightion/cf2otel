@@ -66,9 +66,20 @@ None recorded.
   healthy deploy. Launch every watcher under `caffeinate -i`, measure deadlines on the wall clock
   (not `time.monotonic()`, which stops during sleep on macOS), and treat an observation gap or an SSH
   error as "not observed", never as unhealthy (loop 10 preparation).
+- On Codex, a watcher backgrounded with `nohup … &` from a one-shot exec call dies when that call
+  returns: empty log, no traceback, no receipt (loops 7, 9 and 10; both loop 10 deploy watchers).
+  Start a watcher as a foreground command in a retained exec session (`exec_command` with a short
+  `yield_time_ms`, record the returned `session_id`), and have it rewrite its receipt after every
+  observation so a death still leaves an observation count (loop 11 preparation).
+- The drift canary reads only what `restProbeQuery` in `tools/apidrift/probe.go` asks for, and most
+  entries ask for one row (`per_page=1` or `limit=1`). A census taken with the API's default paging
+  does not show what the canary sees (loop 10 REV-41).
 - The drift canary's Access apps entry: two Worker-destination apps (destination types `worker`
   and `all_preview_workers`) legitimately have no `domain`. A domainless row of any other shape is
   drift (loop 10 preparation, CFO-0041).
+- SCIM update-log rows: `resource_user_email` is absent on every GROUP row and on some USER rows.
+  The owner's rule is that it must appear in at least one row of the page, never on every row
+  (Rob, 2026-09-27, CFO-0042).
 - On an external write's rejection, capture the full response body before deciding whether to roll
   back, and re-GET to confirm a state actually changed before rolling back a write that was itself
   rejected with nothing changed (evidence brief D8).
