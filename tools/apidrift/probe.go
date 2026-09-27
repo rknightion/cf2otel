@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -31,13 +32,43 @@ type graphContract struct {
 }
 
 type restContract struct {
-	Name           string   `json:"name"`
-	Scope          string   `json:"scope"`
-	Path           string   `json:"path"`
-	RequiredFields []string `json:"required_fields"`
-	AllowEmpty     bool     `json:"allow_empty,omitempty"`
-	Single         bool     `json:"single,omitempty"`
-	RawJSON        bool     `json:"raw_json,omitempty"`
+	Name                         string              `json:"name"`
+	Scope                        string              `json:"scope"`
+	Path                         string              `json:"path"`
+	RequiredFields               []string            `json:"required_fields"`
+	AllowEmpty                   bool                `json:"allow_empty,omitempty"`
+	Single                       bool                `json:"single,omitempty"`
+	RawJSON                      bool                `json:"raw_json,omitempty"`
+	CheckAllRows                 bool                `json:"check_all_rows,omitempty"`
+	OptionalWhenDestinationTypes map[string][]string `json:"optional_when_destination_types,omitempty"`
+	RequiredInAnyRow             []string            `json:"required_in_any_row,omitempty"`
+	invalidNullRowRule           bool
+}
+
+func (r *restContract) UnmarshalJSON(data []byte) error {
+	type restContractFields restContract
+	var fields restContractFields
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&fields); err != nil {
+		return err
+	}
+	*r = restContract(fields)
+
+	var rawFields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &rawFields); err != nil {
+		return err
+	}
+	for name, raw := range rawFields {
+		if !bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			continue
+		}
+		if strings.EqualFold(name, "check_all_rows") || strings.EqualFold(name, "optional_when_destination_types") || strings.EqualFold(name, "required_in_any_row") {
+			r.invalidNullRowRule = true
+			break
+		}
+	}
+	return nil
 }
 
 type probeAPI interface {
@@ -50,6 +81,10 @@ type probeAPI interface {
 
 type rawProbeAPI interface {
 	GetRaw(context.Context, string, url.Values, any) error
+}
+
+type pageProbeAPI interface {
+	GetPage(context.Context, string, url.Values, any) error
 }
 
 var fieldName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$`)
@@ -116,7 +151,7 @@ func validateContract(c contract) error {
 		if r.RawJSON {
 			fieldsValid = len(r.RequiredFields) == 0
 		}
-		if !ok || r.Path != path || restSeen[r.Name] || !fieldsValid || (r.Scope != "global" && r.Scope != "account" && r.Scope != "gateway" && r.Scope != "gateway-log") {
+		if !ok || r.Path != path || restSeen[r.Name] || !fieldsValid || !validRESTOptionalRules(r) || (r.Scope != "global" && r.Scope != "account" && r.Scope != "gateway" && r.Scope != "gateway-log") {
 			return errors.New("invalid REST contract")
 		}
 		if (r.Scope == "global") != !strings.Contains(r.Path, "{account}") {
@@ -134,6 +169,46 @@ func validateContract(c contract) error {
 		return errors.New("gateway log detail paths require the gateway log list")
 	}
 	return nil
+}
+
+func validRESTOptionalRules(r restContract) bool {
+	if r.invalidNullRowRule {
+		return false
+	}
+	if r.RawJSON || r.Single {
+		return !r.CheckAllRows && r.OptionalWhenDestinationTypes == nil && r.RequiredInAnyRow == nil
+	}
+	required := make(map[string]bool, len(r.RequiredFields))
+	for _, field := range r.RequiredFields {
+		required[field] = true
+	}
+	if r.RequiredInAnyRow != nil {
+		if !validFields(r.RequiredInAnyRow) {
+			return false
+		}
+		for _, field := range r.RequiredInAnyRow {
+			if required[field] {
+				return false
+			}
+		}
+	}
+	if r.OptionalWhenDestinationTypes == nil {
+		return true
+	}
+	if len(r.OptionalWhenDestinationTypes) == 0 {
+		return false
+	}
+	for field, destinationTypes := range r.OptionalWhenDestinationTypes {
+		if !required[field] || len(destinationTypes) == 0 {
+			return false
+		}
+		for _, destinationType := range destinationTypes {
+			if strings.TrimSpace(destinationType) == "" {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func validFields(fields []string) bool {
@@ -271,6 +346,7 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 				continue
 			}
 			var rows []map[string]any
+			var totalCount int
 			if r.Single {
 				var row map[string]any
 				if err := api.Get(ctx, path, query, &row); err != nil {
@@ -280,9 +356,24 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 				if row != nil {
 					rows = append(rows, row)
 				}
+			} else if r.CheckAllRows {
+				if getter, ok := api.(pageProbeAPI); ok {
+					var page cfapi.Page
+					if err := getter.GetPage(ctx, path, query, &page); err != nil || json.Unmarshal(page.Result, &rows) != nil {
+						diffs = append(diffs, label+": read failed")
+						continue
+					}
+					totalCount = page.ResultInfo.TotalCount
+				} else if err := api.Get(ctx, path, query, &rows); err != nil {
+					diffs = append(diffs, label+": read failed")
+					continue
+				}
 			} else if err := api.Get(ctx, path, query, &rows); err != nil {
 				diffs = append(diffs, label+": read failed")
 				continue
+			}
+			if r.CheckAllRows && totalCount > len(rows) {
+				diffs = append(diffs, fmt.Sprintf("%s: checked %d of %d rows", label, len(rows), totalCount))
 			}
 			if len(rows) == 0 {
 				if !r.AllowEmpty {
@@ -290,9 +381,40 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 				}
 				continue
 			}
+			rowsToCheck := rows[:1]
+			if r.CheckAllRows {
+				rowsToCheck = rows
+			}
 			for _, field := range r.RequiredFields {
-				if !hasField(rows[0], field) {
-					diffs = append(diffs, label+": missing field "+field)
+				missing := 0
+				for _, row := range rowsToCheck {
+					if hasField(row, field) {
+						continue
+					}
+					if allowedTypes, optional := r.OptionalWhenDestinationTypes[field]; optional && destinationsHaveOnlyTypes(row, allowedTypes) {
+						continue
+					}
+					missing++
+				}
+				if missing == 0 {
+					continue
+				}
+				diff := label + ": missing field " + field
+				if r.CheckAllRows {
+					diff += fmt.Sprintf(" (%d of %d rows)", missing, len(rows))
+				}
+				diffs = append(diffs, diff)
+			}
+			for _, field := range r.RequiredInAnyRow {
+				found := false
+				for _, row := range rows {
+					if hasField(row, field) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					diffs = append(diffs, fmt.Sprintf("%s: field %s absent from all %d rows", label, field, len(rows)))
 				}
 			}
 			if r.Name == "ai-gateway-logs" {
@@ -326,7 +448,9 @@ func restProbeQuery(name string, now time.Time) url.Values {
 	case "access-logins":
 		return url.Values{"since": {from}, "until": {to}, "page": {"1"}, "per_page": {"1"}}
 	case "access-scim":
-		return url.Values{"since": {from}, "until": {to}, "page": {"1"}, "limit": {"1"}, "direction": {"asc"}}
+		return url.Values{"since": {from}, "until": {to}, "page": {"1"}, "limit": {"50"}, "direction": {"asc"}}
+	case "access-apps":
+		return url.Values{"page": {"1"}, "per_page": {"1000"}}
 	case "audit-logs":
 		return url.Values{"since": {from}, "before": {to}, "limit": {"1"}}
 	case "ai-gateway-logs":
@@ -350,6 +474,32 @@ func hasField(row map[string]any, path string) bool {
 		}
 		current, ok = object[part]
 		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func destinationsHaveOnlyTypes(row map[string]any, allowedTypes []string) bool {
+	destinationsValue, ok := row["destinations"]
+	if !ok {
+		return false
+	}
+	destinations, ok := destinationsValue.([]any)
+	if !ok || len(destinations) == 0 {
+		return false
+	}
+	allowed := make(map[string]bool, len(allowedTypes))
+	for _, destinationType := range allowedTypes {
+		allowed[destinationType] = true
+	}
+	for _, destinationValue := range destinations {
+		destination, ok := destinationValue.(map[string]any)
+		if !ok {
+			return false
+		}
+		destinationType, ok := destination["type"].(string)
+		if !ok || !allowed[destinationType] {
 			return false
 		}
 	}

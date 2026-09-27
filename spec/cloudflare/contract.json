@@ -421,6 +421,13 @@
         "name",
         "domain"
       ],
+      "check_all_rows": true,
+      "optional_when_destination_types": {
+        "domain": [
+          "worker",
+          "all_preview_workers"
+        ]
+      },
       "allow_empty": true
     },
     {
@@ -463,9 +470,12 @@
         "idp_id",
         "logged_at",
         "resource_type",
-        "resource_user_email",
         "status"
       ],
+      "required_in_any_row": [
+        "resource_user_email"
+      ],
+      "check_all_rows": true,
       "allow_empty": true
     },
     {
