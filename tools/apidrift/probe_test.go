@@ -524,6 +524,68 @@ func TestAccessAppsAcceptsDomainAndPureWorkerRowsInEitherOrder(t *testing.T) {
 	}
 }
 
+func TestAccessAppsTreatsNullDomainAsMissingUnlessWorkerDestination(t *testing.T) {
+	t.Run("domain-based", func(t *testing.T) {
+		c := accessAppsExceptionContract(t)
+		api := fakeAPI{contract: c, restRows: map[string][]map[string]any{
+			"access-apps": {{"id": "domain", "name": "domain app", "domain": nil}},
+		}}
+		want := "REST access-apps scope #1: missing field domain (1 of 1 rows)"
+		if diffs := probe(context.Background(), api, c); !containsDiff(diffs, want) {
+			t.Fatalf("null domain on a domain-based app was not reported: got %v, want %q", diffs, want)
+		}
+	})
+
+	t.Run("pure-worker", func(t *testing.T) {
+		c := accessAppsExceptionContract(t)
+		api := fakeAPI{contract: c, restRows: map[string][]map[string]any{
+			"access-apps": {{
+				"id": "worker", "name": "worker app", "domain": nil,
+				"destinations": []any{map[string]any{"type": "worker"}},
+			}},
+		}}
+		if diffs := probe(context.Background(), api, c); hasRESTDiff(diffs, "access-apps") {
+			t.Fatalf("null domain on a pure Worker app should stay exempt: %v", diffs)
+		}
+	})
+}
+
+func TestAccessSCIMTreatsNullEmailAsMissingButAcceptsNonNullRow(t *testing.T) {
+	t.Run("null-only", func(t *testing.T) {
+		c := accessSCIMAnyRowContract(t)
+		group := scimUpdateRow("group", "group-row", false)
+		group["resource_user_email"] = nil
+		user := scimUpdateRow("user", "user-row", false)
+		user["resource_user_email"] = nil
+		api := fakeAPI{contract: c, restRows: map[string][]map[string]any{"access-scim": {group, user}}}
+		want := "REST access-scim scope #1: field resource_user_email absent from all 2 rows"
+		if diffs := probe(context.Background(), api, c); !containsDiff(diffs, want) {
+			t.Fatalf("null emails in every row were not reported absent: got %v, want %q", diffs, want)
+		}
+	})
+
+	t.Run("one-non-null", func(t *testing.T) {
+		c := accessSCIMAnyRowContract(t)
+		group := scimUpdateRow("group", "group-row", false)
+		group["resource_user_email"] = nil
+		user := scimUpdateRow("user", "user-row", true)
+		api := fakeAPI{contract: c, restRows: map[string][]map[string]any{"access-scim": {group, user}}}
+		if diffs := probe(context.Background(), api, c); hasRESTDiff(diffs, "access-scim") {
+			t.Fatalf("one non-null email should satisfy the any-row rule: %v", diffs)
+		}
+	})
+}
+
+func TestRESTRequiredFieldNullRemainsPresent(t *testing.T) {
+	c := loadTestContract(t)
+	row := scimUpdateRow("user", "user-row", true)
+	row["status"] = nil
+	api := fakeAPI{contract: c, restRows: map[string][]map[string]any{"access-scim": {row}}}
+	if diffs := probe(context.Background(), api, c); hasRESTDiff(diffs, "access-scim") {
+		t.Fatalf("null on a plain required field should remain present: %v", diffs)
+	}
+}
+
 func TestAccessAppsRequiresDomainForPublicMixedAndMalformedDestinations(t *testing.T) {
 	invalidDestinations := []struct {
 		name string
