@@ -782,6 +782,7 @@ func TestContractRejectsNullRESTRowRules(t *testing.T) {
 		field string
 	}{
 		{name: "check_all_rows", entry: "access-apps", field: "check_all_rows"},
+		{name: "CHECK_ALL_ROWS key", entry: "access-apps", field: "CHECK_ALL_ROWS"},
 		{name: "optional_when_destination_types", entry: "access-apps", field: "optional_when_destination_types"},
 		{name: "required_in_any_row", entry: "access-scim", field: "required_in_any_row"},
 	}

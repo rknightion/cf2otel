@@ -59,8 +59,11 @@ func (r *restContract) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &rawFields); err != nil {
 		return err
 	}
-	for _, name := range []string{"check_all_rows", "optional_when_destination_types", "required_in_any_row"} {
-		if raw, present := rawFields[name]; present && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+	for name, raw := range rawFields {
+		if !bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			continue
+		}
+		if strings.EqualFold(name, "check_all_rows") || strings.EqualFold(name, "optional_when_destination_types") || strings.EqualFold(name, "required_in_any_row") {
 			r.invalidNullRowRule = true
 			break
 		}
