@@ -54,3 +54,6 @@ THIRD_PARTY_NOTICES.md
 
 # Python generator caches.
 __pycache__/
+
+# loop-pi (pi-subagents writes .pi/subagents/)
+.pi/
