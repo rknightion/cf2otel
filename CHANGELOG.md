@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/rknightion/cf2otel/compare/v0.8.1...v0.8.2) (2026-09-29)
+
+
+### Bug Fixes
+
+* **apidrift:** treat scoped null fields as missing ([0aba544](https://github.com/rknightion/cf2otel/commit/0aba54402c31a9c0fabb50ca4339a57169229e66))
+
 ## [0.8.1](https://github.com/rknightion/cf2otel/compare/v0.8.0...v0.8.1) (2026-09-26)
 
 
