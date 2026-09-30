@@ -3,17 +3,21 @@ id: doc-0004
 title: Parity checklist - reference pollers
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-09-23 10:01'
+updated_date: '2026-09-30 21:17'
 ---
-cf2otel must cover every capability of two existing open-source Cloudflare pollers, both MIT:
+cf2otel must cover every capability listed here. The list is a behaviour contract drawn from a survey
+of open-source Cloudflare pollers and exporters; no other project is named and no code is copied.
+Output is OTLP (logs, metrics, traces), with an optional Prometheus pull endpoint (CFO-0051.06): an
+equivalent surface is required, not the same wire format. Where sources disagree, the stronger
+behaviour is the target.
 
-- **[Go]** `afreidah/cloudflare-log-collector` - Loki push + Prometheus + OTel traces.
-- **[Py]** `kozliatko/cf-log-forwarder` - CEF-over-syslog or JSONL, persisted cursor, rich CLI.
+Tags: **[Go]** and **[Py]** mark the two log-shipping pollers surveyed first (2026-09-23); **[Prom]**
+marks the Prometheus-style exporter survey (2026-09-30). The later items name the Backlog task that
+delivers them.
 
-Inventory taken 2026-09-23 from a full read of both source trees. Neither project's code is copied;
-this list is the behaviour contract. Where the two disagree, the stronger behaviour is the target and
-is named. Output is OTLP (logs, metrics, traces) rather than Loki push or CEF: an equivalent surface
-is required, not the same wire format.
+Cardinality policy (Rob, 2026-09-30): low-cardinality dimensions are on by default, high-cardinality
+ones (colo, ASN, path, per-device, per-user) are opt-in, and every metric stays under a series cap.
+The OTel SDK cardinality limit is per instrument and configurable (CFO-0045).
 
 ## Access / Zero Trust logins
 
@@ -86,3 +90,62 @@ is required, not the same wire format.
 - [Py] Read-only exploration mode that prints a dataset as a table/JSON and names the missing
   permission on a 403.
 - [Both] Non-root container, healthcheck, hardened compose/systemd.
+
+
+## HTTP zone analytics [Prom] (CFO-0046)
+
+- Edge response bytes alongside requests; eyeball-only `requestSource` policy (CFO-0046.01).
+- Exact edge status, origin status, country, HTTP protocol, TLS protocol, method, content type as
+  default dimensions (CFO-0046.02).
+- Opt-in colo (host allowlist), ASN, and 4xx/5xx by normalised path (numeric, UUID and hex segments
+  collapsed) (CFO-0046.03).
+- Edge TTFB average and percentiles; origin duration p50/p95/p99 (CFO-0046.04).
+- Visits and threats where the plan allows; account data transfer month-to-date with a linear
+  projection (CFO-0046.05).
+
+## Workers and platform depth [Prom] (CFO-0047)
+
+- Workers invocation status, errors, subrequests, CPU/duration/wall-time percentiles per script
+  (CFO-0047.01). Raw invocation events stay skipped (CFO-0023).
+- Durable Objects errors and wall-time/response-size percentiles with script; D1 rows read/written
+  and batch-time percentiles; Queues lag time, retry count and billable operations breakdown
+  (CFO-0047.02).
+- Logpush failed uploads by job, destination, status and final attempt, account and zone scope
+  (CFO-0047.03).
+- Bounded per-resource names for D1, KV, Queues and DO; R2 action type (CFO-0047.04).
+
+## Zero Trust state [Prom] (CFO-0048)
+
+- Tunnel status and connector health (CFO-0048.01).
+- WARP fleet status as aggregates by status, platform, version, mode and colo, fully paginated; never
+  per device (CFO-0048.02).
+- DEX HTTP and traceroute test results (CFO-0048.03).
+- Access and Gateway seat counts (CFO-0048.04).
+
+## Firewall depth [Prom] (CFO-0049)
+
+- Rule ID and resolved rule description, host and country on the firewall metric (CFO-0049.01).
+- Bot score buckets and score source with a fallback for unentitled zones (CFO-0049.02).
+
+## Origin and edge health [Prom] (CFO-0050)
+
+- Certificate pack status and expiry (CFO-0050.01).
+- Load balancer pool/origin health by region, origin RTT, pool traffic (CFO-0050.02).
+- Health check events with RTT/TTFB/TCP/TLS timings and failure reason (CFO-0050.03).
+- Opt-in public status page component status (CFO-0050.04).
+
+## Operations [Prom] (CFO-0051)
+
+- Zone exclude list; discovered/filtered/processed/skipped zone self-metrics (CFO-0051.01).
+- Metric and attribute deny list validated against semconv (CFO-0051.02).
+- Classified collector errors (CFO-0051.03).
+- Per-zone entitlement backoff and a shared client-side rate limiter (CFO-0051.04).
+- Multiple accounts, listed or discovered (CFO-0051.05).
+- Optional Prometheus `/metrics` endpoint (CFO-0051.06).
+
+## Deliberately out of scope
+
+Magic Transit, Magic Firewall and Network Analytics datasets (Enterprise/Magic products), Stream and
+Images statistics, running cf2otel as a Worker, Global API Key authentication, a hostname trace
+probe (synthetic monitoring does this better), and a runtime configuration API. The retired REST
+analytics endpoints are superseded by the GraphQL datasets above.
