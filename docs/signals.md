@@ -45,7 +45,7 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cloudflare.tunnel.connections` | `{connection}` | Active tunnel connections by id, name and colo. (CFO-0048.01) |
 | `cloudflare.tunnel.connectors` | `{connector}` | Tunnel connectors by id, name and connector version. (CFO-0048.01) |
 | `cf2otel.metric.cardinality_overflows` | `{datapoint}` | Overflow datapoint count by instrument. (CFO-0045) |
-| `cf2otel.identity.outcomes` | `{request}` | Identity inference outcome count by matched, unmatched or ambiguous outcome. (CFO-0058) |
+| `cf2otel.identity.outcomes` | `{request}` | Monotonic counter of identity inference outcomes, grouped by `cf2otel.identity.outcome` (`matched`, `unmatched`, `ambiguous`). Records only new outcomes each poll, not repeated cumulative snapshots; resets on process restart. Replaces the three `cf2otel.identity.matched` / `unmatched` / `ambiguous` gauges. (CFO-0058) |
 | `cloudflare.access.logins` | `1` | Human Access login count from `cf1AccessLoginsRawGroups`; `cloudflare.access.allowed` is normalized from the source decision to `true`/`false`, matching every Access signal. |
 | `cloudflare.access.identity_logins` | `1` | Exact REST identity-login count by app, allowed, connection and action; excludes nonidentity service-token rows. |
 | `cloudflare.access.requests` | `{request}` | Access request count from `accessLoginRequestsAdaptiveGroups`; keep `nonidentity` traffic separate. |
@@ -121,9 +121,6 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cf2otel.api.requests` | `{request}` | Cloudflare API requests. |
 | `cf2otel.api.duration` | `s` | Cloudflare API request duration. |
 | `cf2otel.api.retries` | `1` | Cloudflare API retries. |
-| `cf2otel.identity.matched` | `1` | HTTP events matched to one Access identity. |
-| `cf2otel.identity.unmatched` | `1` | HTTP events without a match. |
-| `cf2otel.identity.ambiguous` | `1` | HTTP events with more than one candidate. |
 | `cf2otel.window.gap` | `s` | Skipped retention-gap seconds by collector. |
 | `cf2otel.window.commit_failures` | `1` | Failed window commits by retry or dropped outcome. |
 | `cf2otel.window.catchup_windows` | `1` | Additional bounded collector windows committed in one scheduler tick. |
@@ -183,9 +180,8 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cf2otel.checkpoint.age` |
 | Metric | `cf2otel.export.errors` |
 | Metric | `cf2otel.export.success` |
-| Metric | `cf2otel.identity.ambiguous` |
-| Metric | `cf2otel.identity.matched` |
-| Metric | `cf2otel.identity.unmatched` |
+| Metric | `cf2otel.identity.outcomes` |
+| Attribute | `cf2otel.identity.outcome` |
 | Metric | `cf2otel.scrape.duration` |
 | Metric | `cf2otel.scrape.errors` |
 | Metric | `cf2otel.scrape.last_success_timestamp` |

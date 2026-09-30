@@ -13,6 +13,8 @@ import (
 
 type Stats struct {
 	mu              sync.Mutex
+	identityMu      sync.Mutex // Serializes snapshot-to-delta recording across concurrent collects.
+	identityLast    [3]uint64
 	emitter         telemetry.Emitter
 	version, commit string
 	lastSuccess     map[string]time.Time
@@ -46,10 +48,14 @@ func (s *Stats) Expect(name string) {
 	s.expected[name] = struct{}{}
 }
 
+// SetIdentityStats attaches a new outcome source, starting a fresh delta baseline.
 func (s *Stats) SetIdentityStats(snapshot func() identity.Stats) {
+	s.identityMu.Lock()
+	defer s.identityMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.identityStats = snapshot
+	s.identityLast = [3]uint64{}
 }
 
 // Poll records one completed scheduler attempt. The caller supplies completion time.
@@ -92,7 +98,8 @@ func (s *Stats) Checkpoint(name string, at time.Time) {
 	s.checkpoints[name] = at
 }
 
-// Collect emits bounded gauges. It never includes error text or checkpoint keys beyond registered names.
+// Collect emits bounded gauges and identity outcome counter deltas. It never
+// includes error text or checkpoint keys beyond registered names.
 func (s *Stats) Collect(ctx context.Context, now time.Time) error {
 	s.mu.Lock()
 	last := make(map[string]time.Time, len(s.lastSuccess))
@@ -108,7 +115,6 @@ func (s *Stats) Collect(ctx context.Context, now time.Time) error {
 	for k, v := range s.checkpoints {
 		points[k] = v
 	}
-	identitySnapshot := s.identityStats
 	s.mu.Unlock()
 	var errs []error
 	for name, at := range last {
@@ -129,23 +135,45 @@ func (s *Stats) Collect(ctx context.Context, now time.Time) error {
 			errs = append(errs, err)
 		}
 	}
-	if identitySnapshot != nil {
-		outcomes := identitySnapshot()
-		for _, metric := range []struct {
-			name  string
-			value uint64
-		}{
-			{semconv.MetricIdentityMatched, outcomes.Matched},
-			{semconv.MetricIdentityUnmatched, outcomes.Unmatched},
-			{semconv.MetricIdentityAmbiguous, outcomes.Ambiguous},
-		} {
-			if err := s.emitter.Gauge(ctx, metric.name, float64(metric.value)); err != nil {
-				errs = append(errs, err)
-			}
-		}
+	if err := s.collectIdentity(ctx); err != nil {
+		errs = append(errs, err)
 	}
 	if err := s.emitter.Gauge(ctx, semconv.MetricBuildInfo, 1, telemetry.Attr{Key: semconv.AttrBuildVersion, Value: s.version}, telemetry.Attr{Key: semconv.AttrBuildCommit, Value: s.commit}); err != nil {
 		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
+}
+
+func (s *Stats) collectIdentity(ctx context.Context) error {
+	s.identityMu.Lock()
+	defer s.identityMu.Unlock()
+	s.mu.Lock()
+	snapshot := s.identityStats
+	s.mu.Unlock()
+	if snapshot == nil {
+		return nil
+	}
+	outcomes := snapshot()
+	var errs []error
+	for i, outcome := range []struct {
+		name  string
+		value uint64
+	}{
+		{"matched", outcomes.Matched},
+		{"unmatched", outcomes.Unmatched},
+		{"ambiguous", outcomes.Ambiguous},
+	} {
+		delta := outcome.value
+		if outcome.value >= s.identityLast[i] {
+			delta -= s.identityLast[i]
+		}
+		// A lower snapshot starts a new source epoch; never add a negative
+		// delta. Only advance a baseline after the emitter accepts the add.
+		if err := s.emitter.Counter(ctx, semconv.MetricIdentityOutcomes, float64(delta), telemetry.Attr{Key: semconv.AttrIdentityOutcome, Value: outcome.name}); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		s.identityLast[i] = outcome.value
 	}
 	return errors.Join(errs...)
 }
