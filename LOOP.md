@@ -91,6 +91,17 @@ None recorded.
   completed SHA at loop 13 preparation. Loop 12's hand-edited copy dropped `for x in runs` from its
   `all()`, and the swallowed NameError ran every wait to its 60-minute deadline. A receipt holding
   only error observations means "not observed": read the run back with `gh run view`.
+- `just check` in the shared checkout fails in fmt, lint, vet and test because the gitignored `codex/`
+  holds Go files; a clean worktree of the same SHA passes. Run every gate in a worktree or `-runend`
+  (loop 14 preparation).
+- GraphQL `settings.<dataset>.availableFields` spells fields `part_field` (`sum_edgeResponseBytes`,
+  `dimensions_coloCode`), not dotted; a dotted lookup reads every field as absent (loop 14 preparation).
+- On `httpRequestsAdaptiveGroups`, edge TTFB (avg and quantiles) and ASN dimensions are Pro-only, while
+  origin-duration quantiles, bytes, visits, country, protocol, TLS and content type are available on Free
+  (live, loop 14 preparation).
+- `GET /accounts/{a}/cfd_tunnel` without `Cloudflare Tunnel Read` returns `200` with an empty list, not a
+  403; `Zero Trust Read` does not cover it. Treat an empty tunnel list as unproven until the token's
+  permissions are confirmed (loop 14 preparation; both loop tokens now carry it).
 - On an external write's rejection, capture the full response body before deciding whether to roll
   back, and re-GET to confirm a state actually changed before rolling back a write that was itself
   rejected with nothing changed (evidence brief D8).
