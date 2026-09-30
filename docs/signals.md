@@ -6,7 +6,7 @@ All signals carry `service.name=cf2otel`. Cloudflare-specific names begin `cloud
 
 | Event or span | Source | Notes |
 | --- | --- | --- |
-| `cloudflare.access.login` | Access REST request log | Login action, decision, app, country and available identity details. The source has short history. |
+| `cloudflare.access.login` | Access REST request log | Login action, decision (`cloudflare.access.allowed`: `true`/`false`), app, uppercase ISO 3166-1 alpha-2 country and available identity details. The source has short history. |
 | `cloudflare.access.scim_update` | Access SCIM update log | Resource type, HTTP method, status and available identifiers. |
 | `cloudflare.http.request` | `httpRequestsAdaptive` | Sampled per-request event. Access user identity, when present, is inferred and flagged. |
 | `cloudflare.ai_gateway.request` | AI Gateway REST logs | Request metadata and outcome. Request and response content is optional and capped. |
@@ -24,7 +24,7 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 
 | Name | Unit | Meaning |
 | --- | --- | --- |
-| `cloudflare.access.logins` | `1` | Human Access login count from `cf1AccessLoginsRawGroups`. |
+| `cloudflare.access.logins` | `1` | Human Access login count from `cf1AccessLoginsRawGroups`; `cloudflare.access.allowed` is normalized from the source decision to `true`/`false`, matching every Access signal. |
 | `cloudflare.access.identity_logins` | `1` | Exact REST identity-login count by app, allowed, connection and action; excludes nonidentity service-token rows. |
 | `cloudflare.access.requests` | `{request}` | Access request count from `accessLoginRequestsAdaptiveGroups`; keep `nonidentity` traffic separate. |
 | `cloudflare.access.apps` | `1` | Access application inventory gauge. |

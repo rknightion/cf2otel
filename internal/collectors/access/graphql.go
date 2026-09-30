@@ -3,6 +3,7 @@ package access
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,7 +58,7 @@ func (c loginMetrics) CollectWindow(ctx context.Context, from, to time.Time, e t
 			if r.Sum.Logins <= 0 {
 				continue
 			}
-			pending = append(pending, point{semconv.MetricAccessLogins, r.Sum.Logins, []telemetry.Attr{{Key: semconv.AttrAccessApp, Value: r.Dimensions.AppName}, {Key: semconv.AttrAccessIdentityProvider, Value: identityClass(r.Dimensions.IDP)}, {Key: semconv.AttrAccessLoginType, Value: r.Dimensions.LoginType}, {Key: semconv.AttrAccessAllowed, Value: r.Dimensions.Allowed}}})
+			pending = append(pending, point{semconv.MetricAccessLogins, r.Sum.Logins, []telemetry.Attr{{Key: semconv.AttrAccessApp, Value: r.Dimensions.AppName}, {Key: semconv.AttrAccessIdentityProvider, Value: identityClass(r.Dimensions.IDP)}, {Key: semconv.AttrAccessLoginType, Value: r.Dimensions.LoginType}, {Key: semconv.AttrAccessAllowed, Value: strconv.FormatBool(strings.EqualFold(r.Dimensions.Allowed, "allowed"))}}})
 		}
 		start = end
 	}
