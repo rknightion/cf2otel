@@ -44,7 +44,7 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cloudflare.tunnel.status` | `{tunnel}` | Current tunnel status gauge with value 1, by id, name and status. (CFO-0048.01) |
 | `cloudflare.tunnel.connections` | `{connection}` | Active tunnel connections by id, name and colo. (CFO-0048.01) |
 | `cloudflare.tunnel.connectors` | `{connector}` | Tunnel connectors by id, name and connector version. (CFO-0048.01) |
-| `cf2otel.metric.cardinality_overflows` | `{datapoint}` | Overflow datapoint count by instrument. (CFO-0045) |
+| `cf2otel.metric.cardinality_overflows` | `{datapoint}` | SDK overflow datapoints observed per export, by `cf2otel.instrument`. Cumulative overflow series are counted each time they are exported; the counter appears on the next collection. A warning names each overflowing instrument at most once per hour. (CFO-0045) |
 | `cf2otel.identity.outcomes` | `{request}` | Identity inference outcome count by matched, unmatched or ambiguous outcome. (CFO-0058) |
 | `cloudflare.access.logins` | `1` | Human Access login count from `cf1AccessLoginsRawGroups`; `cloudflare.access.allowed` is normalized from the source decision to `true`/`false`, matching every Access signal. |
 | `cloudflare.access.identity_logins` | `1` | Exact REST identity-login count by app, allowed, connection and action; excludes nonidentity service-token rows. |
@@ -55,7 +55,7 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cloudflare.http.origin.duration` | `s` | Average origin response duration per Groups window, in seconds. |
 | `cloudflare.audit.events` | `1` | Exact audit event count by resource product, action type and action result. |
 | `cloudflare.firewall.events` | `1` | Security event count from a Groups dataset by zone. Pro Groups provides action and source dimensions; Free ByTimeGroups rejects them despite `settings.availableFields` advertising them. |
-| `cloudflare.dns.queries` | `1` | DNS query count from `dnsAnalyticsAdaptiveGroups` by zone and available bounded dimensions. |
+| `cloudflare.dns.queries` | `1` | DNS query count from `dnsAnalyticsAdaptiveGroups` by zone and available query type, response code, cached/stale flags and protocol. Colo is intentionally omitted from metrics to reduce cardinality; it remains on `cloudflare.dns.query` events. (CFO-0045) |
 | `cloudflare.gateway.dns.queries` | `1` | Gateway DNS query sum from account-level `cf1GatewayDnsRawGroups`, by bounded query type, resolver decision and country. |
 | `cloudflare.rum.page_views` | `1` | Page views from `rumPageloadEventsAdaptiveGroups` by country and device. |
 | `cloudflare.rum.sessions` | `1` | Visit sum from `rumPageloadEventsAdaptiveGroups` by country and device. |
@@ -152,7 +152,7 @@ The retired AI Gateway dashboard's **Data boundaries** panel was static provenan
 | AI Gateway DLP | `cloudflare.ai_gateway.dlp.action`, `cloudflare.ai_gateway.dlp.direction` are also bounded metric dimensions on `cloudflare.ai_gateway.dlp.requests`; `cloudflare.ai_gateway.dlp.policy.id` and `cloudflare.ai_gateway.dlp.profile.id` are log and span attributes, never metric dimensions. |
 | Audit | `cloudflare.audit.*` attributes are listed individually below; actor email and IP are log only. |
 | Firewall | `cloudflare.firewall.*` attributes are listed individually below; IP, path, query, user agent and ray are log only. |
-| DNS | `cloudflare.dns.*` attributes are listed individually below; query name and IPs are log only. |
+| DNS | `cloudflare.dns.*` attributes are listed individually below; query name, IPs and `cloudflare.dns.colo` are log only. |
 | Gateway DNS | `cloudflare.gateway.dns.query.type`, `cloudflare.gateway.dns.decision`, `cloudflare.gateway.dns.country`; only bounded metric dimensions. |
 | Platform resource names | `cloudflare.workers.script_name`, `cloudflare.r2.bucket_name`, `cloudflare.r2.catalog.namespace_name`, `cloudflare.r2sql.bucket_name`; bounded names only. |
 | RUM | `cloudflare.rum.country`, `cloudflare.rum.device_type`, `cloudflare.rum.site_tag`; gauges use device and optional site tag. |

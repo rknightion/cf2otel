@@ -94,7 +94,11 @@ func run(args []string) error {
 		dryEmitter = &dryRunEmitter{writer: os.Stdout, counts: make(map[string]dryRunCounts)}
 		emitter = dryEmitter
 	} else {
-		providers, err = telemetry.NewProviders(ctx, telemetry.ProviderOptions{Endpoint: cfg.OTLP.Endpoint, Protocol: cfg.OTLP.Protocol, InstanceID: cfg.OTLP.GrafanaCloud.InstanceID, Token: cfg.OTLP.GrafanaCloud.Token.Value(), ServiceVersion: version, InstanceUUID: hostname(), Headers: cfg.OTLP.Headers})
+		cardinalityLimit := cfg.OTLP.MetricCardinalityLimit
+		if cardinalityLimit == 0 {
+			cardinalityLimit = -1 // Config zero means unlimited, unlike ProviderOptions zero.
+		}
+		providers, err = telemetry.NewProviders(ctx, telemetry.ProviderOptions{CardinalityLimit: cardinalityLimit, Endpoint: cfg.OTLP.Endpoint, Protocol: cfg.OTLP.Protocol, InstanceID: cfg.OTLP.GrafanaCloud.InstanceID, Token: cfg.OTLP.GrafanaCloud.Token.Value(), ServiceVersion: version, InstanceUUID: hostname(), Headers: cfg.OTLP.Headers})
 		if err != nil {
 			return err
 		}

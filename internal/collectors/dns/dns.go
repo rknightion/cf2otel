@@ -37,7 +37,6 @@ var metricDimensions = []struct {
 	{field: "responseCached", attr: semconv.AttrDNSResponseCached},
 	{field: "responseStale", attr: semconv.AttrDNSResponseStale},
 	{field: "protocol", attr: semconv.AttrDNSProtocol},
-	{field: "coloName", attr: semconv.AttrDNSColo},
 }
 
 var rawLogAttributes = []struct {

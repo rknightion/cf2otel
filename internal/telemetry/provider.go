@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/metric"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -27,6 +28,9 @@ type ProviderOptions struct {
 	Endpoint, Protocol, InstanceID, Token, ServiceVersion, InstanceUUID string
 	Headers                                                             map[string]string
 	Interval                                                            time.Duration
+	// CardinalityLimit is per instrument: zero preserves the SDK default,
+	// negative disables the limit, and positive sets the global SDK limit.
+	CardinalityLimit int
 }
 type Providers struct {
 	Emitter Emitter
@@ -105,11 +109,22 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 		o.Interval = 15 * time.Second
 	}
 	hook := &exportObserver{}
-	mx = observedMetricExporter{Exporter: mx, hook: hook}
+	overflow := &cardinalityExporter{Exporter: mx, lastWarning: make(map[string]time.Time)}
+	mx = observedMetricExporter{Exporter: overflow, hook: hook}
 	lx = observedLogExporter{Exporter: lx, hook: hook}
 	lx = newBoundedLogExporter(lx)
 	tx = observedTraceExporter{SpanExporter: tx, hook: hook}
-	mp := sdkmetric.NewMeterProvider(sdkmetric.WithResource(res), sdkmetric.WithReader(sdkmetric.NewPeriodicReader(mx, sdkmetric.WithInterval(o.Interval))))
+	metricOptions := []sdkmetric.Option{sdkmetric.WithResource(res), sdkmetric.WithReader(sdkmetric.NewPeriodicReader(mx, sdkmetric.WithInterval(o.Interval)))}
+	if o.CardinalityLimit != 0 {
+		metricOptions = append(metricOptions, sdkmetric.WithCardinalityLimit(o.CardinalityLimit))
+	}
+	mp := sdkmetric.NewMeterProvider(metricOptions...)
+	spec, _ := semconv.Metric(semconv.MetricCardinalityOverflows)
+	counter, err := mp.Meter(semconv.ServiceName).Int64Counter(semconv.MetricCardinalityOverflows, metric.WithUnit(spec.Unit), metric.WithDescription(spec.Description))
+	if err != nil {
+		return nil, errors.Join(err, mp.Shutdown(ctx), lx.Shutdown(ctx), tx.Shutdown(ctx))
+	}
+	overflow.setCounter(counter)
 	// The log SDK's batch queue drops records on overflow without reporting the
 	// loss through ForceFlush. Synchronous bounded export retains backpressure.
 	lp := sdklog.NewLoggerProvider(sdklog.WithResource(res), sdklog.WithProcessor(sdklog.NewSimpleProcessor(lx)))
