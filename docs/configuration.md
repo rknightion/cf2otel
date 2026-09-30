@@ -15,13 +15,30 @@ Settings load in this order: built-in defaults, YAML, then `CF2OTEL_` environmen
 | `state` | Persistent checkpoint directory; default `/var/lib/cf2otel`. |
 | `health`, `log` | Loopback health listener and application logging. |
 
-Collector keys are `access.logins`, `access.login_metrics`, `access.scim`, `inventory.access`, `httpreq.events`, `httpreq.metrics`, `aigateway.logs`, `aigateway.metrics`, `aigateway.coverage`, `audit.logs`, `firewall.events`, `firewall.metrics`, `dns.events`, `dns.metrics`, `rum.pageloads`, `rum.web_vitals`, `gateway.dns`, `workers.overview`, `turnstile.events`, `logpush.health`, `d1.analytics`, `d1.queries`, `d1.storage`, `kv.operations`, `kv.storage`, `r2.bandwidth`, `r2.catalog_data`, `r2.catalog_maintenance`, `r2.operations`, `r2.storage`, `r2.sql`, `durableobjects.invocations`, `durableobjects.periodic`, `durableobjects.sql_storage`, `durableobjects.subrequests`, `queues.backlog`, `queues.consumer`, `queues.delayed_backlog`, `queues.message_operations`, `email.routing`, `email.sending`, and `selfobs`. Enabled collectors default to five-minute intervals. The email collectors sum Groups counts across account-owned zones over complete five-minute buckets; they emit no zone metric attributes. DMARC is excluded. `aigateway.metrics` is disabled and unscheduled because its GraphQL Groups ingestion lag is not bounded; `aigateway.logs` emits the AI Gateway metrics from REST rows. The default initial lookback is 30 minutes and maximum window is one hour. `aigateway.coverage` is present but disabled by default. The scheduler advances a checkpoint after a successful window or after it drops a window following three payload rejections.
+Collector keys are `access.logins`, `access.login_metrics`, `access.scim`, `inventory.access`, `httpreq.events`, `httpreq.metrics`, `aigateway.logs`, `aigateway.metrics`, `aigateway.coverage`, `audit.logs`, `firewall.events`, `firewall.metrics`, `dns.events`, `dns.metrics`, `rum.pageloads`, `rum.web_vitals`, `gateway.dns`, `workers.overview`, `workers.invocations`, `turnstile.events`, `logpush.health`, `d1.analytics`, `d1.queries`, `d1.storage`, `kv.operations`, `kv.storage`, `r2.bandwidth`, `r2.catalog_data`, `r2.catalog_maintenance`, `r2.operations`, `r2.storage`, `r2.sql`, `durableobjects.invocations`, `durableobjects.periodic`, `durableobjects.sql_storage`, `durableobjects.subrequests`, `queues.backlog`, `queues.consumer`, `queues.delayed_backlog`, `queues.message_operations`, `email.routing`, `email.sending`, `selfobs`, `certs.packs`, and `tunnels.status`. Enabled collectors default to five-minute intervals. The email collectors sum Groups counts across account-owned zones over complete five-minute buckets; they emit no zone metric attributes. DMARC is excluded. `aigateway.metrics` is disabled and unscheduled because its GraphQL Groups ingestion lag is not bounded; `aigateway.logs` emits the AI Gateway metrics from REST rows. The default initial lookback is 30 minutes and maximum window is one hour. `aigateway.coverage` is present but disabled by default. The scheduler advances a checkpoint after a successful window or after it drops a window following three payload rejections.
 
 The Access REST log has only about a day's observed reach. Keep its polling interval short and preserve the state directory; a long outage cannot be repaired by expanding the lookback. Cloudflare GraphQL retention and permitted window width vary by dataset and plan, so cf2otel negotiates available fields and splits requests to fit reported limits.
 
 `httpRequestsAdaptive` event rows are sampled. Use the companion `httpreq.metrics` collector for corrected aggregate counts; do not count event rows to calculate a request rate.
 
 See [Security and PII](security.md) before enabling AI Gateway body capture or wider HTTP scope.
+
+## Additional analytics settings
+
+| Key | Default | Contract |
+| --- | --- | --- |
+| `otlp.metric_cardinality_limit` | `10000` | Nonnegative integer; `0` means no limit. The application maps config `0` to provider option `-1`; a zero-valued provider option retains the SDK default for existing callers. (CFO-0045) |
+| `http.request_source` | `eyeball` | `eyeball` or `all`; applies only to `httpreq.metrics` Groups queries, never raw events. Eyeball-only totals exclude internal traffic and Worker subrequests. (CFO-0046.01) |
+| `http.breakdowns` | `[status, origin_status, country, protocol, tls_protocol, method, content_type]` | Each value must be in this set and enables one attribute. An instrument is emitted when any of its attributes is enabled and carries only enabled attributes. `[]` disables breakdown instruments. Breakdowns are zone-level, without host. (CFO-0046.02) |
+| `collectors.workers.invocations` | Enabled, `5m` interval | Aggregate Groups metrics only, with the usual lookback/window settings; no raw invocation events. (CFO-0047.01) |
+| `collectors.certs.packs` | Disabled, `1h` interval | Requires SSL and Certificates Read. Snapshot collector with no checkpoint key. (CFO-0050.01) |
+| `collectors.tunnels.status` | Disabled, `1m` interval | Requires Cloudflare Tunnel Read. Without permission the API returns an empty 200, not a 403. Snapshot collector with no checkpoint key; first poll after startup emits no status-change event. (CFO-0048.01) |
+
+Override these keys using `CF2OTEL_OTLP__METRIC_CARDINALITY_LIMIT`,
+`CF2OTEL_HTTP__REQUEST_SOURCE` and `CF2OTEL_HTTP__BREAKDOWNS`. The breakdown environment
+value is comma-separated (for example `country,method`); an empty value disables all breakdowns.
+Collector environment forms are `WORKERS_INVOCATIONS`, `CERTS_PACKS` and `TUNNELS_STATUS`.
+Snapshot collectors use the polling interval, not the window or initial lookback.
 
 ## Delivery semantics
 
@@ -51,6 +68,7 @@ span; its content logs use the content side to distinguish request and response 
 | `EventHTTPRequest` | Log | `cloudflare.http.zone`, `cloudflare.http.ray_id` and record timestamp. |
 | `EventFirewallEvent` | Log | `cloudflare.firewall.zone`, `cloudflare.firewall.ray_id` and record timestamp. |
 | `EventDNSQuery` | Log | `cloudflare.dns.zone`, record timestamp and a deterministic hash of the complete event body and attributes; the source row has no event ID, so this is best-effort and cannot distinguish identical queries. Do not rely on it for exact query counts. |
+| `EventTunnelStatusChange` | Log | `cloudflare.tunnel.id`, `cloudflare.tunnel.status` and observed time (record timestamp). (CFO-0048.01) |
 | `EventWindowGap` | Log | `cf2otel.collector`, `cf2otel.window.from`, `cf2otel.window.floor` and `cloudflare.dns.zone` when present. |
 
 cf2otel also emits two span families. Deduplicate the AI Gateway request span by

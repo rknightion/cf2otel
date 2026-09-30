@@ -1,6 +1,8 @@
 package semconv
 
 const (
+	AttrStatistic = "cloudflare.statistic"
+
 	ServiceName           = "cf2otel"
 	AttrServiceName       = "service.name"
 	AttrServiceVersion    = "service.version"

@@ -1,6 +1,11 @@
 package semconv
 
 const (
+	AttrIdentityOutcome        = "cf2otel.identity.outcome"
+	MetricCardinalityOverflows = "cf2otel.metric.cardinality_overflows"
+	MetricIdentityOutcomes     = "cf2otel.identity.outcomes"
+	AttrInstrument             = "cf2otel.instrument"
+
 	MetricScrapeSuccess        = "cf2otel.scrape.success"
 	EventWindowGap             = "cf2otel.window.gap"
 	MetricWindowGap            = "cf2otel.window.gap"
