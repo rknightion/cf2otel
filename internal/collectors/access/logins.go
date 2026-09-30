@@ -131,7 +131,7 @@ func (c *logins) emit(ctx context.Context, row loginRow, out telemetry.Emitter) 
 		{Key: semconv.AttrAccessUserEmail, Value: row.UserEmail},
 		{Key: semconv.AttrAccessUserID, Value: row.UserID},
 		{Key: semconv.AttrAccessUserIPAddress, Value: row.IPAddress},
-		{Key: semconv.AttrAccessCountry, Value: row.Country},
+		{Key: semconv.AttrAccessCountry, Value: strings.ToUpper(row.Country)},
 		{Key: semconv.AttrAccessAppID, Value: row.AppUID},
 		{Key: semconv.AttrAccessApp, Value: row.AppName},
 		{Key: semconv.AttrAccessAppType, Value: row.AppType},
