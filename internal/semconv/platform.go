@@ -1,6 +1,14 @@
 package semconv
 
 const (
+	MetricWorkersInvocations     = "cloudflare.workers.invocations"
+	MetricWorkersErrors          = "cloudflare.workers.errors"
+	MetricWorkersSubrequests     = "cloudflare.workers.subrequests"
+	MetricWorkersCPUTime         = "cloudflare.workers.cpu_time"
+	MetricWorkersWallTime        = "cloudflare.workers.wall_time"
+	MetricWorkersRequestDuration = "cloudflare.workers.request_duration"
+	AttrWorkersStatus            = "cloudflare.workers.status"
+
 	MetricWorkersRequests                = "cloudflare.workers.requests"
 	MetricTurnstileEvents                = "cloudflare.turnstile.events"
 	MetricLogpushUploads                 = "cloudflare.logpush.uploads"

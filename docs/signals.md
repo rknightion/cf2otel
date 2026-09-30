@@ -6,6 +6,7 @@ All signals carry `service.name=cf2otel`. Cloudflare-specific names begin `cloud
 
 | Event or span | Source | Notes |
 | --- | --- | --- |
+| `cloudflare.tunnel.status_change` | Tunnel REST snapshot | ID, name, status and previous status; first poll emits none. (CFO-0048.01) |
 | `cloudflare.access.login` | Access REST request log | Login action, decision, app, country and available identity details. The source has short history. |
 | `cloudflare.access.scim_update` | Access SCIM update log | Resource type, HTTP method, status and available identifiers. |
 | `cloudflare.http.request` | `httpRequestsAdaptive` | Sampled per-request event. Access user identity, when present, is inferred and flagged. |
@@ -24,6 +25,27 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 
 | Name | Unit | Meaning |
 | --- | --- | --- |
+| `cloudflare.http.response.bytes` | `By` | Response byte count on the HTTP request dimensions. (CFO-0046.01) |
+| `cloudflare.http.edge.ttfb` | `s` | Edge time to first byte by zone, host and statistic (avg, p50, p95, p99); Pro only. (CFO-0046.04) |
+| `cloudflare.http.origin.response_time` | `s` | Origin response time by zone, host and statistic (p50, p95, p99). (CFO-0046.04) |
+| `cloudflare.http.requests.by_status` | `{request}` | Request count by enabled edge and origin status. Zone-level, without host. (CFO-0046.02) |
+| `cloudflare.http.requests.by_country` | `{request}` | Request count by client country. Zone-level, without host. (CFO-0046.02) |
+| `cloudflare.http.requests.by_protocol` | `{request}` | Request count by enabled HTTP and TLS protocol. Zone-level, without host. (CFO-0046.02) |
+| `cloudflare.http.requests.by_method` | `{request}` | Request count by HTTP method. Zone-level, without host. (CFO-0046.02) |
+| `cloudflare.http.requests.by_content_type` | `{request}` | Request count by response content type. Zone-level, without host. (CFO-0046.02) |
+| `cloudflare.http.response.bytes.by_country` | `By` | Response byte count by zone and client country, without host. (CFO-0046.02) |
+| `cloudflare.workers.invocations` | `{request}` | Invocation count by script name and status. (CFO-0047.01) |
+| `cloudflare.workers.errors` | `{error}` | Invocation error count by script name. (CFO-0047.01) |
+| `cloudflare.workers.subrequests` | `{request}` | Subrequest count by script name. (CFO-0047.01) |
+| `cloudflare.workers.cpu_time` | `s` | CPU time by script name and statistic (p50, p75, p99, p999). (CFO-0047.01) |
+| `cloudflare.workers.wall_time` | `s` | Wall time by script name and statistic (p50, p75, p99, p999). (CFO-0047.01) |
+| `cloudflare.workers.request_duration` | `s` | Request duration by script name and statistic (p50, p75, p99, p999). (CFO-0047.01) |
+| `cloudflare.certificate.expiry` | `s` | Seconds until the earliest certificate expiry in a pack; negative once expired. (CFO-0050.01) |
+| `cloudflare.tunnel.status` | `{tunnel}` | Current tunnel status gauge with value 1, by id, name and status. (CFO-0048.01) |
+| `cloudflare.tunnel.connections` | `{connection}` | Active tunnel connections by id, name and colo. (CFO-0048.01) |
+| `cloudflare.tunnel.connectors` | `{connector}` | Tunnel connectors by id, name and connector version. (CFO-0048.01) |
+| `cf2otel.metric.cardinality_overflows` | `{datapoint}` | Overflow datapoint count by instrument. (CFO-0045) |
+| `cf2otel.identity.outcomes` | `{request}` | Identity inference outcome count by matched, unmatched or ambiguous outcome. (CFO-0058) |
 | `cloudflare.access.logins` | `1` | Human Access login count from `cf1AccessLoginsRawGroups`. |
 | `cloudflare.access.identity_logins` | `1` | Exact REST identity-login count by app, allowed, connection and action; excludes nonidentity service-token rows. |
 | `cloudflare.access.requests` | `{request}` | Access request count from `accessLoginRequestsAdaptiveGroups`; keep `nonidentity` traffic separate. |
@@ -412,3 +434,27 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `service.instance.id` |
 | Attribute | `service.name` |
 | Attribute | `service.version` |
+
+## Loop 14 attribute seams
+
+| Attribute | Meaning |
+| --- | --- |
+| `cf2otel.identity.outcome` | Identity inference outcome: matched, unmatched or ambiguous. (CFO-0058) |
+| `cloudflare.statistic` | Statistic: avg, p50, p75, p95, p99 or p999. (CFO-0046.04 / CFO-0047.01) |
+| `cloudflare.workers.status` | Invocation status as returned. (CFO-0047.01) |
+| `cf2otel.instrument` | Overflowing instrument name. (CFO-0045) |
+| `cloudflare.http.client.country` | Uppercase ISO 3166-1 alpha-2 country. (CFO-0046.02) |
+| `cloudflare.http.protocol` | HTTP protocol as returned, e.g. HTTP/2. (CFO-0046.02) |
+| `cloudflare.http.tls.protocol` | TLS protocol as returned, e.g. TLSv1.3 or none. (CFO-0046.02) |
+| `cloudflare.http.content_type` | Edge response content type name. (CFO-0046.02) |
+| `cloudflare.certificate.zone` | Certificate pack zone name. (CFO-0050.01) |
+| `cloudflare.certificate.pack_id` | Certificate pack pack_id. (CFO-0050.01) |
+| `cloudflare.certificate.type` | Certificate pack type. (CFO-0050.01) |
+| `cloudflare.certificate.authority` | Certificate pack authority. (CFO-0050.01) |
+| `cloudflare.certificate.status` | Certificate pack status. (CFO-0050.01) |
+| `cloudflare.tunnel.id` | Tunnel id. (CFO-0048.01) |
+| `cloudflare.tunnel.name` | Tunnel name. (CFO-0048.01) |
+| `cloudflare.tunnel.status` | Tunnel status. (CFO-0048.01) |
+| `cloudflare.tunnel.previous_status` | Tunnel previous_status. (CFO-0048.01) |
+| `cloudflare.tunnel.colo` | Tunnel colo. (CFO-0048.01) |
+| `cloudflare.tunnel.connector.version` | Tunnel connector.version. (CFO-0048.01) |

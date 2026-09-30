@@ -5,6 +5,7 @@ import (
 	"github.com/rknightion/cf2otel/internal/collectors/access"
 	"github.com/rknightion/cf2otel/internal/collectors/aigateway"
 	"github.com/rknightion/cf2otel/internal/collectors/audit"
+	"github.com/rknightion/cf2otel/internal/collectors/certs"
 	"github.com/rknightion/cf2otel/internal/collectors/d1"
 	"github.com/rknightion/cf2otel/internal/collectors/dns"
 	"github.com/rknightion/cf2otel/internal/collectors/durableobjects"
@@ -19,6 +20,7 @@ import (
 	"github.com/rknightion/cf2otel/internal/collectors/r2"
 	"github.com/rknightion/cf2otel/internal/collectors/rum"
 	"github.com/rknightion/cf2otel/internal/collectors/selfobs"
+	"github.com/rknightion/cf2otel/internal/collectors/tunnels"
 	"github.com/rknightion/cf2otel/internal/collectors/turnstile"
 	"github.com/rknightion/cf2otel/internal/collectors/workers"
 )
@@ -45,4 +47,6 @@ func registerCollectors(deps collector.Deps) {
 	queues.Register(deps)
 	email.Register(deps)
 	selfobs.Register(deps)
+	certs.Register(deps)
+	tunnels.Register(deps)
 }

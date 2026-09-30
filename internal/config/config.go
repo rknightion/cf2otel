@@ -64,6 +64,8 @@ type AccessConfig struct {
 	IncludeServiceTokens bool `yaml:"include_service_tokens" json:"include_service_tokens"`
 }
 type HTTPConfig struct {
+	RequestSource            string   `yaml:"request_source" json:"request_source"`
+	Breakdowns               []string `yaml:"breakdowns" json:"breakdowns"`
 	Scope                    string   `yaml:"scope" json:"scope"`
 	MetricsScope             string   `yaml:"metrics_scope" json:"metrics_scope"`
 	Hosts                    []string `yaml:"hosts" json:"hosts"`
@@ -86,10 +88,11 @@ type AIGatewayConfig struct {
 	LinkCallerTraces bool     `yaml:"link_caller_traces" json:"link_caller_traces"`
 }
 type OTLPConfig struct {
-	Endpoint     string             `yaml:"endpoint" json:"endpoint"`
-	Protocol     string             `yaml:"protocol" json:"protocol"`
-	GrafanaCloud GrafanaCloudConfig `yaml:"grafana_cloud" json:"grafana_cloud"`
-	Headers      map[string]string  `yaml:"headers" json:"headers"`
+	MetricCardinalityLimit int                `yaml:"metric_cardinality_limit" json:"metric_cardinality_limit"`
+	Endpoint               string             `yaml:"endpoint" json:"endpoint"`
+	Protocol               string             `yaml:"protocol" json:"protocol"`
+	GrafanaCloud           GrafanaCloudConfig `yaml:"grafana_cloud" json:"grafana_cloud"`
+	Headers                map[string]string  `yaml:"headers" json:"headers"`
 }
 
 func (o OTLPConfig) MarshalJSON() ([]byte, error) {
@@ -122,7 +125,7 @@ var collectorNames = []string{
 	"httpreq.events", "httpreq.metrics", "aigateway.logs", "aigateway.metrics",
 	"audit.logs", "firewall.events", "firewall.metrics", "dns.events", "dns.metrics",
 	"rum.pageloads", "rum.web_vitals", "gateway.dns",
-	"workers.overview", "turnstile.events", "logpush.health",
+	"workers.overview", "workers.invocations", "turnstile.events", "logpush.health",
 	"d1.analytics", "d1.queries", "d1.storage", "kv.operations", "kv.storage",
 	"r2.bandwidth", "r2.catalog_data", "r2.catalog_maintenance", "r2.operations", "r2.storage", "r2.sql",
 	"durableobjects.invocations", "durableobjects.periodic", "durableobjects.sql_storage", "durableobjects.subrequests",
@@ -133,13 +136,16 @@ var collectorNames = []string{
 var disabledCollectorNames = []string{"aigateway.coverage"}
 
 func Default() Config {
-	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{Scope: "access_protected", MaxMetricHostsPerZone: 1000, MaxMetricSeriesPerWindow: 10000}, Platform: PlatformConfig{MaxMetricSeriesPerWindow: 500}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
+	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{RequestSource: "eyeball", Breakdowns: []string{"status", "origin_status", "country", "protocol", "tls_protocol", "method", "content_type"}, Scope: "access_protected", MaxMetricHostsPerZone: 1000, MaxMetricSeriesPerWindow: 10000}, Platform: PlatformConfig{MaxMetricSeriesPerWindow: 500}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{MetricCardinalityLimit: 10000, Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
 	for _, name := range collectorNames {
 		c.Collectors[name] = CollectorConfig{Enabled: true, Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
 	}
 	for _, name := range disabledCollectorNames {
 		c.Collectors[name] = CollectorConfig{Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
 	}
+	// Snapshot collectors have no lookback window or checkpoint key.
+	c.Collectors["certs.packs"] = CollectorConfig{Interval: time.Hour}
+	c.Collectors["tunnels.status"] = CollectorConfig{Interval: time.Minute}
 	// GraphQL AI Gateway Groups showed unbounded ingestion lag in the verified
 	// account. REST logs provide the wave-1 metrics; do not schedule Groups.
 	metrics := c.Collectors["aigateway.metrics"]
@@ -182,7 +188,14 @@ func Load(path string) (*Config, error) {
 		if strings.HasPrefix(key, EnvPrefix+"COLLECTORS__") {
 			return "", nil
 		}
-		return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(key, EnvPrefix)), "__", "."), value
+		name := strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(key, EnvPrefix)), "__", ".")
+		if name == "http.breakdowns" {
+			if value == "" {
+				return name, []string{}
+			}
+			return name, strings.Split(value, ",")
+		}
+		return name, value
 	}}), nil); err != nil {
 		return nil, fmt.Errorf("environment: %w", err)
 	}
@@ -255,6 +268,15 @@ func (c Config) Validate() error {
 	add(c.OTLP.Protocol == "http" || c.OTLP.Protocol == "grpc", "otlp.protocol must be http or grpc")
 	add(c.OTLP.GrafanaCloud.InstanceID != "", "otlp.grafana_cloud.instance_id is required")
 	add(c.OTLP.GrafanaCloud.Token != "", "otlp.grafana_cloud.token is required")
+	add(c.OTLP.MetricCardinalityLimit >= 0, "otlp.metric_cardinality_limit must be nonnegative")
+	add(c.HTTP.RequestSource == "eyeball" || c.HTTP.RequestSource == "all", "http.request_source must be eyeball or all")
+	for _, breakdown := range c.HTTP.Breakdowns {
+		switch breakdown {
+		case "status", "origin_status", "country", "protocol", "tls_protocol", "method", "content_type":
+		default:
+			issues = append(issues, "http.breakdowns contains invalid value: "+breakdown)
+		}
+	}
 	add(c.HTTP.Scope == "access_protected" || c.HTTP.Scope == "hosts" || c.HTTP.Scope == "all", "http.scope is invalid")
 	add(c.HTTP.MetricsScope == "" || c.HTTP.MetricsScope == "access_protected" || c.HTTP.MetricsScope == "hosts" || c.HTTP.MetricsScope == "all", "http.metrics_scope is invalid")
 	add(c.HTTP.Scope != "hosts" || len(c.HTTP.Hosts) > 0, "http.hosts is required for hosts scope")
@@ -271,7 +293,9 @@ func (c Config) Validate() error {
 		if v.Enabled {
 			add(v.Interval > 0, name+".interval must be positive")
 			add(v.InitialLookback >= 0, name+".initial_lookback must be nonnegative")
-			add(v.MaxWindow > 0, name+".max_window must be positive")
+			if name != "certs.packs" && name != "tunnels.status" {
+				add(v.MaxWindow > 0, name+".max_window must be positive")
+			}
 		}
 	}
 	if len(issues) == 0 {

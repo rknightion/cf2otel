@@ -13,6 +13,28 @@ var genAIOperationDurationBuckets = []float64{0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1
 var pollerDurationBuckets = []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60}
 
 var metricSpecs = map[string]MetricSpec{
+	MetricHTTPResponseBytes:          {Unit: "By", Description: "Response byte count on the HTTP request dimensions."},
+	MetricHTTPEdgeTTFB:               {Unit: "s", Description: "Edge time to first byte by zone, host and statistic (avg, p50, p95, p99); Pro only."},
+	MetricHTTPOriginResponseTime:     {Unit: "s", Description: "Origin response time by zone, host and statistic (p50, p95, p99)."},
+	MetricHTTPRequestsByStatus:       {Unit: "{request}", Description: "Request count by enabled edge and origin status. Zone-level, without host."},
+	MetricHTTPRequestsByCountry:      {Unit: "{request}", Description: "Request count by client country. Zone-level, without host."},
+	MetricHTTPRequestsByProtocol:     {Unit: "{request}", Description: "Request count by enabled HTTP and TLS protocol. Zone-level, without host."},
+	MetricHTTPRequestsByMethod:       {Unit: "{request}", Description: "Request count by HTTP method. Zone-level, without host."},
+	MetricHTTPRequestsByContentType:  {Unit: "{request}", Description: "Request count by response content type. Zone-level, without host."},
+	MetricHTTPResponseBytesByCountry: {Unit: "By", Description: "Response byte count by zone and client country, without host."},
+	MetricWorkersInvocations:         {Unit: "{request}", Description: "Invocation count by script name and status."},
+	MetricWorkersErrors:              {Unit: "{error}", Description: "Invocation error count by script name."},
+	MetricWorkersSubrequests:         {Unit: "{request}", Description: "Subrequest count by script name."},
+	MetricWorkersCPUTime:             {Unit: "s", Description: "CPU time by script name and statistic (p50, p75, p99, p999)."},
+	MetricWorkersWallTime:            {Unit: "s", Description: "Wall time by script name and statistic (p50, p75, p99, p999)."},
+	MetricWorkersRequestDuration:     {Unit: "s", Description: "Request duration by script name and statistic (p50, p75, p99, p999)."},
+	MetricCertificateExpiry:          {Unit: "s", Description: "Seconds until the earliest certificate expiry in a pack; negative once expired."},
+	MetricTunnelStatus:               {Unit: "{tunnel}", Description: "Current tunnel status gauge with value 1, by id, name and status."},
+	MetricTunnelConnections:          {Unit: "{connection}", Description: "Active tunnel connections by id, name and colo."},
+	MetricTunnelConnectors:           {Unit: "{connector}", Description: "Tunnel connectors by id, name and connector version."},
+	MetricCardinalityOverflows:       {Unit: "{datapoint}", Description: "Overflow datapoint count by instrument."},
+	MetricIdentityOutcomes:           {Unit: "{request}", Description: "Identity inference outcome count by matched, unmatched or ambiguous outcome."},
+
 	MetricWindowGap:                      {Unit: "s", Description: "Skipped retention-gap seconds by collector."},
 	MetricAccessLogins:                   {Unit: "1", Description: "Human Access login count from cf1AccessLoginsRawGroups."},
 	MetricAccessIdentityLogins:           {Unit: "1", Description: "Exact REST identity-login count by app, allowed, connection and action; excludes nonidentity service-token rows."},

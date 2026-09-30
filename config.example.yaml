@@ -9,6 +9,8 @@ cloudflare:
 access:
   include_service_tokens: false
 http:
+  request_source: eyeball # Groups metrics only: eyeball or all; never filters raw events.
+  breakdowns: [status, origin_status, country, protocol, tls_protocol, method, content_type]
   scope: access_protected
   metrics_scope: "" # Inherit http.scope; set to all to include every account zone in metrics only.
   hosts: []
@@ -27,6 +29,7 @@ ai_gateway:
   max_body_bytes: 16384
   link_caller_traces: true
 otlp:
+  metric_cardinality_limit: 10000 # Nonnegative; 0 disables the SDK cardinality limit.
   endpoint: https://otlp-gateway-prod-gb-south-1.grafana.net/otlp
   protocol: http
   grafana_cloud:
@@ -79,6 +82,9 @@ collectors:
     enabled: true
   workers.overview:
     enabled: true
+  workers.invocations:
+    enabled: true
+    interval: 5m
   turnstile.events:
     enabled: true
   logpush.health:
@@ -127,3 +133,9 @@ collectors:
     enabled: true
   selfobs:
     enabled: true
+  certs.packs: # Requires SSL and Certificates Read; snapshot, no checkpoint key.
+    enabled: false
+    interval: 1h
+  tunnels.status: # Requires Cloudflare Tunnel Read; snapshot, no checkpoint key.
+    enabled: false
+    interval: 1m
