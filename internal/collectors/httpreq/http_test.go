@@ -168,6 +168,9 @@ func TestEventsScopeAndInference(t *testing.T) {
 	if len(e.counts) != 0 {
 		t.Fatalf("raw sampled rows produced metrics: %+v", e.counts)
 	}
+	if len(f.queries) == 1 && f.queries[0].Filter["requestSource"] != nil {
+		t.Fatal("raw events must not be restricted to eyeball traffic")
+	}
 	if len(f.queries) != 1 || !reflect.DeepEqual(f.queries[0].WantedFields, eventFields) || !reflect.DeepEqual(f.queries[0].JoinFields, []string{"rayName", "datetime"}) {
 		t.Fatalf("raw selection did not request bounded joinable fields: %+v", f.queries)
 	}
