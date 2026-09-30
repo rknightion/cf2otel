@@ -182,6 +182,12 @@ func (c *HTTPClient) GetRaw(ctx context.Context, path string, query url.Values, 
 	if err != nil {
 		return err
 	}
+	// RawMessage callers inspect body endpoints that need not return JSON.
+	// Keep typed destinations' existing JSON decoding contract.
+	if body, ok := out.(*json.RawMessage); ok && body != nil {
+		*body = append((*body)[:0], raw...)
+		return nil
+	}
 	return json.Unmarshal(raw, out)
 }
 

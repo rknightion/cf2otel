@@ -64,6 +64,34 @@ func TestRawBodyEndpoint(t *testing.T) {
 		t.Fatal("raw messages missing")
 	}
 }
+func TestRawMessagePreservesBodyBytes(t *testing.T) {
+	for _, body := range []string{"Rate limited", "", ` {"fixture":true} `} {
+		t.Run(body, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(body))
+			}))
+			defer srv.Close()
+			c := New(config.CloudflareConfig{APIBase: srv.URL, APIToken: "fixture", Timeout: time.Second, MaxResponseBytes: 1024})
+			out := json.RawMessage(`{"old":true}`)
+			if err := c.GetRaw(context.Background(), "/fixture", nil, &out); err != nil {
+				t.Fatalf("raw bytes read failed: %v", err)
+			}
+			if string(out) != body {
+				t.Fatalf("raw bytes = %q, want %q", out, body)
+			}
+			var decoded map[string]bool
+			err := c.GetRaw(context.Background(), "/fixture", nil, &decoded)
+			if json.Valid([]byte(body)) {
+				if err != nil || !decoded["fixture"] {
+					t.Fatalf("typed JSON decode: %v %v", decoded, err)
+				}
+			} else if err == nil {
+				t.Fatal("typed destination accepted non-JSON")
+			}
+		})
+	}
+}
+
 func TestGraphQLErrorDoesNotEchoResponseText(t *testing.T) {
 	var response graphResponse
 	response.Errors = append(response.Errors, struct {

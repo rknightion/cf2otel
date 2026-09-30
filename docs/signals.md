@@ -76,6 +76,7 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cloudflare.email.sending.events` | `1` | Email Sending Groups count summed across account-owned zones, account aggregate. |
 | `cloudflare.ai_gateway.requests` | `{request}` | AI Gateway request count. |
 | `cloudflare.ai_gateway.errors` | `1` | AI Gateway error count. |
+| `cloudflare.ai_gateway.body_non_json` | `{request}` | Non-JSON bodies omitted from content export, counted per `cloudflare.ai_gateway.body.side` (`request` or `response`); metadata export continues. |
 | `cloudflare.ai_gateway.cache_hits` | `1` | AI Gateway cache hits. |
 | `cloudflare.ai_gateway.cost` | `1` | AI Gateway request cost. |
 | `cloudflare.ai_gateway.dlp.requests` | `{request}` | AI Gateway request count with a DLP outcome (flagged, blocked or other), by gateway, action and direction; one count per distinct request/response direction, or `other` when the action carries no findings. |
@@ -125,6 +126,7 @@ The retired AI Gateway dashboard's **Data boundaries** panel was static provenan
 | Access SCIM | `cloudflare.access.scim.resource_type`, `cloudflare.access.scim.method`, `cloudflare.access.scim.status`, `cloudflare.access.scim.idp_id`, `cloudflare.access.scim.resource_id`, `cloudflare.access.scim.user_email` |
 | HTTP | `cloudflare.http.host`, `cloudflare.http.method`, `cloudflare.http.path`, `cloudflare.http.query`, `cloudflare.http.status_code`, `cloudflare.http.origin_status_code`, `cloudflare.http.client_ip`, `cloudflare.http.user_agent`, `cloudflare.http.ray_id`, `cloudflare.http.zone`, `cloudflare.http.cache_status`, `cloudflare.http.security_action`, `cloudflare.http.colo` |
 | AI Gateway content | `cloudflare.ai_gateway.content.side`, `cloudflare.ai_gateway.content.length` |
+| AI Gateway non-JSON bodies | `cloudflare.ai_gateway.request.body_non_json`, `cloudflare.ai_gateway.response.body_non_json`: string `"true"` on the request log and span when that fetched body is not JSON. No content is exported from that side. `cloudflare.ai_gateway.body.side` is the counter dimension (`request` or `response`). |
 | AI Gateway DLP | `cloudflare.ai_gateway.dlp.action`, `cloudflare.ai_gateway.dlp.direction` are also bounded metric dimensions on `cloudflare.ai_gateway.dlp.requests`; `cloudflare.ai_gateway.dlp.policy.id` and `cloudflare.ai_gateway.dlp.profile.id` are log and span attributes, never metric dimensions. |
 | Audit | `cloudflare.audit.*` attributes are listed individually below; actor email and IP are log only. |
 | Firewall | `cloudflare.firewall.*` attributes are listed individually below; IP, path, query, user agent and ray are log only. |
@@ -178,6 +180,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cloudflare.ai_gateway.cost` |
 | Metric | `cloudflare.ai_gateway.dlp.requests` |
 | Metric | `cloudflare.ai_gateway.errors` |
+| Metric | `cloudflare.ai_gateway.body_non_json` |
 | Metric | `cloudflare.ai_gateway.log_coverage.gap` |
 | Metric | `cloudflare.ai_gateway.requests` |
 | Metric | `cloudflare.audit.events` |
@@ -302,6 +305,8 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `cloudflare.ai_gateway.request.body` |
 | Attribute | `cloudflare.ai_gateway.request.body_truncated` |
 | Attribute | `cloudflare.ai_gateway.request.body_unavailable` |
+| Attribute | `cloudflare.ai_gateway.request.body_non_json` |
+| Attribute | `cloudflare.ai_gateway.body.side` |
 | Attribute | `cloudflare.ai_gateway.request.content_type` |
 | Attribute | `cloudflare.ai_gateway.request.head` |
 | Attribute | `cloudflare.ai_gateway.request.head_complete` |
@@ -310,6 +315,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `cloudflare.ai_gateway.response.body` |
 | Attribute | `cloudflare.ai_gateway.response.body_truncated` |
 | Attribute | `cloudflare.ai_gateway.response.body_unavailable` |
+| Attribute | `cloudflare.ai_gateway.response.body_non_json` |
 | Attribute | `cloudflare.ai_gateway.response.head` |
 | Attribute | `cloudflare.ai_gateway.response.head_complete` |
 | Attribute | `cloudflare.ai_gateway.response.size` |

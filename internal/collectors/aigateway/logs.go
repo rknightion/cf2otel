@@ -244,6 +244,7 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 	var links []trace.Link
 	var events []telemetry.SpanEvent
 	var contentLogs []telemetry.LogRecord
+	var nonJSONBodySides []string
 	if c.cfg.AIGateway.CaptureBodies || c.cfg.AIGateway.LinkCallerTraces {
 		path := "/accounts/" + url.PathEscape(c.cfg.Cloudflare.AccountID) + "/ai-gateway/gateways/" + url.PathEscape(gateway) + "/logs/" + url.PathEscape(row.ID)
 		var detail logRow
@@ -287,6 +288,18 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 						continue
 					}
 					return fmt.Errorf("aigateway %s body: %w", side.suffix, err)
+				}
+				// Classify the complete body before capping: a truncated JSON
+				// document is not an upstream non-JSON body. Never export opaque
+				// non-JSON bytes through any content path.
+				if !json.Valid(body) {
+					key := semconv.AttrAIGatewayRequestBodyNonJSON
+					if side.suffix == "response" {
+						key = semconv.AttrAIGatewayResponseBodyNonJSON
+					}
+					attrs = append(attrs, telemetry.Attr{Key: key, Value: "true"})
+					nonJSONBodySides = append(nonJSONBodySides, side.suffix)
+					continue
 				}
 				capped, truncated := capBody(body, c.cfg.AIGateway.MaxBodyBytes)
 				contentAttrs = append(contentAttrs, telemetry.Attr{Key: side.truncatedKey, Value: strconv.FormatBool(truncated)})
@@ -362,6 +375,11 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 	}
 	if err := out.Span(ctx, span); err != nil {
 		return err
+	}
+	for _, side := range nonJSONBodySides {
+		if err := out.Counter(ctx, semconv.MetricAIGatewayBodyNonJSON, 1, telemetry.Attr{Key: semconv.AttrAIGatewayBodySide, Value: side}); err != nil {
+			return err
+		}
 	}
 	dims := []telemetry.Attr{{Key: semconv.AttrAIGatewayName, Value: gateway}, {Key: semconv.AttrGenAIOperation, Value: operation}}
 	if provider != "" {
