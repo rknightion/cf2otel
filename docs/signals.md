@@ -408,7 +408,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `gen_ai.operation.name` |
 | Attribute | `gen_ai.output.messages` |
 | Attribute | `gen_ai.provider.name` |
-| Attribute | `gen_ai.request.model` |
+| Attribute | `gen_ai.request.model`: AI Gateway model identifier with the `provider/` prefix removed; unprefixed identifiers and `@` model namespaces are preserved. Empty values, empty path segments, null-like placeholders and non-identifier strings (such as prose, JSON or URLs) map to `unknown`. Identifiers may contain ASCII letters, digits, `-`, `_`, `.`, `:`, `@` and namespace `/` separators; validation is syntactic, not a model-catalog lookup. The same normalized value is used in logs, spans (including their names), and model-level metrics. |
 | Attribute | `gen_ai.usage.cache_read.input_tokens` |
 | Attribute | `gen_ai.usage.cost` |
 | Attribute | `gen_ai.usage.input_tokens` |

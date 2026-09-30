@@ -166,6 +166,7 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 	start := end.Add(-time.Duration(*row.Duration * float64(time.Millisecond)))
 	operation := operationName(row.Path)
 	provider := providerName(row.Provider)
+	model := normalizeModel(row.Model)
 	attrs := []telemetry.Attr{{Key: semconv.AttrAIGatewayName, Value: gateway}, {Key: semconv.AttrAIGatewayLogID, Value: row.ID}, {Key: semconv.AttrGenAIOperation, Value: operation}}
 	add := func(key, value string) {
 		if value != "" {
@@ -175,7 +176,7 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 	add(semconv.AttrAIGatewayEventID, row.EventID)
 	add(semconv.AttrAIGatewayProvider, row.Provider)
 	add(semconv.AttrGenAIProvider, provider)
-	add(semconv.AttrGenAIModel, row.Model)
+	add(semconv.AttrGenAIModel, model)
 	add(semconv.AttrAIGatewayModelType, row.ModelType)
 	add(semconv.AttrAIGatewayPath, row.Path)
 	add(semconv.AttrAIGatewayDurationMS, strconv.FormatFloat(*row.Duration, 'f', -1, 64))
@@ -331,9 +332,7 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 						{Key: semconv.AttrAIGatewayLogID, Value: row.ID},
 						{Key: semconv.AttrGenAIOperation, Value: operation},
 					}
-					if row.Model != "" {
-						logAttrs = append(logAttrs, telemetry.Attr{Key: semconv.AttrGenAIModel, Value: row.Model})
-					}
+					logAttrs = append(logAttrs, telemetry.Attr{Key: semconv.AttrGenAIModel, Value: model})
 					if provider != "" {
 						logAttrs = append(logAttrs, telemetry.Attr{Key: semconv.AttrGenAIProvider, Value: provider})
 					}
@@ -364,10 +363,7 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 	if err := out.LogEvent(ctx, semconv.EventAIGatewayRequest, "AI Gateway request", end, otellog.SeverityInfo, logAttrs...); err != nil {
 		return err
 	}
-	name := operation
-	if row.Model != "" {
-		name += " " + row.Model
-	}
+	name := operation + " " + model
 	span := telemetry.SpanSpec{Name: name, Start: start, End: end, Kind: trace.SpanKindClient, Links: links, Events: events, Logs: contentLogs, Attrs: attrs}
 	failed := (row.StatusCode != nil && *row.StatusCode >= 400) || (row.Success != nil && !*row.Success)
 	if failed {
@@ -385,9 +381,7 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 	if provider != "" {
 		dims = append(dims, telemetry.Attr{Key: semconv.AttrGenAIProvider, Value: provider})
 	}
-	if row.Model != "" {
-		dims = append(dims, telemetry.Attr{Key: semconv.AttrGenAIModel, Value: row.Model})
-	}
+	dims = append(dims, telemetry.Attr{Key: semconv.AttrGenAIModel, Value: model})
 	statusClass := "unknown"
 	if row.StatusCode != nil {
 		statusClass = strconv.Itoa(*row.StatusCode/100) + "xx"
