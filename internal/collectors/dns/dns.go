@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
@@ -69,14 +71,26 @@ type base struct {
 }
 
 type events struct{ base }
-type metrics struct{ base }
+type metrics struct {
+	base
+	mu           sync.Mutex
+	admitted     map[string]struct{}
+	lastWarning  time.Time
+	seriesBudget int
+}
 
 func NewEvents(cfg *config.Config, api cfapi.Client) *events {
 	return &events{base{cfg: cfg, api: api}}
 }
 
 func NewMetrics(cfg *config.Config, api cfapi.Client) *metrics {
-	return &metrics{base{cfg: cfg, api: api}}
+	// Leave room for the SDK's reserved overflow slot, and reserve one of our
+	// own slots for coarse aggregation. Unlimited SDK mode still bounds DNS.
+	budget := 9999
+	if limit := cfg.OTLP.MetricCardinalityLimit; limit > 0 {
+		budget = min(budget, max(1, limit-1))
+	}
+	return &metrics{base: base{cfg: cfg, api: api}, admitted: make(map[string]struct{}), seriesBudget: budget}
 }
 
 func (*events) Name() string                    { return "dns.events" }
@@ -238,12 +252,50 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 	if err := emitDNSGaps(ctx, out, c.Name(), to, gaps); err != nil {
 		return from, err
 	}
+	var folded float64
 	for _, sample := range samples {
+		if !c.admit(sample.attrs) {
+			folded += sample.value
+			continue
+		}
 		if err := out.Counter(ctx, semconv.MetricDNSQueries, sample.value, sample.attrs...); err != nil {
 			return from, err
 		}
 	}
+	if folded > 0 {
+		c.warnCoalescing()
+		if err := out.Counter(ctx, semconv.MetricDNSQueries, folded, telemetry.Attr{Key: semconv.AttrDNSZone, Value: "<aggregated>"}); err != nil {
+			return from, err
+		}
+	}
 	return to, nil
+}
+
+// Admissions are sticky across windows: cumulative SDK aggregation retains
+// every previously observed attribute set. Never recycle slots at collection.
+func (c *metrics) admit(attrs []telemetry.Attr) bool {
+	encoded, _ := json.Marshal(attrs) // Attr contains only strings; encoding cannot fail.
+	key := string(encoded)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.admitted[key]; ok {
+		return true
+	}
+	if len(c.admitted) >= c.seriesBudget-1 {
+		return false
+	}
+	c.admitted[key] = struct{}{}
+	return true
+}
+
+func (c *metrics) warnCoalescing() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	if c.lastWarning.IsZero() || now.Sub(c.lastWarning) >= time.Hour {
+		c.lastWarning = now
+		slog.Warn("DNS metric series coalesced", "instrument", semconv.MetricDNSQueries, "series_budget", c.seriesBudget)
+	}
 }
 
 func groupOptionalFields() []string {
