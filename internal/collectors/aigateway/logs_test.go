@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"reflect"
 	"sort"
@@ -16,6 +18,7 @@ import (
 	otellog "go.opentelemetry.io/otel/log"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
+	"github.com/rknightion/cf2otel/internal/collector"
 	"github.com/rknightion/cf2otel/internal/config"
 	"github.com/rknightion/cf2otel/internal/semconv"
 	"github.com/rknightion/cf2otel/internal/telemetry"
@@ -70,6 +73,85 @@ func (f *fakeAPI) GetRaw(_ context.Context, path string, _ url.Values, out any) 
 		return json.Unmarshal([]byte(f.response), out)
 	}
 	return errors.New("unexpected raw path")
+}
+
+func TestNonJSONBodiesKeepMetadataWindow(t *testing.T) {
+	for _, side := range []string{"request", "response", "both"} {
+		t.Run(side, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/logs"):
+					if r.URL.Query().Get("page") == "1" {
+						_, _ = w.Write([]byte(`{"success":true,"result":[{"id":"fixture-log","created_at":"2026-09-23T10:00:00Z","path":"chat/completions","duration":1}]}`))
+					} else {
+						_, _ = w.Write([]byte(`{"success":true,"result":[]}`))
+					}
+				case strings.HasSuffix(r.URL.Path, "/request"), strings.HasSuffix(r.URL.Path, "/response"):
+					if side == "both" || strings.HasSuffix(r.URL.Path, "/"+side) {
+						_, _ = w.Write([]byte("Rate limited"))
+					} else {
+						_, _ = w.Write([]byte(`{"fixture":true}`))
+					}
+				default:
+					_, _ = w.Write([]byte(`{"success":true,"result":{}}`))
+				}
+			}))
+			defer srv.Close()
+			cfg := config.Default()
+			cfg.Cloudflare = config.CloudflareConfig{APIBase: srv.URL, APIToken: "fixture", AccountID: "example", Timeout: time.Second, MaxResponseBytes: 4096}
+			cfg.AIGateway = config.AIGatewayConfig{Gateways: []string{"fixture-gateway"}, CaptureBodies: true, MaxBodyBytes: 4}
+			registry := collector.NewRegistry()
+			Register(collector.Deps{Config: &cfg, API: cfapi.New(cfg.Cloudflare), Registry: registry})
+			var window collector.WindowCollector
+			for _, entry := range registry.Entries() {
+				if entry.Collector.Name() == "aigateway.logs" {
+					window = entry.Collector.(collector.WindowCollector)
+				}
+			}
+			if window == nil {
+				t.Fatal("logs collector not registered")
+			}
+			out := &fakeEmitter{}
+			from := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+			mark, err := window.CollectWindow(context.Background(), from, from.Add(time.Minute), out)
+			if err != nil {
+				t.Fatalf("non-JSON body failed metadata window: %v", err)
+			}
+			if !mark.Equal(from.Add(time.Minute)) || len(out.spans) != 1 || len(out.logEvents) != 1 {
+				t.Fatalf("metadata export/checkpoint absent: mark=%s spans=%d logs=%d", mark, len(out.spans), len(out.logEvents))
+			}
+			for _, bodySide := range []string{"request", "response"} {
+				want := side == "both" || side == bodySide
+				key := "cloudflare.ai_gateway." + bodySide + ".body_non_json"
+				for _, attrs := range [][]telemetry.Attr{out.spans[0].Attrs, out.logEvents[0].attrs} {
+					if (attr(attrs, key) == "true") != want {
+						t.Fatalf("%s marker mismatch: %v", bodySide, attrs)
+					}
+				}
+				var count float64
+				for _, m := range out.counters {
+					if m.name == "cloudflare.ai_gateway.body_non_json" && attr(m.attrs, "cloudflare.ai_gateway.body.side") == bodySide {
+						count += m.value
+					}
+				}
+				if (want && count != 1) || (!want && count != 0) {
+					t.Fatalf("%s non-JSON count=%v", bodySide, count)
+				}
+				if want {
+					for _, log := range out.spans[0].Logs {
+						if attr(log.Attrs, semconv.AttrAIGatewayContentSide) == bodySide {
+							t.Fatalf("non-JSON %s content exported", bodySide)
+						}
+					}
+					for _, event := range out.spans[0].Events {
+						if attr(event.Attrs, "cloudflare.ai_gateway."+bodySide+".body") != "" {
+							t.Fatalf("non-JSON %s body attribute exported", bodySide)
+						}
+					}
+				}
+			}
+		})
+	}
 }
 
 func TestMissingResponseBodyKeepsRequest(t *testing.T) {

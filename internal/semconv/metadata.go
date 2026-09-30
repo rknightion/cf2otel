@@ -63,6 +63,7 @@ var metricSpecs = map[string]MetricSpec{
 	MetricQueuesMessageOperations:        {Unit: "1", Description: "Queue message operation count, account aggregate."},
 	MetricQueuesBillableOperations:       {Unit: "1", Description: "Queue billable operation sum, account aggregate."},
 	MetricAIGatewayRequests:              {Unit: "{request}", Description: "AI Gateway request count."},
+	MetricAIGatewayBodyNonJSON:           {Unit: "{request}", Description: "AI Gateway non-JSON bodies omitted from content export, by request or response side."},
 	MetricAIGatewayErrors:                {Unit: "1", Description: "AI Gateway error count."},
 	MetricAIGatewayCacheHits:             {Unit: "1", Description: "AI Gateway cache hits."},
 	MetricAIGatewayCost:                  {Unit: "1", Description: "AI Gateway request cost."},
