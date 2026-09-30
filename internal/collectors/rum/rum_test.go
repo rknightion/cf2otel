@@ -161,7 +161,7 @@ func TestPageloadsFailClosedWhenRequiredAccountFieldIsMissing(t *testing.T) {
 
 func TestWebVitalsUseRollingAccountGroupsAndExcludeNoDataSentinel(t *testing.T) {
 	// These invented source values exercise conversion from GraphQL timing
-	// quantiles to milliseconds without using live account values.
+	// quantiles to seconds without using live account values.
 	from := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
 	to := from.Add(5 * time.Minute)
 	fields := []string{
@@ -221,7 +221,7 @@ func TestWebVitalsUseRollingAccountGroupsAndExcludeNoDataSentinel(t *testing.T) 
 			}
 		}
 	}
-	if len(wantNames) != 0 || math.Abs(values[semconv.MetricRUMLCPP75]-123.456) > 1e-9 || math.Abs(values[semconv.MetricRUMINPP75]-45.678) > 1e-9 || math.Abs(values[semconv.MetricRUMFCPP75]-76.543) > 1e-9 || math.Abs(values[semconv.MetricRUMTTFBP75]-12.345) > 1e-9 || values[semconv.MetricRUMCLSP75] != 0.08 {
+	if len(wantNames) != 0 || math.Abs(values[semconv.MetricRUMLCPP75]-0.123456) > 1e-9 || math.Abs(values[semconv.MetricRUMINPP75]-0.045678) > 1e-9 || math.Abs(values[semconv.MetricRUMFCPP75]-0.076543) > 1e-9 || math.Abs(values[semconv.MetricRUMTTFBP75]-0.012345) > 1e-9 || values[semconv.MetricRUMCLSP75] != 0.08 {
 		t.Fatalf("quantile names or values were not preserved: missing=%v values=%v", wantNames, values)
 	}
 	if len(api.queries) != 1 {
@@ -238,6 +238,71 @@ func TestWebVitalsUseRollingAccountGroupsAndExcludeNoDataSentinel(t *testing.T) 
 	}
 	if !reflect.DeepEqual(got.WantedFields, wantFields) {
 		t.Fatalf("fields = %v, want maxNumberOfFields-limited %v", got.WantedFields, wantFields)
+	}
+}
+
+func TestRegisteredWebVitalsConvertMicrosecondsToSeconds(t *testing.T) {
+	from := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC)
+	to := from.Add(5 * time.Minute)
+	key := testAccountID + "/rumWebVitalsEventsAdaptiveGroups"
+	api := &fakeAPI{
+		settings: map[string]cfapi.DatasetSettings{key: rumSettings(7,
+			"dimensions_deviceType", "quantiles_largestContentfulPaintP75", "quantiles_interactionToNextPaintP75",
+			"quantiles_firstInputDelayP75", "quantiles_firstContentfulPaintP75", "quantiles_timeToFirstByteP75",
+			"quantiles_cumulativeLayoutShiftP75")},
+		rows: map[string][]map[string]any{key: {{
+			"dimensions": map[string]any{"deviceType": "desktop"},
+			"quantiles": map[string]any{
+				"largestContentfulPaintP75": 2_500_000, "interactionToNextPaintP75": 2_500_000,
+				"firstInputDelayP75": 2_500_000, "firstContentfulPaintP75": 2_500_000,
+				"timeToFirstByteP75": 2_500_000, "cumulativeLayoutShiftP75": 0.08,
+			},
+		}}},
+	}
+	cfg := testConfig()
+	cfg.Collectors = map[string]config.CollectorConfig{"rum.web_vitals": {Enabled: true}}
+	registry := collector.NewRegistry()
+	Register(collector.Deps{Config: cfg, API: api, Registry: registry})
+	out := &telemetry.Buffer{}
+	found := false
+	for _, entry := range registry.Entries() {
+		if entry.Collector.Name() != "rum.web_vitals" {
+			continue
+		}
+		found = true
+		window, ok := entry.Collector.(collector.WindowCollector)
+		if !ok {
+			t.Fatal("web-vitals collector does not support windows")
+		}
+		mark, err := window.CollectWindow(context.Background(), from, to, out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !mark.Equal(to) {
+			t.Fatalf("mark = %s, want %s", mark, to)
+		}
+	}
+	if !found {
+		t.Fatal("web-vitals collector was not registered")
+	}
+	want := map[string]float64{
+		semconv.MetricRUMLCPP75: 2.5, semconv.MetricRUMINPP75: 2.5,
+		semconv.MetricRUMFIDP75: 2.5, semconv.MetricRUMFCPP75: 2.5,
+		semconv.MetricRUMTTFBP75: 2.5, semconv.MetricRUMCLSP75: 0.08,
+	}
+	for _, metric := range out.Metrics {
+		value, ok := want[metric.Name]
+		if !ok {
+			t.Errorf("unexpected or duplicate metric %q", metric.Name)
+			continue
+		}
+		if metric.Kind != "gauge" || metric.Value != value {
+			t.Errorf("%s = %g (%s), want %g gauge (timings in seconds, CLS unchanged)", metric.Name, metric.Value, metric.Kind, value)
+		}
+		delete(want, metric.Name)
+	}
+	if len(want) != 0 {
+		t.Errorf("missing metrics: %v", want)
 	}
 }
 
@@ -365,13 +430,13 @@ func TestRegisterHonorsExplicitDisableAndRegistersBothWindowsWhenEnabled(t *test
 	}
 }
 
-func vitalsRow(device string, timingMilliseconds, cls float64) map[string]any {
+func vitalsRow(device string, timingSeconds, cls float64) map[string]any {
 	return map[string]any{
 		"dimensions": map[string]any{"deviceType": device},
 		"quantiles": map[string]any{
-			"largestContentfulPaintP75": timingMilliseconds * 1000, "interactionToNextPaintP75": timingMilliseconds * 1000,
-			"firstInputDelayP75": timingMilliseconds * 1000, "firstContentfulPaintP75": timingMilliseconds * 1000,
-			"timeToFirstByteP75": timingMilliseconds * 1000, "cumulativeLayoutShiftP75": cls,
+			"largestContentfulPaintP75": timingSeconds * 1_000_000, "interactionToNextPaintP75": timingSeconds * 1_000_000,
+			"firstInputDelayP75": timingSeconds * 1_000_000, "firstContentfulPaintP75": timingSeconds * 1_000_000,
+			"timeToFirstByteP75": timingSeconds * 1_000_000, "cumulativeLayoutShiftP75": cls,
 		},
 	}
 }

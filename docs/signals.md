@@ -37,11 +37,11 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cloudflare.gateway.dns.queries` | `1` | Gateway DNS query sum from account-level `cf1GatewayDnsRawGroups`, by bounded query type, resolver decision and country. |
 | `cloudflare.rum.page_views` | `1` | Page views from `rumPageloadEventsAdaptiveGroups` by country and device. |
 | `cloudflare.rum.sessions` | `1` | Visit sum from `rumPageloadEventsAdaptiveGroups` by country and device. |
-| `cloudflare.rum.lcp.p75` | `s` | Rolling p75 largest contentful paint gauge, converted from inferred GraphQL milliseconds to seconds. |
-| `cloudflare.rum.inp.p75` | `s` | Rolling p75 interaction to next paint gauge, converted from inferred GraphQL milliseconds to seconds. |
-| `cloudflare.rum.fid.p75` | `s` | Rolling p75 first input delay gauge, converted from inferred GraphQL milliseconds to seconds. |
-| `cloudflare.rum.fcp.p75` | `s` | Rolling p75 first contentful paint gauge, converted from inferred GraphQL milliseconds to seconds. |
-| `cloudflare.rum.ttfb.p75` | `s` | Rolling p75 time to first byte gauge, converted from inferred GraphQL milliseconds to seconds. |
+| `cloudflare.rum.lcp.p75` | `s` | Rolling p75 largest contentful paint gauge, converted from GraphQL microseconds to seconds. |
+| `cloudflare.rum.inp.p75` | `s` | Rolling p75 interaction to next paint gauge, converted from GraphQL microseconds to seconds. |
+| `cloudflare.rum.fid.p75` | `s` | Rolling p75 first input delay gauge, converted from GraphQL microseconds to seconds. |
+| `cloudflare.rum.fcp.p75` | `s` | Rolling p75 first contentful paint gauge, converted from GraphQL microseconds to seconds. |
+| `cloudflare.rum.ttfb.p75` | `s` | Rolling p75 time to first byte gauge, converted from GraphQL microseconds to seconds. |
 | `cloudflare.rum.cls.p75` | `1` | Rolling p75 cumulative layout shift score gauge. |
 | `cloudflare.workers.requests` | `{request}` | Worker request count from `workersOverviewRequestsAdaptiveGroups`, optionally by bounded script name. |
 | `cloudflare.turnstile.events` | `1` | Turnstile event count from `turnstileAdaptiveGroups`, account aggregate. |
