@@ -107,7 +107,7 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 
 Platform gauges select the latest complete five-minute source bucket and emit at export time. The emitter attaches the listed UCUM units to OTLP instruments. RUM timing values are converted from source milliseconds to seconds before recording. The GenAI operation histogram and poller API/scrape histograms use explicit second-based buckets, including sub-second boundaries. Queue IDs are used only inside source aggregation and are never metric attributes.
 
-Prometheus compatibility naming adds `_seconds` for `s` when the base name lacks it and `_ratio` for dimensionless gauges. Names already ending in `_bytes` retain that suffix, and annotated `{token}` and `{request}` units add no suffix. The generated Grafana queries accept both old and new series names during rollout and revert.
+Prometheus compatibility naming adds `_seconds` for `s` when the base name lacks it and `_ratio` for dimensionless gauges. Names already ending in `_bytes` retain that suffix, and annotated `{token}` and `{request}` units add no suffix. The generated Grafana dashboard (`dashboards/cf2otel.json`, built by `grafana/build_dashboard.py`) queries only the suffixed names.
 
 AI Gateway metrics combine Cloudflare request outcome measurements with GenAI duration and usage conventions.
 
