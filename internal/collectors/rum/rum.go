@@ -39,18 +39,18 @@ var pageloadOptionalFields = []string{
 	"dimensions.siteTag",
 }
 
-// Cloudflare's Groups timing quantiles are normalized from microseconds to the
-// Web Analytics millisecond convention. CLS is a unitless score.
+// Cloudflare's Groups timing quantiles are normalized from microseconds to
+// seconds, matching the emitted metric units. CLS is a unitless score.
 var webVitalsQuantiles = []struct {
 	field   string
 	metric  string
 	divisor float64
 }{
-	{field: "largestContentfulPaintP75", metric: semconv.MetricRUMLCPP75, divisor: 1000},
-	{field: "interactionToNextPaintP75", metric: semconv.MetricRUMINPP75, divisor: 1000},
-	{field: "firstInputDelayP75", metric: semconv.MetricRUMFIDP75, divisor: 1000},
-	{field: "firstContentfulPaintP75", metric: semconv.MetricRUMFCPP75, divisor: 1000},
-	{field: "timeToFirstByteP75", metric: semconv.MetricRUMTTFBP75, divisor: 1000},
+	{field: "largestContentfulPaintP75", metric: semconv.MetricRUMLCPP75, divisor: 1_000_000},
+	{field: "interactionToNextPaintP75", metric: semconv.MetricRUMINPP75, divisor: 1_000_000},
+	{field: "firstInputDelayP75", metric: semconv.MetricRUMFIDP75, divisor: 1_000_000},
+	{field: "firstContentfulPaintP75", metric: semconv.MetricRUMFCPP75, divisor: 1_000_000},
+	{field: "timeToFirstByteP75", metric: semconv.MetricRUMTTFBP75, divisor: 1_000_000},
 	{field: "cumulativeLayoutShiftP75", metric: semconv.MetricRUMCLSP75, divisor: 1},
 }
 
