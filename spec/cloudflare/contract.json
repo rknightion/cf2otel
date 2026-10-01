@@ -2,6 +2,35 @@
   "version": 1,
   "graphql": [
     {
+      "scope": "zone",
+      "dataset": "logpushHealthAdaptiveGroups",
+      "required_fields": ["sum_uploads", "dimensions_datetimeFiveMinutes", "dimensions_jobId", "dimensions_destinationType", "dimensions_status", "dimensions_final", "dimensions_success"],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 86400
+    },
+    {
+      "scope": "account",
+      "dataset": "httpRequestsAdaptiveGroups",
+      "required_fields": ["sum_edgeResponseBytes", "dimensions_requestSource"],
+      "minimum_max_duration_seconds": 2678400,
+      "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "zone",
+      "dataset": "httpRequests1hGroups",
+      "required_fields": ["sum_threats", "dimensions_datetime"],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 259200
+    },
+    {
+      "scope": "zone",
+      "dataset": "healthCheckEventsAdaptiveGroups",
+      "allow_disabled": true,
+      "required_fields": ["count", "dimensions_datetimeFiveMinutes", "dimensions_healthStatus", "dimensions_failureReason", "dimensions_fqdn", "dimensions_healthCheckName", "avg_rttMs", "avg_timeToFirstByteMs", "avg_tcpConnMs", "avg_tlsHandshakeMs"],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 259200
+    },
+    {
       "scope": "account",
       "dataset": "cf1AccessLoginsRawGroups",
       "required_fields": [
@@ -49,7 +78,8 @@
         "sum_edgeResponseBytes",
         "quantiles_originResponseDurationMsP50",
         "quantiles_originResponseDurationMsP95",
-        "quantiles_originResponseDurationMsP99"
+        "quantiles_originResponseDurationMsP99",
+        "sum_visits"
       ],
       "minimum_max_duration_seconds": 2592000,
       "minimum_not_older_than_seconds": 2678400
@@ -167,6 +197,11 @@
       "required_fields": [
         "sum_uploads",
         "sum_records",
+        "dimensions_jobId",
+        "dimensions_destinationType",
+        "dimensions_status",
+        "dimensions_final",
+        "dimensions_success",
         "dimensions_datetimeFiveMinutes"
       ],
       "minimum_max_duration_seconds": 3600,
@@ -178,6 +213,16 @@
       "required_fields": [
         "sum_readQueries",
         "sum_writeQueries",
+        "sum_rowsRead",
+        "sum_rowsWritten",
+        "quantiles_queryBatchTimeMsP50",
+        "quantiles_queryBatchTimeMsP75",
+        "quantiles_queryBatchTimeMsP99",
+        "quantiles_queryBatchTimeMsP999",
+        "quantiles_queryBatchResponseBytesP50",
+        "quantiles_queryBatchResponseBytesP75",
+        "quantiles_queryBatchResponseBytesP99",
+        "quantiles_queryBatchResponseBytesP999",
         "dimensions_datetimeFiveMinutes"
       ],
       "minimum_max_duration_seconds": 3600,
@@ -301,6 +346,16 @@
       "dataset": "durableObjectsInvocationsAdaptiveGroups",
       "required_fields": [
         "sum_requests",
+        "sum_errors",
+        "dimensions_scriptName",
+        "quantiles_wallTimeP50",
+        "quantiles_wallTimeP75",
+        "quantiles_wallTimeP99",
+        "quantiles_wallTimeP999",
+        "quantiles_responseBodySizeP50",
+        "quantiles_responseBodySizeP75",
+        "quantiles_responseBodySizeP99",
+        "quantiles_responseBodySizeP999",
         "dimensions_datetimeFiveMinutes"
       ],
       "minimum_max_duration_seconds": 3600,
@@ -376,6 +431,12 @@
       "required_fields": [
         "count",
         "sum_billableOperations",
+        "avg_lagTime",
+        "avg_retryCount",
+        "dimensions_queueId",
+        "dimensions_actionType",
+        "dimensions_consumerType",
+        "dimensions_outcome",
         "dimensions_datetimeFiveMinutes"
       ],
       "minimum_max_duration_seconds": 3600,

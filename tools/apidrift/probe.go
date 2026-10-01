@@ -130,7 +130,7 @@ func validateContract(c contract) error {
 	seen := map[string]bool{}
 	for _, g := range c.GraphQL {
 		key := string(g.Scope) + "/" + g.Dataset
-		if (g.Scope != cfapi.AccountScope && g.Scope != cfapi.ZoneScope) || !datasetName.MatchString(g.Dataset) || seen[key] || g.MinimumDuration <= 0 || g.MinimumRetention <= 0 || !validFields(g.RequiredFields) || (g.AllowDisabled && (g.Scope != cfapi.ZoneScope || g.Dataset != "firewallEventsAdaptiveGroups")) {
+		if (g.Scope != cfapi.AccountScope && g.Scope != cfapi.ZoneScope) || !datasetName.MatchString(g.Dataset) || seen[key] || g.MinimumDuration <= 0 || g.MinimumRetention <= 0 || !validFields(g.RequiredFields) || (g.AllowDisabled && (g.Scope != cfapi.ZoneScope || g.Dataset != "firewallEventsAdaptiveGroups" && g.Dataset != "healthCheckEventsAdaptiveGroups")) {
 			return errors.New("invalid GraphQL contract")
 		}
 		seen[key] = true
