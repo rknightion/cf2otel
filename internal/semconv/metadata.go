@@ -107,6 +107,7 @@ var metricSpecs = map[string]MetricSpec{
 	MetricBuildInfo:                      {Unit: "1", Description: "Build identity."},
 	MetricCheckpointAge:                  {Unit: "s", Description: "Age of the oldest collector checkpoint."},
 	MetricAPIRequests:                    {Unit: "{request}", Description: "Cloudflare API requests."},
+	MetricAPIEnvelopeErrors:              {Unit: "{error}", Description: "Unsuccessful Cloudflare API envelopes returned with successful HTTP status."},
 	MetricAPIDuration:                    {Unit: "s", Description: "Cloudflare API request duration.", Boundaries: pollerDurationBuckets},
 	MetricAPIRetries:                     {Unit: "1", Description: "Cloudflare API retries."},
 	MetricWindowCommitFailures:           {Unit: "1", Description: "Failed window commits by retry or dropped outcome."},

@@ -29,6 +29,7 @@ const (
 	AttrBuildCommit            = "cf2otel.build.commit"
 	MetricCheckpointAge        = "cf2otel.checkpoint.age"
 	MetricAPIRequests          = "cf2otel.api.requests"
+	MetricAPIEnvelopeErrors    = "cf2otel.api.envelope_errors"
 	MetricAPIDuration          = "cf2otel.api.duration"
 	MetricAPIRetries           = "cf2otel.api.retries"
 	SpanAPIRequest             = "cf2otel.api.request"

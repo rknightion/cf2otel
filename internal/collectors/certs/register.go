@@ -1,6 +1,15 @@
 package certs
 
-import "github.com/rknightion/cf2otel/internal/collector"
+import (
+	"time"
 
-// Register reserves the certs domain seam until its collector implementation lands.
-func Register(collector.Deps) {}
+	"github.com/rknightion/cf2otel/internal/collector"
+)
+
+// Register installs the opt-in certificate-pack snapshot collector.
+func Register(deps collector.Deps) {
+	cfg := deps.Config.Collector("certs.packs")
+	if cfg.Enabled {
+		deps.Registry.RegisterSnapshot(&packs{api: deps.API, warned: make(map[string]time.Time)}, cfg.Interval)
+	}
+}
