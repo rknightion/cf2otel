@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -269,6 +270,62 @@ func TestEmptyRangeSkipsPatchIDScanning(t *testing.T) {
 	}
 	if len(calls) != 0 {
 		t.Fatalf("empty range scanned released history through git show/patch-id: %s", strings.TrimSpace(string(calls)))
+	}
+}
+
+// Exercise the executable boundary: hidden Markdown metadata must never cover
+// a subject, while rendered issue references must not hide a visible subject.
+func TestCLIRenderedOnlyInputContract(t *testing.T) {
+	binary := filepath.Join(t.TempDir(), "relnotes")
+	build := exec.Command("go", "build", "-o", binary, ".")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build CLI: %v: %s", err, output)
+	}
+	repo := newTestRepo(t)
+	writeRepoFile(t, repo, "base.txt", "base\n")
+	commitAt(t, repo, "chore: start history", "2026-01-01T00:00:00Z")
+	if err := git(t, repo, "tag", "v1.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	writeRepoFile(t, repo, "feature.txt", "feature\n")
+	commitAt(t, repo, "feat: collect routing metrics", "2026-01-02T00:00:00Z")
+
+	for _, tc := range []struct {
+		name, notes, format, want string
+		code                      int
+	}{
+		{"hidden destination", "* unrelated [details](collect routing metrics)\n", "", "raw Markdown is not supported", 2},
+		{"hidden title", "* unrelated [details](opaque \"collect routing metrics\")\n", "", "raw Markdown is not supported", 2},
+		{"declared raw", "* collect routing metrics\n", "markdown", "raw Markdown is not supported", 2},
+		{"visible rendered reference", "Features\n\n* collect routing metrics (#42) (opaque)\n", "rendered", "All 1 required commit subject(s) are present", 0},
+		{"default rendered", "* collect routing metrics (#42)\n", "", "All 1 required commit subject(s) are present", 0},
+		{"reference alone", "* unrelated (#42) (opaque)\n", "rendered", "MISSING", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			notesPath := filepath.Join(t.TempDir(), "notes.txt")
+			if err := os.WriteFile(notesPath, []byte(tc.notes), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"--range", "v1.0.0..HEAD", "--notes", notesPath}
+			if tc.format != "" {
+				args = append(args, "--notes-format", tc.format)
+			}
+			cmd := exec.Command(binary, args...)
+			cmd.Dir = repo
+			output, err := cmd.CombinedOutput()
+			code := 0
+			if err != nil {
+				var exitErr *exec.ExitError
+				if errors.As(err, &exitErr) {
+					code = exitErr.ExitCode()
+				} else {
+					t.Fatal(err)
+				}
+			}
+			if code != tc.code || !strings.Contains(string(output), tc.want) {
+				t.Fatalf("CLI exit %d, want %d and %q:\n%s", code, tc.code, tc.want, output)
+			}
+		})
 	}
 }
 

@@ -17,7 +17,10 @@ import (
 var (
 	conventionalHeader = regexp.MustCompile(`^([a-z][a-z0-9-]*)(?:\(([^()\r\n]+)\))?(!)?:[ \t]+([^\r\n]+)$`)
 	markdownListEntry  = regexp.MustCompile(`^(?:[-*+]\s+|[0-9]+[.)]\s+)`)
-	stableTag          = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:\+[0-9A-Za-z.-]+)?$`)
+	// Reject link metadata rather than attempting to render or strip Markdown.
+	// The input contract remains rendered text, including for ambiguous literals.
+	rawMarkdownMetadata = regexp.MustCompile(`(?m)\[[^\]\r\n]*\][ \t\r\n]*(?:\(|\[)|^[ \t]{0,3}\[[^\]\r\n]+\]:|<!--|</?[A-Za-z][^>]*>`)
+	stableTag           = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:\+[0-9A-Za-z.-]+)?$`)
 )
 
 type requiredCommit struct {
@@ -61,12 +64,22 @@ func runAt(args []string, repoDirectory string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("relnotes", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	rangeSpec := flags.String("range", "", "tag..ref range to check; defaults to the newest stable v* tag reachable from HEAD")
-	notesPath := flags.String("notes", "", "path to the release notes text file")
+	notesPath := flags.String("notes", "", "path to official GitHub rendered release notes text (body_text), not raw Markdown")
+	notesFormat := flags.String("notes-format", "rendered", "input format: rendered only; raw Markdown is rejected")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
 	if flags.NArg() != 0 {
 		fmt.Fprintf(stderr, "relnotes: unexpected arguments: %s\n", strings.Join(flags.Args(), " "))
+		return 2
+	}
+	switch *notesFormat {
+	case "rendered":
+	case "markdown", "raw":
+		fmt.Fprintln(stderr, "relnotes: raw Markdown is not supported; supply official GitHub rendered text (body_text)")
+		return 2
+	default:
+		fmt.Fprintf(stderr, "relnotes: unsupported --notes-format %q; use rendered (GitHub body_text)\n", *notesFormat)
 		return 2
 	}
 	if strings.TrimSpace(*notesPath) == "" {
@@ -76,6 +89,10 @@ func runAt(args []string, repoDirectory string, stdout, stderr io.Writer) int {
 	notes, err := os.ReadFile(*notesPath)
 	if err != nil {
 		fmt.Fprintf(stderr, "relnotes: read notes file: %v\n", err)
+		return 2
+	}
+	if rawMarkdownMetadata.Match(notes) {
+		fmt.Fprintln(stderr, "relnotes: raw Markdown is not supported; link or HTML metadata found, supply official GitHub rendered text (body_text)")
 		return 2
 	}
 
