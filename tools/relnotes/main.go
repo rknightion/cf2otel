@@ -20,8 +20,9 @@ var (
 	// Reject link metadata rather than attempting to render or strip Markdown.
 	// Treat backslash-escaped label characters as part of the label so an
 	// escaped closing bracket cannot hide the following destination or title.
+	// Labels may span lines; conservatively include newline escapes as label atoms.
 	// The input contract remains rendered text, including for ambiguous literals.
-	rawMarkdownMetadata = regexp.MustCompile(`(?m)\[(?:\\[^\r\n]|[^\]\\\r\n])*\][ \t\r\n]*(?:\(|\[)|^[ \t]{0,3}\[(?:\\[^\r\n]|[^\]\\\r\n])+\]:|<!--|</?[A-Za-z][^>]*>`)
+	rawMarkdownMetadata = regexp.MustCompile(`(?m)\[(?:\\[\s\S]|[^\]\\])*\][ \t\r\n]*(?:\(|\[)|^[ \t]{0,3}\[(?:\\[\s\S]|[^\]\\])+\]:|<!--|</?[A-Za-z][^>]*>`)
 	stableTag           = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:\+[0-9A-Za-z.-]+)?$`)
 )
 

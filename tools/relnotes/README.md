@@ -18,8 +18,12 @@ As a guard against accidentally passing raw input under the default format,
 Markdown inline/reference link metadata, reference definitions, HTML tags and
 HTML comments are rejected with an explicit raw-Markdown error. This is an
 input guard, not a Markdown renderer or a complete format detector. Ambiguous
-literal text resembling those constructs is rejected too. A plain-text file
-cannot prove its provenance; callers must obtain the official rendered field.
+literal text resembling those constructs is rejected too, including labels that
+span lines (also with backslash escapes). This conservative policy applies to
+inline links, reference links and reference definitions, even when a Markdown
+renderer would treat a particular multiline construct as literal text. A
+plain-text file cannot prove its provenance; callers must obtain the official
+rendered field.
 
 Coverage requires a visible release description matching each required commit's
 subject description. Case and whitespace normalization and whole-phrase
