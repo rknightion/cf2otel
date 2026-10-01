@@ -148,11 +148,18 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 	if err != nil {
 		return from, err
 	}
-	values = append(values, depth...)
+	// Preserve the legacy cap selection before admitting optional depth series.
 	values, err = c.applySeriesCap(ctx, values)
 	if err != nil {
 		return from, err
 	}
+	remaining := c.cfg.Platform.MaxMetricSeriesPerWindow - len(values)
+	sort.Slice(depth, func(i, j int) bool { return metricValueKey(depth[i]) < metricValueKey(depth[j]) })
+	if len(depth) > remaining {
+		slog.WarnContext(ctx, "platform metric series cap dropped account-level metrics", "collector", c.spec.collector, "dropped_series", len(depth)-remaining)
+		depth = depth[:remaining]
+	}
+	values = append(values, depth...)
 	for _, metric := range values {
 		var err error
 		if metric.kind == gaugeMetric {
@@ -374,7 +381,7 @@ func numericField(row map[string]any, field string) (float64, bool) {
 
 // Account/statistic series never carry database identifiers.
 func (c *groupsCollector) applySeriesCap(ctx context.Context, values []metricValue) ([]metricValue, error) {
-	sort.Slice(values, func(i, j int) bool { return metricValueKey(values[i]) < metricValueKey(values[j]) })
+	sort.Slice(values, func(i, j int) bool { return values[i].name < values[j].name })
 	limit := c.cfg.Platform.MaxMetricSeriesPerWindow
 	if limit <= 0 {
 		return nil, errors.New("platform metric series cap must be positive")

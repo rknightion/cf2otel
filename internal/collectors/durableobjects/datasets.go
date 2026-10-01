@@ -175,14 +175,23 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 	if err != nil {
 		return from, fmt.Errorf("aggregate %s: %w", c.spec.dataset, err)
 	}
-	points, err := c.collectDepth(ctx, request, settings, completeFrom, completeTo)
+	depth, err := c.collectDepth(ctx, request, settings, completeFrom, completeTo)
 	if err != nil {
 		return from, err
 	}
+	var points []metricPoint
 	if found {
 		points = append(points, metricPoint{name: c.spec.metric, kind: c.spec.kind, value: value})
 	}
+	// Preserve the legacy cap selection before admitting optional depth series.
 	points = capMetricSeries(c.spec.name, points, seriesLimit, slog.Default())
+	remaining := seriesLimit - len(points)
+	sort.Slice(depth, func(i, j int) bool { return metricPointKey(depth[i]) < metricPointKey(depth[j]) })
+	if len(depth) > remaining {
+		slog.Warn("platform metric series dropped", "collector", c.spec.name, "dropped", len(depth)-remaining)
+		depth = depth[:remaining]
+	}
+	points = append(points, depth...)
 	for _, point := range points {
 		var emitErr error
 		if point.kind == gaugeMetric {
@@ -391,7 +400,7 @@ func ceilBucket(value time.Time) time.Time {
 }
 
 func capMetricSeries(collectorName string, points []metricPoint, limit int, logger *slog.Logger) []metricPoint {
-	sort.Slice(points, func(i, j int) bool { return metricPointKey(points[i]) < metricPointKey(points[j]) })
+	sort.Slice(points, func(i, j int) bool { return points[i].name < points[j].name })
 	if len(points) <= limit {
 		return points
 	}

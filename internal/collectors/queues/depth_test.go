@@ -15,7 +15,7 @@ import (
 )
 
 func TestDepthRegisterHTTP(t *testing.T) {
-	for _, mode := range []string{"success", "absent", "error", "duplicate", "cap", "count-null", "count-missing", "count-negative", "count-fractional", "dataset-null", "empty", "zero"} {
+	for _, mode := range []string{"success", "absent", "error", "duplicate", "cap", "cap-two", "cap-headroom", "cap-headroom-reversed", "count-null", "count-missing", "count-negative", "count-fractional", "dataset-null", "empty", "zero"} {
 		t.Run(mode, func(t *testing.T) {
 			from := time.Now().UTC().Truncate(5 * time.Minute).Add(-30 * time.Minute)
 			fields := []string{"count", "sum_billableOperations", "dimensions_datetimeFiveMinutes", "dimensions_queueId", "avg_lagTime", "avg_retryCount", "dimensions_actionType", "dimensions_consumerType", "dimensions_outcome"}
@@ -89,6 +89,11 @@ func TestDepthRegisterHTTP(t *testing.T) {
 							}
 						}
 					}
+					if mode == "cap-headroom-reversed" {
+						for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+							rows[i], rows[j] = rows[j], rows[i]
+						}
+					}
 					key := "queueMessageOperationsAdaptiveGroups"
 					if strings.Contains(q, "depth:") {
 						key = "depth"
@@ -109,8 +114,13 @@ func TestDepthRegisterHTTP(t *testing.T) {
 			defer server.Close()
 			cfg := queueTestConfig("queues.message_operations")
 			cfg.Cloudflare.APIBase = server.URL
-			if mode == "cap" {
+			switch mode {
+			case "cap":
 				cfg.Platform.MaxMetricSeriesPerWindow = 1
+			case "cap-two":
+				cfg.Platform.MaxMetricSeriesPerWindow = 2
+			case "cap-headroom", "cap-headroom-reversed":
+				cfg.Platform.MaxMetricSeriesPerWindow = 3
 			}
 			window := queueWindow(t, cfg, cfapi.New(cfg.Cloudflare), "queues.message_operations")
 			out := &telemetry.Buffer{}
@@ -124,18 +134,33 @@ func TestDepthRegisterHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if mode == "cap" {
-				if len(out.Metrics) != 1 {
-					t.Fatalf("cap metrics=%v", out.Metrics)
-				}
-				return
-			}
 			got := queueMetrics(out.Metrics)
-			if got[semconv.MetricQueuesMessageOperations].Value != 14 || got[semconv.MetricQueuesBillableOperations].Value != 22 {
-				t.Fatalf("old aggregate changed: %v", out.Metrics)
+			billable, billablePresent := got[semconv.MetricQueuesBillableOperations]
+			if !billablePresent || billable.Kind != "counter" || billable.Value != 22 || len(billable.Attrs) != 0 {
+				t.Fatalf("legacy billable operations identity/value changed: %v", out.Metrics)
+			}
+			operations, operationsPresent := got[semconv.MetricQueuesMessageOperations]
+			if mode == "cap" {
+				if operationsPresent {
+					t.Fatalf("old one-series cap selection changed: %v", out.Metrics)
+				}
+			} else if !operationsPresent || operations.Kind != "counter" || operations.Value != 14 || len(operations.Attrs) != 0 {
+				t.Fatalf("legacy message operations identity/value changed: %v", out.Metrics)
 			}
 			if !checkpoint.Equal(from.Add(10 * time.Minute)) {
 				t.Fatalf("successful window did not advance: %v", checkpoint)
+			}
+			if strings.HasPrefix(mode, "cap") {
+				if len(out.Metrics) != cfg.Platform.MaxMetricSeriesPerWindow {
+					t.Fatalf("cap metrics=%v", out.Metrics)
+				}
+				if strings.HasPrefix(mode, "cap-headroom") {
+					point := out.Metrics[2]
+					if point.Name != semconv.MetricQueuesBillableOperationsByAction || point.Kind != "counter" || point.Value != 16 || len(point.Attrs) != 3 || point.Attrs[0].Key != semconv.AttrQueuesActionType || point.Attrs[0].Value != "ReadMessage" || point.Attrs[1].Key != semconv.AttrQueuesConsumerType || point.Attrs[1].Value != "worker" || point.Attrs[2].Key != semconv.AttrQueuesOutcome || point.Attrs[2].Value != "none" {
+						t.Fatalf("remaining capacity lost deterministic ReadMessage action count: %v", out.Metrics)
+					}
+				}
+				return
 			}
 			if mode == "absent" || mode == "empty" {
 				if len(out.Metrics) != 2 {

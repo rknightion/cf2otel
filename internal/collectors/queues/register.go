@@ -172,11 +172,22 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 	if err != nil {
 		return from, err
 	}
-	values = append(values, depth...)
 	if err := ctx.Err(); err != nil {
 		return from, err
 	}
-	points := capSeries(c.Name(), values, c.cfg.Platform.MaxMetricSeriesPerWindow)
+	// Preserve the legacy cap selection before admitting optional depth series.
+	limit := c.cfg.Platform.MaxMetricSeriesPerWindow
+	if limit <= 0 {
+		limit = queueDefaultSeriesLimit
+	}
+	points := capSeries(c.Name(), values, limit)
+	remaining := limit - len(points)
+	sort.Slice(depth, func(i, j int) bool { return metricValueKey(depth[i]) < metricValueKey(depth[j]) })
+	if len(depth) > remaining {
+		slog.Warn("platform metric series dropped", "collector", c.Name(), "dropped", len(depth)-remaining)
+		depth = depth[:remaining]
+	}
+	points = append(points, depth...)
 	for _, point := range points {
 		var emitErr error
 		if point.kind == gaugeMetric {
@@ -486,7 +497,7 @@ func capSeries(collectorName string, values []metricValue, limit int) []metricVa
 	if limit <= 0 {
 		limit = queueDefaultSeriesLimit
 	}
-	sort.Slice(values, func(i, j int) bool { return metricValueKey(values[i]) < metricValueKey(values[j]) })
+	sort.Slice(values, func(i, j int) bool { return values[i].name < values[j].name })
 	dropped := len(values) - limit
 	if dropped > 0 {
 		values = values[:limit]

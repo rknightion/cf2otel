@@ -16,7 +16,7 @@ import (
 )
 
 func TestDepthRegisterHTTP(t *testing.T) {
-	for _, mode := range []string{"success", "absent", "error", "duplicate", "cap", "count-null", "count-missing", "count-negative", "count-fractional", "dataset-null", "empty"} {
+	for _, mode := range []string{"success", "absent", "error", "duplicate", "cap", "cap-two", "cap-headroom", "count-null", "count-missing", "count-negative", "count-fractional", "dataset-null", "empty"} {
 		t.Run(mode, func(t *testing.T) {
 			from := time.Now().UTC().Truncate(5 * time.Minute).Add(-30 * time.Minute)
 			fields := []string{"sum_readQueries", "sum_writeQueries", "dimensions_datetimeFiveMinutes", "sum_rowsRead", "sum_rowsWritten", "quantiles_queryBatchTimeMsP50", "quantiles_queryBatchTimeMsP99", "quantiles_queryBatchResponseBytesP50", "quantiles_queryBatchResponseBytesP75"}
@@ -89,8 +89,13 @@ func TestDepthRegisterHTTP(t *testing.T) {
 			defer server.Close()
 			cfg := testConfig()
 			cfg.Cloudflare.APIBase = server.URL
-			if mode == "cap" {
+			switch mode {
+			case "cap":
 				cfg.Platform.MaxMetricSeriesPerWindow = 1
+			case "cap-two":
+				cfg.Platform.MaxMetricSeriesPerWindow = 2
+			case "cap-headroom":
+				cfg.Platform.MaxMetricSeriesPerWindow = 4
 			}
 			reg := collector.NewRegistry()
 			Register(collector.Deps{Config: cfg, API: cfapi.New(cfg.Cloudflare), Registry: reg})
@@ -114,18 +119,35 @@ func TestDepthRegisterHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if mode == "cap" {
-				if len(out.Metrics) != 1 {
-					t.Fatalf("cap metrics=%v", out.Metrics)
-				}
-				return
-			}
 			got := metricRows(out.Metrics)
-			if got[semconv.MetricD1ReadQueries].Value != 14 || got[semconv.MetricD1WriteQueries].Value != 4 {
-				t.Fatalf("old queries changed: %v", out.Metrics)
+			read, readPresent := got[semconv.MetricD1ReadQueries]
+			if !readPresent || read.Kind != "counter" || read.Value != 14 || len(read.Attrs) != 0 {
+				t.Fatalf("legacy read queries identity/value changed: %v", out.Metrics)
+			}
+			write, writePresent := got[semconv.MetricD1WriteQueries]
+			if mode == "cap" {
+				if writePresent {
+					t.Fatalf("old one-series cap selection changed: %v", out.Metrics)
+				}
+			} else if !writePresent || write.Kind != "counter" || write.Value != 4 || len(write.Attrs) != 0 {
+				t.Fatalf("legacy write queries identity/value changed: %v", out.Metrics)
 			}
 			if !checkpoint.Equal(from.Add(10 * time.Minute)) {
 				t.Fatalf("successful window did not advance: %v", checkpoint)
+			}
+			if strings.HasPrefix(mode, "cap") {
+				if len(out.Metrics) != cfg.Platform.MaxMetricSeriesPerWindow {
+					t.Fatalf("cap metrics=%v", out.Metrics)
+				}
+				if mode == "cap-headroom" {
+					for name, want := range map[string]float64{semconv.MetricD1QueryBatchResponseSize: 0, semconv.MetricD1QueryBatchTime: 2.5} {
+						point, present := got[name]
+						if !present || point.Kind != "gauge" || point.Value != want || len(point.Attrs) != 1 || point.Attrs[0].Key != semconv.AttrStatistic || point.Attrs[0].Value != "p50" {
+							t.Fatalf("remaining capacity lost selected batch gauge: %v", out.Metrics)
+						}
+					}
+				}
+				return
 			}
 			if mode == "absent" || mode == "empty" {
 				if len(out.Metrics) != 2 {

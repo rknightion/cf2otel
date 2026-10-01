@@ -3,6 +3,7 @@ package durableobjects
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,9 +17,13 @@ import (
 )
 
 func TestDepthRegisterHTTP(t *testing.T) {
-	for _, mode := range []string{"success", "absent", "error", "duplicate", "cap", "count-null", "count-missing", "count-negative", "count-fractional", "dataset-null", "empty", "zero"} {
+	for _, mode := range []string{"success", "absent", "error", "duplicate", "cap", "cap-default", "cap-default-reversed", "count-null", "count-missing", "count-negative", "count-fractional", "dataset-null", "empty", "zero"} {
 		t.Run(mode, func(t *testing.T) {
 			from := time.Now().UTC().Truncate(5 * time.Minute).Add(-30 * time.Minute)
+			scriptCount := 1
+			if strings.HasPrefix(mode, "cap-default") {
+				scriptCount = 500
+			}
 			fields := []string{"sum_requests", "sum_errors", "dimensions_datetimeFiveMinutes", "dimensions_scriptName", "quantiles_wallTimeP50", "quantiles_wallTimeP99", "quantiles_responseBodySizeP50", "quantiles_responseBodySizeP75"}
 			if mode == "absent" {
 				fields = fields[:1]
@@ -32,7 +37,7 @@ func TestDepthRegisterHTTP(t *testing.T) {
 				q := req.Query
 				var node map[string]any
 				if strings.Contains(q, "settings{") {
-					node = map[string]any{"settings": map[string]any{"durableObjectsInvocationsAdaptiveGroups": map[string]any{"enabled": true, "availableFields": fields, "maxNumberOfFields": 3, "maxPageSize": 100, "maxDuration": 300, "notOlderThan": 86400}}}
+					node = map[string]any{"settings": map[string]any{"durableObjectsInvocationsAdaptiveGroups": map[string]any{"enabled": true, "availableFields": fields, "maxNumberOfFields": 3, "maxPageSize": max(100, scriptCount+1), "maxDuration": 300, "notOlderThan": 86400}}}
 				} else {
 					if strings.Contains(q, "status") || strings.Contains(q, "namespace") {
 						t.Error("ambiguous/resource grouping selected")
@@ -68,7 +73,22 @@ func TestDepthRegisterHTTP(t *testing.T) {
 								counts["errors"] = 1.5
 							}
 						}
-						rows = append(rows, row)
+						if strings.Contains(q, "scriptName") {
+							for j := 0; j < scriptCount; j++ {
+								script := j
+								if mode == "cap-default-reversed" {
+									script = scriptCount - 1 - j
+								}
+								name := "example-script"
+								if scriptCount > 1 {
+									name = fmt.Sprintf("example-script-%03d", script)
+								}
+								rows = append(rows, map[string]any{"dimensions": map[string]any{"datetimeFiveMinutes": at.Format(time.RFC3339), "scriptName": name}, "sum": row["sum"], "quantiles": row["quantiles"]})
+							}
+						} else {
+							row["sum"].(map[string]any)["requests"] = 7 * scriptCount
+							rows = append(rows, row)
+						}
 						if mode == "duplicate" && strings.Contains(q, "wallTimeP50") {
 							rows = append(rows, row)
 						}
@@ -110,21 +130,32 @@ func TestDepthRegisterHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if mode == "cap" {
-				if len(out.Metrics) != 1 {
-					t.Fatalf("cap metrics=%v", out.Metrics)
-				}
-				return
-			}
 			got := map[string]telemetry.BufferedMetric{}
 			for _, m := range out.Metrics {
 				got[m.Name] = m
 			}
-			if got[semconv.MetricDurableObjectsRequests].Value != 14 {
-				t.Fatalf("old requests changed: %v", out.Metrics)
+			requests, requestsPresent := got[semconv.MetricDurableObjectsRequests]
+			if !requestsPresent || requests.Kind != "counter" || requests.Value != float64(14*scriptCount) || len(requests.Attrs) != 0 {
+				t.Fatalf("legacy requests identity/value changed: %v", out.Metrics)
 			}
 			if !checkpoint.Equal(from.Add(10 * time.Minute)) {
 				t.Fatalf("successful window did not advance: %v", checkpoint)
+			}
+			if strings.HasPrefix(mode, "cap") {
+				if len(out.Metrics) != cfg.Platform.MaxMetricSeriesPerWindow {
+					t.Fatalf("cap metrics=%v", out.Metrics)
+				}
+				if scriptCount > 1 {
+					if out.Metrics[0].Name != semconv.MetricDurableObjectsRequests {
+						t.Fatalf("legacy requests not retained first: %v", out.Metrics)
+					}
+					for i, point := range out.Metrics[1:] {
+						if point.Name != semconv.MetricDurableObjectsErrors || point.Kind != "counter" || point.Value != 4 || len(point.Attrs) != 1 || point.Attrs[0].Key != semconv.AttrWorkersScriptName || point.Attrs[0].Value != fmt.Sprintf("example-script-%03d", i) {
+							t.Fatalf("remaining capacity did not retain deterministic script errors: %v", point)
+						}
+					}
+				}
+				return
 			}
 			if mode == "absent" || mode == "empty" {
 				if len(out.Metrics) != 1 {
