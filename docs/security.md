@@ -16,6 +16,7 @@ The table maps every configured collector name to its expected read group. For G
 | `access.login_metrics` | `Account Analytics Read` (Account) | Unverified |
 | `access.scim` | `Access: SCIM Logs Read` (Account) | Unverified |
 | `inventory.access` | `Access: Apps Read` and `Access: Users Read` (Account) | Unverified |
+| `tunnels.status` | `Cloudflare Tunnel Read` (Account) | Loop 14 preparation verified the required group; without it the list can be an empty 200, so an empty result does not prove permission |
 | `httpreq.events` | `Analytics Read` (Zone); `Access: Apps Read` (Account) when `http.scope` is `access_protected` | Unverified |
 | `httpreq.metrics` | `Analytics Read` (Zone) | Unverified |
 | `aigateway.logs` | `AI Gateway Metadata Read` (Account); add `AI Gateway Read` (Account) when body capture is enabled | Live-verified in `doc-0003` |
