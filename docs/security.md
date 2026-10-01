@@ -52,6 +52,7 @@ The table maps every configured collector name to its expected read group. For G
 | `queues.message_operations` | `Account Analytics Read` (Account) | Unverified |
 | `email.routing` | `Analytics Read` (Zone) | Unverified |
 | `email.sending` | `Analytics Read` (Zone) | Unverified |
+| `certs.packs` | `SSL and Certificates Read` (Zone) | Live-verified in the loop 14 endpoint schema; disabled by default |
 | `selfobs` | None; this collector reads local process state only | Not applicable |
 
 The expected groups for other collectors are candidates based on their API surface and GraphQL dataset scope. Verify them against the target account before enabling a collector; Cloudflare can require dataset-specific entitlements in addition to the base analytics group.
