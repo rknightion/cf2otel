@@ -51,6 +51,9 @@ func (c *packs) readZone(ctx context.Context, zone string) ([]pack, error) {
 		if err := c.api.Get(ctx, path, q, &rows); err != nil {
 			return nil, err
 		}
+		if rows == nil {
+			return nil, errors.New("certificate packs: null result")
+		}
 		all = append(all, rows...)
 		if len(rows) < pageSize {
 			return all, nil
@@ -112,8 +115,16 @@ func (c *packs) Collect(ctx context.Context, e telemetry.Emitter) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			// HTTP failures are counted by cfapi's shared request observer (including
-			// skipped 403s), rather than duplicating the request counter here.
+			// cfapi's HTTP observer counts the actual transport status. An
+			// unsuccessful 2xx envelope needs a separate logical-error counter;
+			// HTTP errors (including 403) are already visible to that observer.
+			var httpErr *cfapi.HTTPError
+			if !errors.As(err, &httpErr) && err.Error() == "cloudflare API: code 9109" {
+				if emitErr := e.Counter(ctx, semconv.MetricAPIEnvelopeErrors, 1,
+					telemetry.Attr{Key: semconv.AttrStatusClass, Value: "4xx"}); emitErr != nil {
+					return fmt.Errorf("certificate API envelope counter: %w", emitErr)
+				}
+			}
 			if permissionDenied(err) {
 				c.warnPermission(ctx, zone.Name, now)
 			}

@@ -3,6 +3,7 @@ package certs
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -24,14 +25,19 @@ type point struct {
 	value float64
 	attrs []telemetry.Attr
 }
-type recordingEmitter struct{ points []point }
+type recordingEmitter struct {
+	points     []point
+	counters   []point
+	counterErr error
+}
 
 func (e *recordingEmitter) Gauge(_ context.Context, n string, v float64, a ...telemetry.Attr) error {
 	e.points = append(e.points, point{n, v, a})
 	return nil
 }
-func (*recordingEmitter) Counter(context.Context, string, float64, ...telemetry.Attr) error {
-	return nil
+func (e *recordingEmitter) Counter(_ context.Context, n string, v float64, a ...telemetry.Attr) error {
+	e.counters = append(e.counters, point{n, v, a})
+	return e.counterErr
 }
 func (*recordingEmitter) Histogram(context.Context, string, float64, ...telemetry.Attr) error {
 	return nil
@@ -168,7 +174,7 @@ func TestEmptyAndFailedSnapshots(t *testing.T) {
 				case "empty":
 					_, _ = fmt.Fprint(w, `{"result":[]}`)
 				case "null":
-					_, _ = fmt.Fprint(w, `{"result":null}`)
+					_, _ = fmt.Fprint(w, `{"success":true,"result":null}`)
 				case "malformed":
 					_, _ = fmt.Fprint(w, `{"result":{"unexpected":true}}`)
 				case "later-page-failure":
@@ -184,11 +190,73 @@ func TestEmptyAndFailedSnapshots(t *testing.T) {
 			}, nil)
 			e := &recordingEmitter{}
 			err := c.Collect(context.Background(), e)
-			if (err == nil) != (kind == "empty" || kind == "null") {
+			if (err == nil) != (kind == "empty") {
 				t.Fatalf("%s error=%v", kind, err)
 			}
 			if len(e.points) != 0 {
 				t.Fatalf("unknown expiry emitted: %+v", e.points)
+			}
+		})
+	}
+}
+
+func TestNullAndDeniedZonesFailSnapshot(t *testing.T) {
+	c := snapshot(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/zones" {
+			_, _ = fmt.Fprint(w, `{"result":[{"id":"zone-null","name":"null.example.com"},{"id":"zone-denied","name":"denied.example.com"}]}`)
+			return
+		}
+		if strings.Contains(r.URL.Path, "zone-null") {
+			_, _ = fmt.Fprint(w, `{"success":true,"result":null}`)
+			return
+		}
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = fmt.Fprint(w, `{"success":false,"errors":[{"code":9109}]}`)
+	}, nil)
+	if err := c.Collect(context.Background(), &recordingEmitter{}); err == nil {
+		t.Fatal("null plus denied zones must fail snapshot")
+	}
+}
+
+func TestPermissionEnvelopeAccounting(t *testing.T) {
+	for _, failEmitter := range []bool{false, true} {
+		t.Run(fmt.Sprintf("emitter-failure=%t", failEmitter), func(t *testing.T) {
+			statuses := map[int]int{}
+			c := snapshot(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/zones" {
+					_, _ = fmt.Fprint(w, `{"result":[{"id":"zone-envelope","name":"envelope.example.com"},{"id":"zone-denied","name":"denied.example.com"},{"id":"zone-ok","name":"example.com"}]}`)
+					return
+				}
+				if strings.Contains(r.URL.Path, "zone-ok") {
+					_, _ = fmt.Fprint(w, `{"success":true,"result":[]}`)
+					return
+				}
+				if strings.Contains(r.URL.Path, "zone-denied") {
+					w.WriteHeader(http.StatusForbidden)
+				}
+				_, _ = fmt.Fprint(w, `{"success":false,"errors":[{"code":9109}],"result":null}`)
+			}, func(_, _ string, status int, _ time.Duration, _ bool) { statuses[status]++ })
+			e := &recordingEmitter{}
+			if failEmitter {
+				e.counterErr = errors.New("counter export failed")
+			}
+			err := c.Collect(context.Background(), e)
+			if failEmitter && !errors.Is(err, e.counterErr) {
+				t.Fatalf("counter failure must fail closed: %v", err)
+			}
+			if !failEmitter && err != nil {
+				t.Fatal(err)
+			}
+			if len(e.counters) != 1 {
+				t.Fatalf("logical envelope errors=%d, want 1", len(e.counters))
+			}
+			p := e.counters[0]
+			// Literal permits a compiling red witness before the new semconv constant exists.
+			if p.name != "cf2otel.api.envelope_errors" || p.value != 1 || len(p.attrs) != 1 || p.attrs[0].Key != semconv.AttrStatusClass || p.attrs[0].Value != "4xx" {
+				t.Fatalf("logical error point=%+v", p)
+			}
+			if !failEmitter && (statuses[200] != 3 || statuses[403] != 1 || len(statuses) != 2) {
+				t.Fatalf("actual HTTP attempts=%v, want three 200 and one 403", statuses)
 			}
 		})
 	}

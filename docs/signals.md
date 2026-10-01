@@ -118,7 +118,8 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cf2otel.export.errors` | `1` | Failed OTLP exports. |
 | `cf2otel.build.info` | `1` | Build identity. |
 | `cf2otel.checkpoint.age` | `s` | Age of the oldest collector checkpoint. |
-| `cf2otel.api.requests` | `{request}` | Cloudflare API requests. |
+| `cf2otel.api.requests` | `{request}` | Cloudflare API requests, classified by actual HTTP status. |
+| `cf2otel.api.envelope_errors` | `{error}` | Logical errors in unsuccessful Cloudflare API envelopes returned with successful HTTP status. Certificate pack permission code 9109 increments once with `cf2otel.status_class=4xx`; the HTTP request remains classified as 2xx. HTTP 403 is counted only by the shared HTTP request observer, not by this counter. |
 | `cf2otel.api.duration` | `s` | Cloudflare API request duration. |
 | `cf2otel.api.retries` | `1` | Cloudflare API retries. |
 | `cf2otel.identity.matched` | `1` | HTTP events matched to one Access identity. |
@@ -178,6 +179,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Event | `gen_ai.client.inference.operation.details` |
 | Metric | `cf2otel.api.duration` |
 | Metric | `cf2otel.api.requests` |
+| Metric | `cf2otel.api.envelope_errors` |
 | Metric | `cf2otel.api.retries` |
 | Metric | `cf2otel.build.info` |
 | Metric | `cf2otel.checkpoint.age` |
