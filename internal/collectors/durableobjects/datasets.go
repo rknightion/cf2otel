@@ -198,11 +198,20 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 }
 
 func (c *datasetCollector) queryRows(ctx context.Context, request cfapi.GraphQLRequest, from, to time.Time) ([]map[string]any, error) {
+	return c.queryRowsMode(ctx, request, from, to, false)
+}
+
+func (c *datasetCollector) queryRowsMode(ctx context.Context, request cfapi.GraphQLRequest, from, to time.Time, strict bool) ([]map[string]any, error) {
 	rows, err := collector.Bisect(from, to, durableObjectsBucket, durableObjectsBucket, func(from, to time.Time) ([]map[string]any, bool, error) {
 		leaf := request
 		leaf.From, leaf.To = from, to
 		var rows []map[string]any
-		err := c.api.Query(ctx, leaf, &rows)
+		var err error
+		if strict {
+			rows, err = c.queryDepthLeaf(ctx, leaf)
+		} else {
+			err = c.api.Query(ctx, leaf, &rows)
+		}
 		if err == nil && len(rows) < leaf.Limit {
 			return rows, false, nil
 		}

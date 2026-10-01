@@ -16,7 +16,7 @@ import (
 )
 
 func TestDepthRegisterHTTP(t *testing.T) {
-	for _, mode := range []string{"success", "absent", "error", "duplicate", "cap"} {
+	for _, mode := range []string{"success", "absent", "error", "duplicate", "cap", "count-null", "count-missing", "count-negative", "count-fractional", "dataset-null", "empty"} {
 		t.Run(mode, func(t *testing.T) {
 			from := time.Now().UTC().Truncate(5 * time.Minute).Add(-30 * time.Minute)
 			fields := []string{"sum_readQueries", "sum_writeQueries", "dimensions_datetimeFiveMinutes", "sum_rowsRead", "sum_rowsWritten", "quantiles_queryBatchTimeMsP50", "quantiles_queryBatchTimeMsP99", "quantiles_queryBatchResponseBytesP50", "quantiles_queryBatchResponseBytesP75"}
@@ -51,12 +51,38 @@ func TestDepthRegisterHTTP(t *testing.T) {
 							value = 2500
 						}
 						row := map[string]any{"dimensions": map[string]any{"datetimeFiveMinutes": at.Format(time.RFC3339)}, "sum": map[string]any{"readQueries": 7, "writeQueries": 2, "rowsRead": 11, "rowsWritten": 0}, "quantiles": map[string]any{"queryBatchTimeMsP50": value, "queryBatchTimeMsP99": map[bool]int{true: -1, false: 10000}[i == 1], "queryBatchResponseBytesP50": 0}}
+						if i == 1 && strings.Contains(q, "rowsRead") {
+							counts := row["sum"].(map[string]any)
+							switch mode {
+							case "count-null":
+								counts["rowsRead"] = nil
+							case "count-missing":
+								delete(counts, "rowsWritten")
+							case "count-negative":
+								counts["rowsRead"] = -1
+							case "count-fractional":
+								counts["rowsRead"] = 1.5
+							}
+						}
 						rows = append(rows, row)
 						if mode == "duplicate" && strings.Contains(q, "queryBatchTimeMsP50") {
 							rows = append(rows, row)
 						}
 					}
-					node = map[string]any{"d1AnalyticsAdaptiveGroups": rows}
+					key := "d1AnalyticsAdaptiveGroups"
+					if strings.Contains(q, "depth:") {
+						key = "depth"
+					}
+					var data any = rows
+					if strings.Contains(q, "rowsRead") || strings.Contains(q, "queryBatch") {
+						switch mode {
+						case "dataset-null":
+							data = nil
+						case "empty":
+							data = []any{}
+						}
+					}
+					node = map[string]any{key: data}
 				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"viewer": map[string]any{"accounts": []any{node}}}})
 			}))
@@ -78,9 +104,9 @@ func TestDepthRegisterHTTP(t *testing.T) {
 				t.Fatal("not registered")
 			}
 			out := &telemetry.Buffer{}
-			_, err := window.CollectWindow(context.Background(), from, from.Add(10*time.Minute), out)
-			if mode == "error" || mode == "duplicate" {
-				if err == nil || len(out.Metrics) != 0 {
+			checkpoint, err := window.CollectWindow(context.Background(), from, from.Add(10*time.Minute), out)
+			if mode == "error" || mode == "duplicate" || strings.HasPrefix(mode, "count-") || mode == "dataset-null" {
+				if err == nil || len(out.Metrics) != 0 || !checkpoint.Equal(from) {
 					t.Fatalf("failure must emit nothing: err=%v metrics=%v", err, out.Metrics)
 				}
 				return
@@ -98,7 +124,10 @@ func TestDepthRegisterHTTP(t *testing.T) {
 			if got[semconv.MetricD1ReadQueries].Value != 14 || got[semconv.MetricD1WriteQueries].Value != 4 {
 				t.Fatalf("old queries changed: %v", out.Metrics)
 			}
-			if mode == "absent" {
+			if !checkpoint.Equal(from.Add(10 * time.Minute)) {
+				t.Fatalf("successful window did not advance: %v", checkpoint)
+			}
+			if mode == "absent" || mode == "empty" {
 				if len(out.Metrics) != 2 {
 					t.Fatalf("unentitled extension emitted: %v", out.Metrics)
 				}

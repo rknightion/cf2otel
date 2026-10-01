@@ -241,11 +241,20 @@ func availableField(available []string, wanted string) bool {
 }
 
 func (c *groupsCollector) queryRows(ctx context.Context, request cfapi.GraphQLRequest) ([]map[string]any, error) {
+	return c.queryRowsMode(ctx, request, false)
+}
+
+func (c *groupsCollector) queryRowsMode(ctx context.Context, request cfapi.GraphQLRequest, strict bool) ([]map[string]any, error) {
 	rows, err := collector.Bisect(request.From, request.To, queueBucketDuration, queueMinimumQueryWindow, func(from, to time.Time) ([]map[string]any, bool, error) {
 		leaf := request
 		leaf.From, leaf.To = from, to
 		var rows []map[string]any
-		err := c.api.Query(ctx, leaf, &rows)
+		var err error
+		if strict {
+			rows, err = c.queryDepthLeaf(ctx, leaf)
+		} else {
+			err = c.api.Query(ctx, leaf, &rows)
+		}
 		saturated := isSaturationError(err, leaf.Dataset)
 		if err == nil && len(rows) >= leaf.Limit {
 			saturated = true

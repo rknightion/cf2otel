@@ -15,7 +15,7 @@ import (
 )
 
 func TestDepthRegisterHTTP(t *testing.T) {
-	for _, mode := range []string{"success", "absent", "error", "duplicate", "cap"} {
+	for _, mode := range []string{"success", "absent", "error", "duplicate", "cap", "count-null", "count-missing", "count-negative", "count-fractional", "dataset-null", "empty", "zero"} {
 		t.Run(mode, func(t *testing.T) {
 			from := time.Now().UTC().Truncate(5 * time.Minute).Add(-30 * time.Minute)
 			fields := []string{"count", "sum_billableOperations", "dimensions_datetimeFiveMinutes", "dimensions_queueId", "avg_lagTime", "avg_retryCount", "dimensions_actionType", "dimensions_consumerType", "dimensions_outcome"}
@@ -67,13 +67,42 @@ func TestDepthRegisterHTTP(t *testing.T) {
 								row["dimensions"].(map[string]any)["outcome"] = "none"
 								rows = append(rows, map[string]any{"dimensions": map[string]any{"datetimeFiveMinutes": at.Format(time.RFC3339), "actionType": "SendMessage", "consumerType": "", "outcome": "none"}, "sum": map[string]any{"billableOperations": 3}})
 							}
+							if mode == "zero" && strings.Contains(q, "consumerType") {
+								row["sum"].(map[string]any)["billableOperations"] = 0
+							}
+							if i == 1 && strings.Contains(q, "consumerType") {
+								counts := row["sum"].(map[string]any)
+								switch mode {
+								case "count-null":
+									counts["billableOperations"] = nil
+								case "count-missing":
+									delete(counts, "billableOperations")
+								case "count-negative":
+									counts["billableOperations"] = -1
+								case "count-fractional":
+									counts["billableOperations"] = 1.5
+								}
+							}
 							rows = append(rows, row)
 							if mode == "duplicate" && strings.Contains(q, "lagTime") {
 								rows = append(rows, row)
 							}
 						}
 					}
-					node = map[string]any{"queueMessageOperationsAdaptiveGroups": rows}
+					key := "queueMessageOperationsAdaptiveGroups"
+					if strings.Contains(q, "depth:") {
+						key = "depth"
+					}
+					var data any = rows
+					if strings.Contains(q, "consumerType") || strings.Contains(q, "lagTime") {
+						switch mode {
+						case "dataset-null":
+							data = nil
+						case "empty":
+							data = []any{}
+						}
+					}
+					node = map[string]any{key: data}
 				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"viewer": map[string]any{"accounts": []any{node}}}})
 			}))
@@ -85,9 +114,9 @@ func TestDepthRegisterHTTP(t *testing.T) {
 			}
 			window := queueWindow(t, cfg, cfapi.New(cfg.Cloudflare), "queues.message_operations")
 			out := &telemetry.Buffer{}
-			_, err := window.CollectWindow(context.Background(), from, from.Add(10*time.Minute), out)
-			if mode == "error" || mode == "duplicate" {
-				if err == nil || len(out.Metrics) != 0 {
+			checkpoint, err := window.CollectWindow(context.Background(), from, from.Add(10*time.Minute), out)
+			if mode == "error" || mode == "duplicate" || strings.HasPrefix(mode, "count-") || mode == "dataset-null" {
+				if err == nil || len(out.Metrics) != 0 || !checkpoint.Equal(from) {
 					t.Fatalf("failure must emit nothing: err=%v metrics=%v", err, out.Metrics)
 				}
 				return
@@ -105,7 +134,10 @@ func TestDepthRegisterHTTP(t *testing.T) {
 			if got[semconv.MetricQueuesMessageOperations].Value != 14 || got[semconv.MetricQueuesBillableOperations].Value != 22 {
 				t.Fatalf("old aggregate changed: %v", out.Metrics)
 			}
-			if mode == "absent" {
+			if !checkpoint.Equal(from.Add(10 * time.Minute)) {
+				t.Fatalf("successful window did not advance: %v", checkpoint)
+			}
+			if mode == "absent" || mode == "empty" {
 				if len(out.Metrics) != 2 {
 					t.Fatalf("unentitled extension emitted: %v", out.Metrics)
 				}
@@ -127,7 +159,12 @@ func TestDepthRegisterHTTP(t *testing.T) {
 					t.Fatalf("consumer N/A source value reinterpreted: %v", m)
 				}
 			}
-			if actions["ReadMessage"] != 16 || actions["SendMessage"] != 6 {
+			readCount, readPresent := actions["ReadMessage"]
+			wantReadCount := float64(16)
+			if mode == "zero" {
+				wantReadCount = 0
+			}
+			if !readPresent || readCount != wantReadCount || actions["SendMessage"] != 6 {
 				t.Fatalf("missing grouped action counts including inapplicable consumer: %v", out.Metrics)
 			}
 			for _, m := range out.Metrics {

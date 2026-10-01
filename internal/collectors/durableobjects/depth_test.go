@@ -16,7 +16,7 @@ import (
 )
 
 func TestDepthRegisterHTTP(t *testing.T) {
-	for _, mode := range []string{"success", "absent", "error", "duplicate", "cap"} {
+	for _, mode := range []string{"success", "absent", "error", "duplicate", "cap", "count-null", "count-missing", "count-negative", "count-fractional", "dataset-null", "empty", "zero"} {
 		t.Run(mode, func(t *testing.T) {
 			from := time.Now().UTC().Truncate(5 * time.Minute).Add(-30 * time.Minute)
 			fields := []string{"sum_requests", "sum_errors", "dimensions_datetimeFiveMinutes", "dimensions_scriptName", "quantiles_wallTimeP50", "quantiles_wallTimeP99", "quantiles_responseBodySizeP50", "quantiles_responseBodySizeP75"}
@@ -52,12 +52,41 @@ func TestDepthRegisterHTTP(t *testing.T) {
 							value = 2500000
 						}
 						row := map[string]any{"dimensions": map[string]any{"datetimeFiveMinutes": at.Format(time.RFC3339), "scriptName": "example-script"}, "sum": map[string]any{"requests": 7, "errors": 2}, "quantiles": map[string]any{"wallTimeP50": value, "wallTimeP99": map[bool]int{true: -1, false: 10000000}[i == 1], "responseBodySizeP50": 0}}
+						if mode == "zero" {
+							row["sum"].(map[string]any)["errors"] = 0
+						}
+						if i == 1 && strings.Contains(q, "errors") {
+							counts := row["sum"].(map[string]any)
+							switch mode {
+							case "count-null":
+								counts["errors"] = nil
+							case "count-missing":
+								delete(counts, "errors")
+							case "count-negative":
+								counts["errors"] = -1
+							case "count-fractional":
+								counts["errors"] = 1.5
+							}
+						}
 						rows = append(rows, row)
 						if mode == "duplicate" && strings.Contains(q, "wallTimeP50") {
 							rows = append(rows, row)
 						}
 					}
-					node = map[string]any{"durableObjectsInvocationsAdaptiveGroups": rows}
+					key := "durableObjectsInvocationsAdaptiveGroups"
+					if strings.Contains(q, "depth:") {
+						key = "depth"
+					}
+					var data any = rows
+					if strings.Contains(q, "scriptName") {
+						switch mode {
+						case "dataset-null":
+							data = nil
+						case "empty":
+							data = []any{}
+						}
+					}
+					node = map[string]any{key: data}
 				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"viewer": map[string]any{"accounts": []any{node}}}})
 			}))
@@ -71,9 +100,9 @@ func TestDepthRegisterHTTP(t *testing.T) {
 			Register(collector.Deps{Config: cfg, API: cfapi.New(cfg.Cloudflare), Registry: reg})
 			window := collectorEntry(t, reg, "durableobjects.invocations").Collector.(collector.WindowCollector)
 			out := &telemetry.Buffer{}
-			_, err := window.CollectWindow(context.Background(), from, from.Add(10*time.Minute), out)
-			if mode == "error" || mode == "duplicate" {
-				if err == nil || len(out.Metrics) != 0 {
+			checkpoint, err := window.CollectWindow(context.Background(), from, from.Add(10*time.Minute), out)
+			if mode == "error" || mode == "duplicate" || strings.HasPrefix(mode, "count-") || mode == "dataset-null" {
+				if err == nil || len(out.Metrics) != 0 || !checkpoint.Equal(from) {
 					t.Fatalf("failure must emit nothing: err=%v metrics=%v", err, out.Metrics)
 				}
 				return
@@ -94,13 +123,21 @@ func TestDepthRegisterHTTP(t *testing.T) {
 			if got[semconv.MetricDurableObjectsRequests].Value != 14 {
 				t.Fatalf("old requests changed: %v", out.Metrics)
 			}
-			if mode == "absent" {
+			if !checkpoint.Equal(from.Add(10 * time.Minute)) {
+				t.Fatalf("successful window did not advance: %v", checkpoint)
+			}
+			if mode == "absent" || mode == "empty" {
 				if len(out.Metrics) != 1 {
 					t.Fatalf("unentitled extension emitted: %v", out.Metrics)
 				}
 				return
 			}
-			if got[semconv.MetricDurableObjectsErrors].Value != 4 || got[semconv.MetricDurableObjectsWallTime].Value != 2.5 {
+			errorsMetric, errorsPresent := got[semconv.MetricDurableObjectsErrors]
+			wantErrors := float64(4)
+			if mode == "zero" {
+				wantErrors = 0
+			}
+			if !errorsPresent || errorsMetric.Value != wantErrors || got[semconv.MetricDurableObjectsWallTime].Value != 2.5 {
 				t.Fatalf("missing errors/latest seconds: %v", out.Metrics)
 			}
 			size, ok := got[semconv.MetricDurableObjectsResponseSize]

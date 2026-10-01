@@ -1,11 +1,13 @@
 package d1
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"strings"
 	"time"
 
@@ -78,7 +80,15 @@ func (c *groupsCollector) collectDepth(ctx context.Context, request cfapi.GraphQ
 				if f.statistic != "" && !bucket.Equal(latest) {
 					continue
 				}
-				value, exists, err := depthNumber(row, f.field)
+				var value float64
+				var exists bool
+				var err error
+				if f.statistic == "" {
+					value, err = depthCount(row, f.field)
+					exists = err == nil
+				} else {
+					value, exists, err = depthNumber(row, f.field)
+				}
 				if err != nil {
 					return nil, err
 				}
@@ -109,6 +119,15 @@ func depthNumber(row map[string]any, field string) (float64, bool, error) {
 	part, key, _ := strings.Cut(field, ".")
 	group, _ := row[part].(map[string]any)
 	raw := group[key]
+	if n, ok := raw.(json.Number); ok {
+		value, err := n.Float64()
+		if err != nil {
+			return 0, false, fmt.Errorf("invalid optional D1 field %s: %w", field, err)
+		}
+		raw = value
+		group = map[string]any{key: value}
+		row = map[string]any{part: group}
+	}
 	if raw == nil {
 		return 0, false, nil
 	}
@@ -134,7 +153,7 @@ func (c *groupsCollector) queryDepthRows(ctx context.Context, request cfapi.Grap
 		}
 		leaf := request
 		leaf.From, leaf.To = start, end
-		rows, err := c.queryRows(ctx, leaf)
+		rows, err := c.queryRowsMode(ctx, leaf, true)
 		if err != nil {
 			return nil, err
 		}
@@ -151,6 +170,45 @@ func (c *groupsCollector) queryDepthRows(ctx context.Context, request cfapi.Grap
 		start = end
 	}
 	return all, nil
+}
+
+// Selected additive counts are required unsigned integers, unlike optional statistics.
+func depthCount(row map[string]any, field string) (float64, error) {
+	part, key, _ := strings.Cut(field, ".")
+	group, _ := row[part].(map[string]any)
+	n, ok := group[key].(json.Number)
+	if !ok {
+		return 0, fmt.Errorf("missing or invalid selected count %s", field)
+	}
+	integer, ok := new(big.Rat).SetString(n.String())
+	if !ok || !integer.IsInt() || !integer.Num().IsUint64() {
+		return 0, fmt.Errorf("invalid unsigned integral count %s", field)
+	}
+	// Validate exactly before the existing float counter representation rounds large counts.
+	value, err := n.Float64()
+	return value, err
+}
+
+func (c *groupsCollector) queryDepthLeaf(ctx context.Context, request cfapi.GraphQLRequest) ([]map[string]any, error) {
+	batch, ok := c.api.(cfapi.GraphQLBatchQuerier)
+	if !ok {
+		return nil, errors.New("depth collection requires raw GraphQL batch queries")
+	}
+	result, err := batch.QueryBatch(ctx, []cfapi.GraphQLBatchSelection{{Alias: "depth", Request: request}})
+	if err != nil {
+		return nil, err
+	}
+	raw := bytes.TrimSpace(result["depth"])
+	if len(raw) == 0 || raw[0] != '[' {
+		return nil, errors.New("depth dataset must be a nonnull row array")
+	}
+	var rows []map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
 
 func metricValueKey(point metricValue) string {
