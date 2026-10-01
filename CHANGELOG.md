@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.10.0](https://github.com/rknightion/cf2otel/compare/v0.9.0...v0.10.0) (2026-10-01)
+
+
+### Features
+
+* **apidrift:** probe HTTP bytes, Workers invocations, tunnels and certificates ([000d210](https://github.com/rknightion/cf2otel/commit/000d2101980788e638927500a4c75ac4e6b1877c))
+* **certs:** export certificate pack expiry snapshots ([f3fbcad](https://github.com/rknightion/cf2otel/commit/f3fbcad94b7c9ed77eae6873efb73dc583548645))
+* **dashboard:** cover landed signals and current tunnel health ([5ee8e69](https://github.com/rknightion/cf2otel/commit/5ee8e692749ec1325bd6aa87cf0407a606349963))
+* **httpreq:** export zone-level HTTP breakdowns with aliased batches ([6b4b7be](https://github.com/rknightion/cf2otel/commit/6b4b7becdbec7a317f83d3ccd4bd532dca781e77))
+* **httpreq:** request totals now count eyeball traffic only; add bytes and latency ([a79211e](https://github.com/rknightion/cf2otel/commit/a79211e944e843d66cec09c4d722873363054b55))
+* **tunnels:** export snapshot health and status changes ([efe59b6](https://github.com/rknightion/cf2otel/commit/efe59b61e83f9dad76ddb7de13e89cc9d9b1787e))
+* **workers:** export aggregate invocation counters and timing quantiles ([8396656](https://github.com/rknightion/cf2otel/commit/83966563875d78bde91ea012e20497c0783b9c7b))
+
+
+### Bug Fixes
+
+* **aigateway:** align coverage windows with the scheduler clock ([3166014](https://github.com/rknightion/cf2otel/commit/316601492bca4d2c826a07beab62819f46bc4e22))
+* **aigateway:** normalize model identifiers and malformed values ([c1facc9](https://github.com/rknightion/cf2otel/commit/c1facc9e897bcfee95092587bcc894d8ee702340))
+* **certs:** reject null results and count logical permission errors ([e586bdd](https://github.com/rknightion/cf2otel/commit/e586bdd5f9b9cb56cfa7586cc2de5acd17df3e28))
+* **dashboard:** show non-JSON AI bodies and correct RUM source units ([99f662b](https://github.com/rknightion/cf2otel/commit/99f662b407666949222813b1c2a9cfbb0aafa742))
+* **dns:** bound lifetime series with coarse aggregation ([3321227](https://github.com/rknightion/cf2otel/commit/3321227255fb9e5f2710368ffac8c13a99358b45))
+* **dns:** configure SDK cardinality and expose metric overflows ([6c7d6c6](https://github.com/rknightion/cf2otel/commit/6c7d6c65a5e1e6b0d476c17fdfc2f8730d2e9f58))
+* **selfobs:** record identity outcomes as request counter deltas ([8e67b69](https://github.com/rknightion/cf2otel/commit/8e67b69034557c2b8db11fdeb98996fbed63d401))
+* **selfobs:** refine poll duration histogram buckets ([2384dff](https://github.com/rknightion/cf2otel/commit/2384dffb17625fabc46916a53477c37ffe2a0d34))
+* **tunnels:** retire stale gauges and freeze transition retries ([b82aad9](https://github.com/rknightion/cf2otel/commit/b82aad9861840f795d0e44795f252f68800c368e))
+
 ## [0.9.0](https://github.com/rknightion/cf2otel/compare/v0.8.2...v0.9.0) (2026-09-30)
 
 
