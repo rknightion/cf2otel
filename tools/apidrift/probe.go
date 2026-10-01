@@ -101,6 +101,8 @@ var restPaths = map[string]string{
 	"ai-gateway-log-request":  "/accounts/{account}/ai-gateway/gateways/{gateway}/logs/{id}/request",
 	"ai-gateway-log-response": "/accounts/{account}/ai-gateway/gateways/{gateway}/logs/{id}/response",
 	"audit-logs":              "/accounts/{account}/logs/audit",
+	"cfd-tunnel-list":         "/accounts/{account}/cfd_tunnel",
+	"certificate-packs":       "/zones/{zone}/ssl/certificate_packs",
 }
 
 func loadContract(path string) (contract, error) {
@@ -151,10 +153,13 @@ func validateContract(c contract) error {
 		if r.RawJSON {
 			fieldsValid = len(r.RequiredFields) == 0
 		}
-		if !ok || r.Path != path || restSeen[r.Name] || !fieldsValid || !validRESTOptionalRules(r) || (r.Scope != "global" && r.Scope != "account" && r.Scope != "gateway" && r.Scope != "gateway-log") {
+		if !ok || r.Path != path || restSeen[r.Name] || !fieldsValid || !validRESTOptionalRules(r) || (r.Scope != "global" && r.Scope != "account" && r.Scope != "zone" && r.Scope != "gateway" && r.Scope != "gateway-log") {
 			return errors.New("invalid REST contract")
 		}
-		if (r.Scope == "global") != !strings.Contains(r.Path, "{account}") {
+		if (r.Scope == "zone") != strings.Contains(r.Path, "{zone}") {
+			return errors.New("invalid REST zone scope")
+		}
+		if (r.Scope == "global" || r.Scope == "zone") != !strings.Contains(r.Path, "{account}") {
 			return errors.New("invalid REST scope")
 		}
 		if ((r.Scope == "gateway") || (r.Scope == "gateway-log")) != strings.Contains(r.Path, "{gateway}") {
@@ -291,9 +296,14 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 	gatewayLogIDs := map[string]string{}
 	now := time.Now().UTC()
 	for _, r := range c.REST {
-		type target struct{ account, gateway, id string }
+		type target struct{ account, zone, gateway, id string }
 		targets := []target{{}}
-		if r.Scope != "global" {
+		if r.Scope == "zone" {
+			targets = targets[:0]
+			for _, zone := range zones {
+				targets = append(targets, target{zone: zone.ID})
+			}
+		} else if r.Scope != "global" {
 			targets = targets[:0]
 			for _, account := range accounts {
 				if r.Scope == "account" {
@@ -322,6 +332,7 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 		for index, t := range targets {
 			label := fmt.Sprintf("REST %s scope #%d", r.Name, index+1)
 			path := strings.ReplaceAll(r.Path, "{account}", url.PathEscape(t.account))
+			path = strings.ReplaceAll(path, "{zone}", url.PathEscape(t.zone))
 			path = strings.ReplaceAll(path, "{gateway}", url.PathEscape(t.gateway))
 			path = strings.ReplaceAll(path, "{id}", url.PathEscape(t.id))
 			query := restProbeQuery(r.Name, now)
@@ -454,6 +465,10 @@ func restProbeQuery(name string, now time.Time) url.Values {
 		return url.Values{"since": {from}, "until": {to}, "page": {"1"}, "per_page": {"1"}}
 	case "access-scim":
 		return url.Values{"since": {from}, "until": {to}, "page": {"1"}, "limit": {"50"}, "direction": {"asc"}}
+	case "cfd-tunnel-list":
+		return url.Values{"page": {"1"}, "per_page": {"1"}, "is_deleted": {"false"}}
+	case "certificate-packs":
+		return url.Values{"page": {"1"}, "per_page": {"5"}, "status": {"all"}}
 	case "access-apps":
 		return url.Values{"page": {"1"}, "per_page": {"1000"}}
 	case "audit-logs":

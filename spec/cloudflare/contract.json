@@ -45,7 +45,11 @@
         "dimensions_clientRequestHTTPHost",
         "dimensions_edgeResponseStatus",
         "dimensions_cacheStatus",
-        "avg_originResponseDurationMs"
+        "avg_originResponseDurationMs",
+        "sum_edgeResponseBytes",
+        "quantiles_originResponseDurationMsP50",
+        "quantiles_originResponseDurationMsP95",
+        "quantiles_originResponseDurationMsP99"
       ],
       "minimum_max_duration_seconds": 2592000,
       "minimum_not_older_than_seconds": 2678400
@@ -110,6 +114,32 @@
       ],
       "minimum_max_duration_seconds": 3600,
       "minimum_not_older_than_seconds": 2678400
+    },
+    {
+      "scope": "account",
+      "dataset": "workersInvocationsAdaptive",
+      "required_fields": [
+        "dimensions_datetimeFiveMinutes",
+        "dimensions_scriptName",
+        "dimensions_status",
+        "sum_requests",
+        "sum_errors",
+        "sum_subrequests",
+        "quantiles_cpuTimeP50",
+        "quantiles_cpuTimeP75",
+        "quantiles_cpuTimeP99",
+        "quantiles_cpuTimeP999",
+        "quantiles_wallTimeP50",
+        "quantiles_wallTimeP75",
+        "quantiles_wallTimeP99",
+        "quantiles_wallTimeP999",
+        "quantiles_requestDurationP50",
+        "quantiles_requestDurationP75",
+        "quantiles_requestDurationP99",
+        "quantiles_requestDurationP999"
+      ],
+      "minimum_max_duration_seconds": 2764800,
+      "minimum_not_older_than_seconds": 7776000
     },
     {
       "scope": "account",
@@ -400,6 +430,31 @@
     }
   ],
   "rest": [
+    {
+      "name": "cfd-tunnel-list",
+      "scope": "account",
+      "path": "/accounts/{account}/cfd_tunnel",
+      "required_fields": [
+        "id",
+        "name",
+        "status",
+        "connections"
+      ],
+      "allow_empty": true
+    },
+    {
+      "name": "certificate-packs",
+      "scope": "zone",
+      "path": "/zones/{zone}/ssl/certificate_packs",
+      "required_fields": [
+        "id",
+        "type",
+        "status",
+        "certificate_authority",
+        "certificates"
+      ],
+      "allow_empty": true
+    },
     {
       "name": "zone-list",
       "scope": "global",
