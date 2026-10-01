@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
@@ -65,13 +64,7 @@ type base struct {
 
 type pageloads struct{ base }
 
-type webVitals struct {
-	base
-	mu        sync.Mutex
-	previous  map[vitalSeries]struct{}
-	pending   map[vitalSeries]struct{}
-	pendingTo time.Time
-}
+type webVitals struct{ base }
 
 type pageloadSample struct {
 	pageViews float64
@@ -91,7 +84,7 @@ func NewPageloads(cfg *config.Config, api cfapi.Client) *pageloads {
 }
 
 func NewWebVitals(cfg *config.Config, api cfapi.Client) *webVitals {
-	return &webVitals{base: base{cfg: cfg, api: api}, previous: map[vitalSeries]struct{}{}}
+	return &webVitals{base{cfg: cfg, api: api}}
 }
 
 func (*pageloads) Name() string                   { return "rum.pageloads" }
@@ -229,15 +222,15 @@ func (c *webVitals) CollectWindow(ctx context.Context, from, to time.Time, out t
 				seriesBase.hasSiteTag = true
 			}
 		}
+		if row["quantiles"] == nil {
+			continue
+		}
 		quantiles, ok := row["quantiles"].(map[string]any)
-		if !ok || quantiles == nil {
-			return from, errors.New("RUM web-vitals Groups row is missing quantiles")
+		if !ok {
+			return from, errors.New("RUM web-vitals Groups row has invalid quantiles")
 		}
 		for _, quantile := range webVitalsQuantiles {
-			raw, ok := quantiles[quantile.field]
-			if !ok {
-				return from, fmt.Errorf("RUM web-vitals Groups row is missing %s", quantile.field)
-			}
+			raw := quantiles[quantile.field]
 			if raw == nil {
 				continue
 			}
@@ -245,11 +238,9 @@ func (c *webVitals) CollectWindow(ctx context.Context, from, to time.Time, out t
 			if !ok || math.IsNaN(value) || math.IsInf(value, 0) {
 				return from, fmt.Errorf("RUM web-vitals Groups row has invalid %s", quantile.field)
 			}
-			if value == -1 {
-				continue
-			}
+			// Negative quantiles denote no data, not a measured zero.
 			if value < 0 {
-				return from, fmt.Errorf("RUM web-vitals Groups row has negative %s", quantile.field)
+				continue
 			}
 			value /= quantile.divisor
 			series := seriesBase
@@ -261,35 +252,8 @@ func (c *webVitals) CollectWindow(ctx context.Context, from, to time.Time, out t
 		}
 	}
 
-	if err := c.emitReplacing(ctx, out, from, to, current); err != nil {
-		return from, err
-	}
-	return to, nil
-}
-
-func (c *webVitals) emitReplacing(ctx context.Context, out telemetry.Emitter, from, to time.Time, current map[vitalSeries]float64) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	// A later window is only scheduled after the preceding buffer was flushed
-	// and checkpointed. A retry of the same window must repeat stale zeros.
-	if !c.pendingTo.IsZero() && !from.Before(c.pendingTo) {
-		c.previous = c.pending
-		c.pending = nil
-		c.pendingTo = time.Time{}
-	}
-
-	stale := make([]vitalSeries, 0)
-	for series := range c.previous {
-		if _, ok := current[series]; !ok {
-			stale = append(stale, series)
-		}
-	}
-	sortVitalSeries(stale)
-	for _, series := range stale {
-		if err := out.Gauge(ctx, series.metric, 0, series.attrs()...); err != nil {
-			return err
-		}
-	}
+	// Emit only source measurements. Missing series must not be replaced with
+	// synthetic zeros, even when an earlier window had a value for that series.
 	active := make([]vitalSeries, 0, len(current))
 	for series := range current {
 		active = append(active, series)
@@ -297,16 +261,10 @@ func (c *webVitals) emitReplacing(ctx context.Context, out telemetry.Emitter, fr
 	sortVitalSeries(active)
 	for _, series := range active {
 		if err := out.Gauge(ctx, series.metric, current[series], series.attrs()...); err != nil {
-			return err
+			return from, err
 		}
 	}
-	updated := make(map[vitalSeries]struct{}, len(current))
-	for series := range current {
-		updated[series] = struct{}{}
-	}
-	c.pending = updated
-	c.pendingTo = to
-	return nil
+	return to, nil
 }
 
 func (s vitalSeries) attrs() []telemetry.Attr {

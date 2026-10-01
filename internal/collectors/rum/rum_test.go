@@ -306,7 +306,85 @@ func TestRegisteredWebVitalsConvertMicrosecondsToSeconds(t *testing.T) {
 	}
 }
 
-func TestWebVitalsClearStaleSeriesBeforeEmittingCurrentValues(t *testing.T) {
+func TestRegisteredWebVitalsOmitMissingQuantilesAndRetainZero(t *testing.T) {
+	from := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC)
+	key := testAccountID + "/rumWebVitalsEventsAdaptiveGroups"
+	for _, missing := range []string{"absent", "null", "sentinel", "negative", "absent_quantiles", "null_quantiles", "empty"} {
+		t.Run(missing, func(t *testing.T) {
+			api := &fakeAPI{
+				settings: map[string]cfapi.DatasetSettings{key: rumSettings(7,
+					"dimensions_deviceType", "quantiles_largestContentfulPaintP75", "quantiles_interactionToNextPaintP75",
+					"quantiles_firstInputDelayP75", "quantiles_firstContentfulPaintP75", "quantiles_timeToFirstByteP75",
+					"quantiles_cumulativeLayoutShiftP75")},
+				rows: map[string][]map[string]any{key: {vitalsRow("desktop", 1, 0.1)}},
+			}
+			cfg := testConfig()
+			cfg.Collectors = map[string]config.CollectorConfig{"rum.web_vitals": {Enabled: true}}
+			registry := collector.NewRegistry()
+			Register(collector.Deps{Config: cfg, API: api, Registry: registry})
+			entries := registry.Entries()
+			if len(entries) != 1 {
+				t.Fatalf("registered collectors = %d, want one web-vitals collector", len(entries))
+			}
+			c := entries[0].Collector.(collector.WindowCollector)
+			to := from.Add(5 * time.Minute)
+			initial := &telemetry.Buffer{}
+			if _, err := c.CollectWindow(context.Background(), from, to, initial); err != nil {
+				t.Fatal(err)
+			}
+			if len(initial.Metrics) != 6 {
+				t.Fatalf("initial metrics = %d, want six populated quantiles", len(initial.Metrics))
+			}
+			row := vitalsRow("desktop", 0, 0)
+			quantiles := row["quantiles"].(map[string]any)
+			switch missing {
+			case "absent":
+				delete(quantiles, "firstInputDelayP75")
+			case "null":
+				quantiles["firstInputDelayP75"] = nil
+			case "sentinel":
+				quantiles["firstInputDelayP75"] = -1
+			case "negative":
+				quantiles["firstInputDelayP75"] = -2
+			case "absent_quantiles":
+				delete(row, "quantiles")
+			case "null_quantiles":
+				row["quantiles"] = nil
+			}
+			api.rows[key] = []map[string]any{row}
+			wantCount := 5
+			if missing == "absent_quantiles" || missing == "null_quantiles" || missing == "empty" {
+				wantCount = 0
+			}
+			if missing == "empty" {
+				api.rows[key] = nil
+			}
+			for i := 0; i < 2; i++ {
+				out := &telemetry.Buffer{}
+				mark, err := c.CollectWindow(context.Background(), to, to.Add(5*time.Minute), out)
+				if err != nil {
+					t.Fatalf("missing quantiles must not fail collection: %v", err)
+				}
+				if !mark.Equal(to.Add(5 * time.Minute)) {
+					t.Fatalf("mark = %s, want successful window advance", mark)
+				}
+				if len(out.Metrics) != wantCount {
+					t.Fatalf("metrics = %d, want %d genuine zeros and no synthetic missing-data points", len(out.Metrics), wantCount)
+				}
+				seen := map[string]bool{}
+				for _, metric := range out.Metrics {
+					if metric.Name == semconv.MetricRUMFIDP75 || metric.Kind != "gauge" || metric.Value != 0 || seen[metric.Name] {
+						t.Errorf("metric = %+v, want distinct genuine zero excluding missing FID", metric)
+					}
+					seen[metric.Name] = true
+				}
+				to = to.Add(5 * time.Minute)
+			}
+		})
+	}
+}
+
+func TestWebVitalsOmitStaleSeriesWhenEmittingCurrentValues(t *testing.T) {
 	from := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
 	to := from.Add(5 * time.Minute)
 	settings := rumSettings(30,
@@ -327,21 +405,16 @@ func TestWebVitalsClearStaleSeriesBeforeEmittingCurrentValues(t *testing.T) {
 	if _, err := c.CollectWindow(context.Background(), to, to.Add(5*time.Minute), out); err != nil {
 		t.Fatal(err)
 	}
-	if len(out.Metrics) != 12 {
-		t.Fatalf("metrics=%d, want six stale clears followed by six current gauges", len(out.Metrics))
+	if len(out.Metrics) != 6 {
+		t.Fatalf("metrics=%d, want only six current gauges with no synthetic stale zeros", len(out.Metrics))
 	}
-	for i := 0; i < 6; i++ {
-		if out.Metrics[i].Kind != "gauge" || out.Metrics[i].Value != 0 || !hasRUMAttr(out.Metrics[i].Attrs, semconv.AttrRUMDeviceType, "desktop") {
-			t.Fatalf("stale metric[%d] = %+v, want desktop zero gauge before new values", i, out.Metrics[i])
-		}
-	}
-	for i := 6; i < len(out.Metrics); i++ {
+	for i := 0; i < len(out.Metrics); i++ {
 		want := 2.0
 		if out.Metrics[i].Name == semconv.MetricRUMCLSP75 {
 			want = 0.2
 		}
 		if out.Metrics[i].Value != want || !hasRUMAttr(out.Metrics[i].Attrs, semconv.AttrRUMDeviceType, "mobile") {
-			t.Fatalf("current metric[%d] = %+v, want mobile value after stale clears", i, out.Metrics[i])
+			t.Fatalf("current metric[%d] = %+v, want mobile source value", i, out.Metrics[i])
 		}
 	}
 }
@@ -357,7 +430,7 @@ func (f *vitalsFailSecondFlush) FlushCommit(context.Context, uint64) error {
 	return nil
 }
 
-func TestWebVitalsRetryRepeatsStaleZeroAfterFailedFlush(t *testing.T) {
+func TestWebVitalsRetryEmitsOnlySourceValuesAfterFailedFlush(t *testing.T) {
 	from := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
 	settings := rumSettings(30,
 		"dimensions_deviceType", "quantiles_largestContentfulPaintP75", "quantiles_interactionToNextPaintP75",
@@ -388,17 +461,22 @@ func TestWebVitalsRetryRepeatsStaleZeroAfterFailedFlush(t *testing.T) {
 	if mark, _ := store.Get(c.Name()); !mark.Equal(from.Add(window)) {
 		t.Fatalf("checkpoint after failed flush = %s, want %s", mark, from.Add(window))
 	}
+	out = &telemetry.Buffer{}
+	scheduler.Emitter = out
 	if err := scheduler.RunOnce(context.Background(), entry); err != nil {
 		t.Fatalf("retry flush: %v", err)
 	}
-	staleZeros := 0
-	for _, metric := range out.Metrics {
-		if metric.Kind == "gauge" && metric.Value == 0 && hasRUMAttr(metric.Attrs, semconv.AttrRUMDeviceType, "desktop") {
-			staleZeros++
-		}
+	if len(out.Metrics) != 6 {
+		t.Fatalf("metrics after retry = %d, want six current source values", len(out.Metrics))
 	}
-	if staleZeros != 6 {
-		t.Fatalf("desktop stale zeros after failed export and retry = %d, want 6", staleZeros)
+	for _, metric := range out.Metrics {
+		want := 2.0
+		if metric.Name == semconv.MetricRUMCLSP75 {
+			want = 0.2
+		}
+		if metric.Kind != "gauge" || metric.Value != want || !hasRUMAttr(metric.Attrs, semconv.AttrRUMDeviceType, "mobile") {
+			t.Errorf("retry metric = %+v, want current mobile source value and no stale zero", metric)
+		}
 	}
 }
 

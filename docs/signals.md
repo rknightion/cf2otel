@@ -199,7 +199,7 @@ The retired AI Gateway dashboard's **Data boundaries** panel was static provenan
 | DNS | `cloudflare.dns.*` attributes are listed individually below; query name, IPs and `cloudflare.dns.colo` are log only. |
 | Gateway DNS | `cloudflare.gateway.dns.query.type`, `cloudflare.gateway.dns.decision`, `cloudflare.gateway.dns.country`; only bounded metric dimensions. |
 | Platform resource names | `cloudflare.workers.script_name`, `cloudflare.r2.bucket_name`, `cloudflare.r2.catalog.namespace_name`, `cloudflare.r2sql.bucket_name`; bounded names only. |
-| RUM | `cloudflare.rum.country`, `cloudflare.rum.device_type`, `cloudflare.rum.site_tag`; gauges use device and optional site tag. |
+| RUM | `cloudflare.rum.country`, `cloudflare.rum.device_type`, `cloudflare.rum.site_tag`; gauges use device and optional site tag. Web-vitals quantiles that are absent, null or negative emit no point, including when a previous window had a value; genuine zero measurements remain zero. |
 | Window delivery | `cf2otel.window.*` describes retention gaps and commit outcomes. |
 | Poller | `cf2otel.collector`, `cf2otel.version`, `cf2otel.commit`, `cf2otel.export.signal`, `cf2otel.build.version`, `cf2otel.build.commit` |
 
