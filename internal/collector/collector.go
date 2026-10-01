@@ -41,6 +41,17 @@ type AdaptiveWindowCollector interface {
 	AdaptiveCommitWindow() bool
 }
 
+// BudgetedWindowCollector is an adaptive collector that also bounds one
+// commit's payload. It may return a whole-second mark before to once the
+// records it buffered reach budgetBytes, and it always completes at least one
+// source second, so a single dense second can exceed the budget. A budget of
+// zero or less means no bound. Every row before the returned mark, and none at
+// or after it, must be in the buffer.
+type BudgetedWindowCollector interface {
+	WindowCollector
+	CollectWindowBudget(ctx context.Context, from, to time.Time, budgetBytes int, e telemetry.Emitter) (time.Time, error)
+}
+
 type Entry struct {
 	Collector                            Collector
 	Interval, InitialLookback, MaxWindow time.Duration

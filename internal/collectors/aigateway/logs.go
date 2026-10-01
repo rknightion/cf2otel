@@ -95,6 +95,15 @@ type namedRow struct {
 // only after the emitter accepts the window. [from,to) excludes inclusive API
 // boundaries, and IDs remove duplicates within the same page sequence.
 func (c *logs) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (time.Time, error) {
+	return c.CollectWindowBudget(ctx, from, to, 0, out)
+}
+
+// CollectWindowBudget emits whole source seconds in order and returns a
+// second boundary before to once the buffered records reach budgetBytes. One
+// commit then never delivers, or holds in memory, more than the budget plus
+// one second, and bodies past the mark are not fetched. The second that would
+// overflow is fetched to be measured and left for the next call.
+func (c *logs) CollectWindowBudget(ctx context.Context, from, to time.Time, budgetBytes int, out telemetry.Emitter) (time.Time, error) {
 	if !from.Before(to) || c.cfg == nil || c.api == nil {
 		return time.Time{}, errors.New("aigateway logs: invalid window or dependencies")
 	}
@@ -151,10 +160,37 @@ func (c *logs) CollectWindow(ctx context.Context, from, to time.Time, out teleme
 		}
 		return a.row.CreatedAt.Before(b.row.CreatedAt)
 	})
-	for _, item := range all {
-		if err := c.emit(ctx, item.gateway, item.row, out); err != nil {
+	if budgetBytes <= 0 {
+		for _, item := range all {
+			if err := c.emit(ctx, item.gateway, item.row, out); err != nil {
+				return time.Time{}, err
+			}
+		}
+		return to, nil
+	}
+	buffered := 0
+	for start := 0; start < len(all); {
+		second := all[start].row.CreatedAt.Truncate(time.Second)
+		end := start
+		for end < len(all) && all[end].row.CreatedAt.Truncate(time.Second).Equal(second) {
+			end++
+		}
+		group := &telemetry.Buffer{}
+		for _, item := range all[start:end] {
+			if err := c.emit(ctx, item.gateway, item.row, group); err != nil {
+				return time.Time{}, err
+			}
+		}
+		size := group.ApproxBytes()
+		// The first second is always delivered whole, whatever its size.
+		if start > 0 && buffered+size > budgetBytes {
+			return second, nil
+		}
+		if err := group.ReplayInto(ctx, out); err != nil {
 			return time.Time{}, err
 		}
+		buffered += size
+		start = end
 	}
 	return to, nil
 }

@@ -74,6 +74,59 @@ func (b *Buffer) Span(_ context.Context, s SpanSpec) error {
 	b.Records = append(b.Records, BufferedRecord{Span: &s})
 	return nil
 }
+
+// ApproxBytes estimates the record's export size from its strings. Commit
+// chunking and collector payload budgets share it so they agree on a size.
+func (r BufferedRecord) ApproxBytes() int {
+	size := len(r.Event) + len(r.Body) + 64
+	for _, a := range r.Attrs {
+		size += len(a.Key) + len(a.Value)
+	}
+	if r.Span != nil {
+		size += len(r.Span.Name) + 64
+		for _, a := range r.Span.Attrs {
+			size += len(a.Key) + len(a.Value)
+		}
+		for _, ev := range r.Span.Events {
+			size += len(ev.Name) + 64
+			for _, a := range ev.Attrs {
+				size += len(a.Key) + len(a.Value)
+			}
+		}
+		for _, l := range r.Span.Logs {
+			size += len(l.Name) + len(l.Body) + 64
+			for _, a := range l.Attrs {
+				size += len(a.Key) + len(a.Value)
+			}
+		}
+	}
+	return size
+}
+
+// ApproxBytes is the sum over the buffered records; metrics are not counted.
+func (b *Buffer) ApproxBytes() int {
+	size := 0
+	for _, r := range b.Records {
+		size += r.ApproxBytes()
+	}
+	return size
+}
+
+// ReplayInto appends this buffer's records and metrics to another emitter in
+// their original order within each kind.
+func (b *Buffer) ReplayInto(ctx context.Context, e Emitter) error {
+	for _, r := range b.Records {
+		if err := r.Replay(ctx, e); err != nil {
+			return err
+		}
+	}
+	for _, m := range b.Metrics {
+		if err := m.Replay(ctx, e); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func (r BufferedRecord) Replay(ctx context.Context, e Emitter) error {
 	if r.Span != nil {
 		return e.Span(ctx, *r.Span)

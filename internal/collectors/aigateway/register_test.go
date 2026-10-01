@@ -307,48 +307,59 @@ func TestRegisterAdaptiveDeliveryBudget(t *testing.T) {
 		committed = append(committed, [2]time.Time{previous, mark})
 		previous = mark
 	}
+	// The sink answers each POST after a second, so one commit of the 8 MiB
+	// budget (about 24 capped rows) cannot fit a 15-second aggregate budget.
+	scheduler.CommitTimeout = 15 * time.Second
+	scheduler.CommitBudgetBytes = 8 << 20
 	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
 	defer cancel()
 	entry := registry.Entries()[0]
-	for attempt := 0; attempt < 2; attempt++ {
-		err = scheduler.RunOnce(ctx, entry)
-		if !errors.Is(err, context.DeadlineExceeded) {
-			t.Fatalf("attempt %d: want wrapped deadline, got %v", attempt, err)
-		}
-		reopened, openErr := collector.NewFileStore(statePath)
-		if openErr != nil {
-			t.Fatal(openErr)
-		}
-		mark, _ := reopened.Get("aigateway.logs")
-		if !mark.Equal(from) || metrics.requests != 0 || len(committed) != 0 {
-			t.Fatalf("failed attempt advanced checkpoint=%s metrics=%v", mark, metrics.requests)
-		}
-		mu.Lock()
-		got := sourceWindows[len(sourceWindows)-1]
-		mu.Unlock()
-		want := 15 * time.Minute / time.Duration(1<<attempt)
-		if !got[0].Equal(from) || got[1].Sub(got[0]) != want {
-			t.Fatalf("retry must keep FROM and halve window: got %v want %s", got, want)
-		}
-	}
-	for tick := 0; tick < 2; tick++ {
-		if err = scheduler.RunOnce(ctx, entry); err != nil {
-			t.Fatalf("smaller complete windows must fit unchanged budget: %v", err)
-		}
+	err = scheduler.RunOnce(ctx, entry)
+	var aggregate *collector.CommitDeadlineError
+	if !errors.As(err, &aggregate) || !errors.Is(err, context.DeadlineExceeded) || aggregate.RetryBudget != 4<<20 {
+		t.Fatalf("first commit: want an aggregate deadline that halves the payload budget, got %v", err)
 	}
 	reopened, err := collector.NewFileStore(statePath)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if mark, _ := reopened.Get("aigateway.logs"); !mark.Equal(from) || metrics.requests != 0 || len(committed) != 0 {
+		t.Fatalf("failed commit advanced checkpoint=%s metrics=%v", mark, metrics.requests)
+	}
+	// Later deadlines are allowed while the budget settles; each one must
+	// leave the checkpoint and the metrics of the failed slice untouched.
+	deadlines := 1
+	for run := 0; run < 20; run++ {
+		before, requests := previous, metrics.requests
+		err = scheduler.RunOnce(ctx, entry)
+		if err != nil {
+			if !errors.As(err, &aggregate) {
+				t.Fatalf("run %d: %v", run, err)
+			}
+			deadlines++
+			if previous.Equal(before) && metrics.requests != requests {
+				t.Fatalf("run %d: a failed slice replayed its metrics", run)
+			}
+		}
+		if previous.Equal(to) {
+			break
+		}
+	}
+	reopened, err = collector.NewFileStore(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	mark, _ := reopened.Get("aigateway.logs")
 	if !mark.Equal(to) || metrics.requests != 50 {
-		t.Fatalf("final checkpoint=%s requests=%v, want %s / 50 without successful-window overlap", mark, metrics.requests, to)
+		t.Fatalf("final checkpoint=%s requests=%v, want %s / 50 without successful-slice overlap", mark, metrics.requests, to)
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	for _, window := range sourceWindows[2:] {
-		if window[0].Nanosecond() != 0 || window[1].Nanosecond() != 0 || window[1].Sub(window[0]) != 225*time.Second {
-			t.Fatalf("reduced window lost: %v", window)
+	// Every retry keeps the configured window: the payload budget, not the
+	// source interval, is what shrinks.
+	for _, window := range sourceWindows {
+		if window[0].Nanosecond() != 0 || !window[1].Equal(to) {
+			t.Fatalf("source window changed: %v", window)
 		}
 	}
 	if identityErr != nil {
@@ -365,8 +376,8 @@ func TestRegisterAdaptiveDeliveryBudget(t *testing.T) {
 	if len(spans) != 50 || len(logs) != 150 {
 		t.Fatalf("endpoint/duplicate filtering failed: unique spans=%d logs=%d", len(spans), len(logs))
 	}
-	if !committed[0][1].Equal(from.Add(225 * time.Second)) {
-		t.Fatalf("equal timestamp boundary: %v", committed)
+	if len(committed) < 2 {
+		t.Fatalf("the burst committed in %d slice(s); the budget never applied", len(committed))
 	}
-	t.Logf("two failed commits preserved cursor/metrics; %d complete reduced windows committed; 50 unique spans / 150 unique logs; capture cap unchanged", len(committed))
+	t.Logf("%d aggregate deadlines preserved cursor/metrics; %d budgeted slices committed; 50 unique spans / 150 unique logs; capture cap unchanged", deadlines, len(committed))
 }

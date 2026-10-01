@@ -20,6 +20,14 @@ import (
 var commitMu sync.Mutex
 
 const commitTimeout = 90 * time.Second // SDK retries for up to one minute per export.
+
+// At the roughly 0.4 MB/s observed against the OTLP gateway this leaves the
+// aggregate commit budget about half unused.
+const commitBudgetBytes = 16 << 20
+
+// A reduced payload budget doubles back only this long after it last changed:
+// growing on every success would fail every other commit at the limit.
+const commitBudgetRecovery = time.Hour
 const maxWindowsPerTick = 4
 const commitChunkBytes = 512 * 1024
 const maxSingleSpanBytes = 1024 * 1024 // A capped two-sided AI Gateway span can exceed one normal chunk.
@@ -27,6 +35,11 @@ const commitChunkItems = 512           // Below both SDK processors' default 204
 type CommitFlusher interface {
 	BeginCommit() uint64
 	FlushCommit(context.Context, uint64) error
+}
+
+type reducedBudget struct {
+	bytes int
+	since time.Time
 }
 
 type rejectionState struct {
@@ -40,10 +53,18 @@ type rejectionState struct {
 type CommitDeadlineError struct {
 	Collector           string
 	Window, RetryWindow time.Duration
+	// Budget and RetryBudget are set instead of the windows for a budgeted collector.
+	Budget, RetryBudget int
 	Err                 error
 }
 
 func (e *CommitDeadlineError) Error() string {
+	if e.Budget > 0 {
+		if e.RetryBudget >= e.Budget {
+			return fmt.Sprintf("collector %s: the smallest %d-byte commit payload cannot fit the aggregate commit budget; checkpoint retained, inspect export latency or timestamp-group volume: %v", e.Collector, e.Budget, e.Err)
+		}
+		return fmt.Sprintf("collector %s: aggregate commit budget exhausted for a %d-byte payload budget; checkpoint retained, next commit at most %d bytes: %v", e.Collector, e.Budget, e.RetryBudget, e.Err)
+	}
 	if e.Window <= time.Second {
 		return fmt.Sprintf("collector %s: one-second source window cannot fit the aggregate commit budget; checkpoint retained, inspect export latency or timestamp-group volume: %v", e.Collector, e.Err)
 	}
@@ -52,16 +73,29 @@ func (e *CommitDeadlineError) Error() string {
 func (e *CommitDeadlineError) Unwrap() error { return e.Err }
 
 type Scheduler struct {
-	Registry        *Registry
-	Emitter         telemetry.Emitter
-	Checkpoints     CheckpointStore
-	Now             func() time.Time
-	Logger          *slog.Logger
-	OnPoll          func(context.Context, string, time.Duration, error, time.Time)
-	OnCheckpoint    func(string, time.Time)
-	Flusher         CommitFlusher
-	failed400       map[string]rejectionState
-	adaptiveWindows map[string]time.Duration // protected by commitMu, independent of rejection/cursor state
+	Registry     *Registry
+	Emitter      telemetry.Emitter
+	Checkpoints  CheckpointStore
+	Now          func() time.Time
+	Logger       *slog.Logger
+	OnPoll       func(context.Context, string, time.Duration, error, time.Time)
+	OnCheckpoint func(string, time.Time)
+	Flusher      CommitFlusher
+	// CommitTimeout and CommitBudgetBytes override the aggregate commit budget
+	// and the payload a budgeted collector may buffer for one commit. Zero
+	// keeps the defaults.
+	CommitTimeout     time.Duration
+	CommitBudgetBytes int
+	failed400         map[string]rejectionState
+	adaptiveWindows   map[string]time.Duration // protected by commitMu, independent of rejection/cursor state
+	commitBudgets     map[string]reducedBudget // protected by commitMu; reduced payload budgets per budgeted collector
+}
+
+func (s *Scheduler) commitTimeout() time.Duration {
+	if s.CommitTimeout > 0 {
+		return s.CommitTimeout
+	}
+	return commitTimeout
 }
 
 func NewScheduler(r *Registry, e telemetry.Emitter, store CheckpointStore) *Scheduler {
@@ -163,6 +197,9 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 			return err
 		}
 	}
+	// A budgeted collector that stopped before its window end has more of the
+	// same window to deliver, so it continues inside this run.
+	truncated := false
 	for committed := 0; committed < maxWindowsPerTick && from.Before(to); committed++ {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -173,7 +210,7 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 		if adaptiveWindow(c) && limit > 0 && limit < time.Second {
 			return fmt.Errorf("collector %s: adaptive source-window bound must be at least one second", c.Name())
 		}
-		if committed > 0 && (limit <= 0 || to.Sub(from) <= limit) {
+		if committed > 0 && !truncated && (limit <= 0 || to.Sub(from) <= limit) {
 			break
 		}
 		windowTo := to
@@ -188,6 +225,8 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 			// A retention gap may be unresolvable within this window.
 			return nil
 		}
+		_, isBudgeted := budgetedWindow(c)
+		truncated = isBudgeted && mark.Before(windowTo)
 		from = mark
 		if committed > 0 && s.Emitter != nil {
 			_ = s.Emitter.Counter(context.WithoutCancel(ctx), semconv.MetricWindowCatchupWindows, 1,
@@ -195,7 +234,7 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 		}
 		// The process-wide export lock belongs to a single window. Give
 		// other collectors a chance to commit before taking it again.
-		if committed+1 < maxWindowsPerTick && limit > 0 && to.Sub(from) > limit {
+		if committed+1 < maxWindowsPerTick && (truncated || limit > 0 && to.Sub(from) > limit) {
 			runtime.Gosched()
 		}
 	}
@@ -248,6 +287,58 @@ func (s *Scheduler) reduceSourceWindow(c WindowCollector, from, to time.Time, er
 	return &CommitDeadlineError{Collector: c.Name(), Window: window, RetryWindow: retry, Err: err}
 }
 
+func budgetedWindow(c WindowCollector) (BudgetedWindowCollector, bool) {
+	budgeted, ok := c.(BudgetedWindowCollector)
+	return budgeted, ok && adaptiveWindow(c)
+}
+
+func (s *Scheduler) configuredCommitBudget() int {
+	if s.CommitBudgetBytes > 0 {
+		return s.CommitBudgetBytes
+	}
+	return commitBudgetBytes
+}
+
+func (s *Scheduler) commitBudget(c WindowCollector) int {
+	commitMu.Lock()
+	defer commitMu.Unlock()
+	if reduced := s.commitBudgets[c.Name()]; reduced.bytes > 0 {
+		return reduced.bytes
+	}
+	return s.configuredCommitBudget()
+}
+
+// Called only under commitMu, with the same evidence as reduceSourceWindow.
+// The collector fetched no more than budget bytes, so halving the payload, not
+// the source interval, is what makes the next commit smaller.
+func (s *Scheduler) reduceCommitBudget(c WindowCollector, budget int, err error) error {
+	// Below one export chunk a smaller budget no longer makes a smaller commit.
+	retry := max(min(s.configuredCommitBudget(), commitChunkBytes), budget/2)
+	if retry > budget {
+		retry = budget
+	}
+	if s.commitBudgets == nil {
+		s.commitBudgets = map[string]reducedBudget{}
+	}
+	s.commitBudgets[c.Name()] = reducedBudget{bytes: retry, since: s.Now()}
+	return &CommitDeadlineError{Collector: c.Name(), Budget: budget, RetryBudget: retry, Err: err}
+}
+
+// Called only under commitMu after a successful commit. A reduced budget
+// doubles back towards the configured one after each quiet recovery interval
+// instead of lasting until restart.
+func (s *Scheduler) restoreCommitBudget(c WindowCollector) {
+	reduced, found := s.commitBudgets[c.Name()]
+	if !found || s.Now().Sub(reduced.since) < commitBudgetRecovery {
+		return
+	}
+	if restored := reduced.bytes * 2; restored < s.configuredCommitBudget() {
+		s.commitBudgets[c.Name()] = reducedBudget{bytes: restored, since: s.Now()}
+		return
+	}
+	delete(s.commitBudgets, c.Name())
+}
+
 func (s *Scheduler) commitWindow(ctx context.Context, c WindowCollector, e Entry, from, to time.Time) (time.Time, error) {
 	commitMu.Lock()
 	if pending, found := s.failed400[c.Name()]; found {
@@ -259,7 +350,16 @@ func (s *Scheduler) commitWindow(ctx context.Context, c WindowCollector, e Entry
 	}
 	commitMu.Unlock()
 	buffer := &telemetry.Buffer{}
-	mark, err := c.CollectWindow(ctx, from, to, buffer)
+	budgeted, isBudgeted := budgetedWindow(c)
+	budget := 0
+	var mark time.Time
+	var err error
+	if isBudgeted {
+		budget = s.commitBudget(c)
+		mark, err = budgeted.CollectWindowBudget(ctx, from, to, budget, buffer)
+	} else {
+		mark, err = c.CollectWindow(ctx, from, to, buffer)
+	}
 	if err != nil {
 		var gap *cfapi.RetentionGapError
 		if errors.As(err, &gap) {
@@ -277,16 +377,20 @@ func (s *Scheduler) commitWindow(ctx context.Context, c WindowCollector, e Entry
 	if mark.After(to) || !mark.After(from) {
 		return from, fmt.Errorf("collector %s returned invalid high-water mark", c.Name())
 	}
-	if adaptiveWindow(c) && (!mark.Equal(to) || from.Nanosecond() != 0 || to.Nanosecond() != 0) {
+	if adaptiveWindow(c) && (from.Nanosecond() != 0 || to.Nanosecond() != 0 || mark.Nanosecond() != 0 || !mark.Equal(to) && !isBudgeted) {
 		return from, fmt.Errorf("collector %s: adaptive commit requires a complete whole-second source window", c.Name())
 	}
 	commitMu.Lock()
 	defer commitMu.Unlock()
-	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commitTimeout)
+	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.commitTimeout())
 	defer cancel()
 	if err := s.commit(commitCtx, buffer); err != nil {
 		if adaptiveWindow(c) && errors.Is(err, context.DeadlineExceeded) && errors.Is(commitCtx.Err(), context.DeadlineExceeded) {
-			err = s.reduceSourceWindow(c, from, to, err)
+			if isBudgeted {
+				err = s.reduceCommitBudget(c, budget, err)
+			} else {
+				err = s.reduceSourceWindow(c, from, to, err)
+			}
 		}
 		outcome := "retry"
 		if s.failed400 == nil {
@@ -316,6 +420,9 @@ func (s *Scheduler) commitWindow(ctx context.Context, c WindowCollector, e Entry
 		s.Logger.Error("window dropped after three payload rejections", "collector", c.Name(), "from", from, "to", to, "error", err)
 	} else {
 		delete(s.failed400, c.Name())
+		if isBudgeted {
+			s.restoreCommitBudget(c)
+		}
 		for _, m := range buffer.Metrics {
 			if err := m.Replay(commitCtx, s.Emitter); err != nil {
 				return from, err
@@ -365,7 +472,7 @@ func (s *Scheduler) CollectRange(ctx context.Context, c WindowCollector, from, t
 	}
 	commitMu.Lock()
 	defer commitMu.Unlock()
-	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commitTimeout)
+	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.commitTimeout())
 	defer cancel()
 	if err := s.commit(commitCtx, buffer); err != nil {
 		return err
@@ -395,28 +502,7 @@ func (s *Scheduler) commit(ctx context.Context, b *telemetry.Buffer) error {
 		return err
 	}
 	for _, r := range b.Records {
-		size := len(r.Event) + len(r.Body) + 64
-		for _, a := range r.Attrs {
-			size += len(a.Key) + len(a.Value)
-		}
-		if r.Span != nil {
-			size += len(r.Span.Name) + 64
-			for _, a := range r.Span.Attrs {
-				size += len(a.Key) + len(a.Value)
-			}
-			for _, ev := range r.Span.Events {
-				size += len(ev.Name) + 64
-				for _, a := range ev.Attrs {
-					size += len(a.Key) + len(a.Value)
-				}
-			}
-			for _, l := range r.Span.Logs {
-				size += len(l.Name) + len(l.Body) + 64
-				for _, a := range l.Attrs {
-					size += len(a.Key) + len(a.Value)
-				}
-			}
-		}
+		size := r.ApproxBytes()
 		if size > commitChunkBytes {
 			if r.Span == nil || size > maxSingleSpanBytes {
 				return fmt.Errorf("window record exceeds %d byte export limit", maxSingleSpanBytes)
@@ -483,7 +569,7 @@ func (s *Scheduler) skipGap(ctx context.Context, c WindowCollector, e Entry, fro
 	}
 	commitMu.Lock()
 	defer commitMu.Unlock()
-	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commitTimeout)
+	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.commitTimeout())
 	defer cancel()
 	seconds := mark.Sub(from).Seconds()
 	var seq uint64
