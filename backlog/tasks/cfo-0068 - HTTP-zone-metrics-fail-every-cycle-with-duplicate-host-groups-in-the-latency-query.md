@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-01 17:50'
+updated_date: '2026-10-01 18:41'
 labels:
   - http
   - telemetry
@@ -35,3 +36,9 @@ Since the 0.10.0 deploy on 2026-10-01 the httpreq.metrics collector has succeede
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Cause proven live at loop 15 preparation (2026-10-01, runtime token, eyeball filter): the dataset returns the raw Host header, so a client sending name:port creates a second source group that normalises to the same host. Over ten hours 4 of 23 zones had such groups (17 port-suffixed groups with 31 requests beside 7 canonical groups with 3,239), one zone inside a single five-minute window. The sub-window hypothesis in the description is wrong: maxDuration is 30 days on every zone, so the client never splits these windows.
+<!-- SECTION:NOTES:END -->
