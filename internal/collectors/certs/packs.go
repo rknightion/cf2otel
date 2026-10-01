@@ -31,9 +31,10 @@ type pack struct {
 }
 
 type packs struct {
-	api    cfapi.Client
-	mu     sync.Mutex
-	warned map[string]time.Time
+	api      cfapi.Client
+	interval time.Duration
+	mu       sync.Mutex
+	warned   map[string]time.Time
 }
 
 func (*packs) Name() string                   { return "certs.packs" }
@@ -107,7 +108,7 @@ func (c *packs) Collect(ctx context.Context, e telemetry.Emitter) error {
 		return fmt.Errorf("certificate zones: %w", err)
 	}
 	now := time.Now()
-	successes := 0
+	var expiryPoints, packPoints []telemetry.GaugePoint
 	var failures []error
 	for _, zone := range zones {
 		rows, err := c.readZone(ctx, zone.ID)
@@ -131,12 +132,7 @@ func (c *packs) Collect(ctx context.Context, e telemetry.Emitter) error {
 			failures = append(failures, fmt.Errorf("certificate packs: %w", err))
 			continue
 		}
-		successes++
 		for _, p := range rows {
-			expiry, known := earliestExpiry(p)
-			if !known {
-				continue
-			} // Never turn absent/malformed expiry into a zero gauge.
 			attrs := []telemetry.Attr{
 				{Key: semconv.AttrCertificateZone, Value: zone.Name},
 				{Key: semconv.AttrCertificatePackID, Value: p.ID},
@@ -144,16 +140,37 @@ func (c *packs) Collect(ctx context.Context, e telemetry.Emitter) error {
 				{Key: semconv.AttrCertificateAuthority, Value: p.Authority},
 				{Key: semconv.AttrCertificateStatus, Value: p.Status},
 			}
-			if err := e.Gauge(ctx, semconv.MetricCertificateExpiry, expiry.Sub(now).Seconds(), attrs...); err != nil {
-				return err
+			packPoints = append(packPoints, telemetry.GaugePoint{Value: 1, Attrs: attrs})
+			if expiry, known := earliestExpiry(p); known {
+				expiryPoints = append(expiryPoints, telemetry.GaugePoint{Value: expiry.Sub(now).Seconds(), Attrs: attrs})
 			}
 		}
 	}
-	if successes == 0 {
-		if len(failures) > 0 {
-			return errors.Join(failures...)
+	if len(failures) > 0 {
+		return errors.Join(failures...)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	interval := c.interval
+	if interval <= 0 {
+		interval = c.DefaultInterval()
+	}
+	for _, snapshot := range []struct {
+		name   string
+		points []telemetry.GaugePoint
+	}{{semconv.MetricCertificateExpiry, expiryPoints}, {semconv.MetricCertificatePack, packPoints}} {
+		if emitter, ok := e.(telemetry.SnapshotEmitter); ok {
+			if err := emitter.GaugeSnapshot(ctx, snapshot.name, 3*interval, snapshot.points); err != nil {
+				return err
+			}
+		} else {
+			for _, point := range snapshot.points {
+				if err := e.Gauge(ctx, snapshot.name, point.Value, point.Attrs...); err != nil {
+					return err
+				}
+			}
 		}
-		return errors.New("certificate packs: no discovered zones read successfully")
 	}
 	return nil
 }

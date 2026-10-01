@@ -1,6 +1,7 @@
 package semconv
 
 const (
+	MetricCertificatePack    = "cloudflare.certificate.pack"
 	MetricCertificateExpiry  = "cloudflare.certificate.expiry"
 	AttrCertificateZone      = "cloudflare.certificate.zone"
 	AttrCertificatePackID    = "cloudflare.certificate.pack_id"

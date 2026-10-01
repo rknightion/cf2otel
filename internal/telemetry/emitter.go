@@ -56,6 +56,7 @@ type otelEmitter struct {
 	tracer     trace.Tracer
 	mu         sync.Mutex
 	gauges     map[string]metric.Float64Gauge
+	snapshots  map[string]*gaugeSnapshot
 	counters   map[string]metric.Float64Counter
 	histograms map[string]metric.Float64Histogram
 }

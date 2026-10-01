@@ -101,10 +101,19 @@ func TestRegisterSnapshotExpiryAndPagination(t *testing.T) {
 		t.Fatal(err)
 	}
 	after := time.Now()
-	if calls != 2 || len(e.points) != 2 {
+	if calls != 2 || len(e.points) != 8 {
 		t.Fatalf("pages=%d points=%+v", calls, e.points)
 	}
-	for i, p := range e.points {
+	expiryIndex := 0
+	for _, p := range e.points {
+		if p.name == semconv.MetricCertificatePack {
+			if p.value != 1 {
+				t.Fatalf("pack presence=%+v", p)
+			}
+			continue
+		}
+		i := expiryIndex
+		expiryIndex++
 		want := expiry
 		if i == 1 {
 			want = expiry.Add(-48 * time.Hour)
@@ -149,8 +158,8 @@ func TestPermissionPartialSuccessAndWarningThrottle(t *testing.T) {
 		}
 	})
 	for range 2 {
-		if err := c.Collect(context.Background(), &recordingEmitter{}); err != nil {
-			t.Fatal(err)
+		if err := c.Collect(context.Background(), &recordingEmitter{}); err == nil {
+			t.Fatal("partial read must fail snapshot")
 		}
 	}
 	if apiErrors != 2 || strings.Count(logs.String(), "level=WARN") != 1 {
@@ -244,8 +253,8 @@ func TestPermissionEnvelopeAccounting(t *testing.T) {
 			if failEmitter && !errors.Is(err, e.counterErr) {
 				t.Fatalf("counter failure must fail closed: %v", err)
 			}
-			if !failEmitter && err != nil {
-				t.Fatal(err)
+			if !failEmitter && err == nil {
+				t.Fatal("permission failures must fail snapshot")
 			}
 			if len(e.counters) != 1 {
 				t.Fatalf("logical envelope errors=%d, want 1", len(e.counters))

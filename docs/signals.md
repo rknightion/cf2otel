@@ -86,7 +86,8 @@ These declarations reserve the following signals; this seam-only change does not
 | `cloudflare.workers.cpu_time` | `s` | CPU time by script name and statistic (p50, p75, p99, p999). (CFO-0047.01) |
 | `cloudflare.workers.wall_time` | `s` | Wall time by script name and statistic (p50, p75, p99, p999). (CFO-0047.01) |
 | `cloudflare.workers.request_duration` | `s` | Request duration by script name and statistic (p50, p75, p99, p999). (CFO-0047.01) |
-| `cloudflare.certificate.expiry` | `s` | Seconds until the earliest certificate expiry in a pack; negative once expired. (CFO-0050.01) |
+| `cloudflare.certificate.pack` | `{pack}` | Present certificate packs (value 1), including packs with unknown expiry; latest complete snapshot only, expiring after three collector intervals. |
+| `cloudflare.certificate.expiry` | `s` | Seconds until the earliest certificate expiry in a pack at collection time; negative once expired. Latest complete snapshot only, expiring after three collector intervals; packs with unknown expiry are omitted. (CFO-0050.01) |
 | `cloudflare.tunnel.status` | `{tunnel}` | Current tunnel status gauge with value 1, by id, name and status. (CFO-0048.01) |
 | `cloudflare.tunnel.connections` | `{connection}` | Active tunnel connections by id, name and colo. (CFO-0048.01) |
 | `cloudflare.tunnel.connectors` | `{connector}` | Tunnel connectors by id, name and connector version. (CFO-0048.01) |

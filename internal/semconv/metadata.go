@@ -48,6 +48,7 @@ var metricSpecs = map[string]MetricSpec{
 	MetricWorkersCPUTime:                   {Unit: "s", Description: "CPU time by script name and statistic (p50, p75, p99, p999)."},
 	MetricWorkersWallTime:                  {Unit: "s", Description: "Wall time by script name and statistic (p50, p75, p99, p999)."},
 	MetricWorkersRequestDuration:           {Unit: "s", Description: "Request duration by script name and statistic (p50, p75, p99, p999)."},
+	MetricCertificatePack:                  {Unit: "{pack}", Description: "Present certificate packs, including packs with unknown expiry."},
 	MetricCertificateExpiry:                {Unit: "s", Description: "Seconds until the earliest certificate expiry in a pack; negative once expired."},
 	MetricTunnelStatus:                     {Unit: "{tunnel}", Description: "Current tunnel status gauge with value 1, by id, name and status."},
 	MetricTunnelConnections:                {Unit: "{connection}", Description: "Active tunnel connections by id, name and colo."},
