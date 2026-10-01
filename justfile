@@ -116,6 +116,12 @@ ci: check snapshot image
 clean:
     rm -rf bin dist {{ tools_dir }}
 
+# Scan newly reachable history and the net diff before a public push.
+[group('check')]
+[positional-arguments]
+push-scan base head:
+    go run ./tools/pushscan "$1" "$2"
+
 # Check a release notes file against conventional commits since a release tag.
 [group('release')]
 relnotes-check notes_file commit_range="":
