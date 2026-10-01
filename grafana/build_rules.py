@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from build_dashboard import render
@@ -13,18 +14,38 @@ OUT = ROOT / "alerts" / "grafana-managed"
 FOLDER = "REPLACE_WITH_FOLDER_UID"
 PROM = "grafanacloud-prom"
 
+
+def tunnels_status_interval_seconds() -> int:
+    """Read the deployment-aligned generator setting, not a runtime config key."""
+    key = "GRAFANA_TUNNELS_STATUS_INTERVAL_SECONDS"
+    value = os.environ.get(key, "60")
+    if not value.isascii() or not value.isdecimal():
+        raise SystemExit(f"{key} must be a positive integer in seconds")
+    try:
+        interval = int(value)
+    except ValueError:
+        raise SystemExit(f"{key} must be a positive integer in seconds") from None
+    if interval <= 0:
+        raise SystemExit(f"{key} must be a positive integer in seconds")
+    return interval
+
+
+TUNNELS_STATUS_INTERVAL_SECONDS = tunnels_status_interval_seconds()
+TUNNELS_STATUS_FRESHNESS_SECONDS = 3 * TUNNELS_STATUS_INTERVAL_SECONDS
+
 # A newly observed positive counter has no zero baseline: increase() alone misses
-# its first failure. Include first-seen series until a 15-minute-old sample exists;
-# after that, only positive increases qualify. This also covers process restarts.
+# its first failure. Include first-seen series until older history exists. Search
+# the prior 15-minute window, not one offset instant, so a sampling gap does not
+# turn an unchanged existing counter into a new failure. This also covers restarts.
 LOGPUSH_FINAL = 'cloudflare_logpush_failed_uploads_total{service_name="cf2otel",cloudflare_logpush_final_attempt="true",cloudflare_logpush_status_code=~"[3-9][0-9][0-9]"}'
-LOGPUSH_FINAL_FAILURE = f'(increase({LOGPUSH_FINAL}[15m]) > 0) or ({LOGPUSH_FINAL} unless {LOGPUSH_FINAL} offset 15m)'
+LOGPUSH_FINAL_FAILURE = f'(increase({LOGPUSH_FINAL}[15m]) > 0) or ({LOGPUSH_FINAL} unless max_over_time({LOGPUSH_FINAL}[15m] offset 15m))'
 
 # Certificate alerts are intentionally withheld: cumulative gauge attribute-series
 # retain old statuses/expiry values with fresh export timestamps. No PromQL selector
 # can establish current pack state from that output; snapshot retirement is required.
 RULES = [
-    ("cf2otel-tunnel-unhealthy", "Cloudflare tunnel is not healthy", "The current (value 1) tunnel status has been non-healthy for five minutes, with collector last success less than three minutes old (three default polling intervals). Retired value-0 states are excluded. Collector is disabled by default; stale/absent data is not proof of health.", 2641,
-     '(max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel",cloudflare_tunnel_status!="healthy"} == 1) or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel"} == 1))) and on() (time() - max(cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="tunnels.status"}) < 180)', 0, "NoData"),
+    ("cf2otel-tunnel-unhealthy", "Cloudflare tunnel is not healthy", f"The current (value 1) tunnel status has been non-healthy for five minutes, with collector last success less than {TUNNELS_STATUS_FRESHNESS_SECONDS} seconds old (three deployment polling intervals of {TUNNELS_STATUS_INTERVAL_SECONDS} seconds). Retired value-0 states are excluded. Collector is disabled by default; stale/absent data is not proof of health.", 2641,
+     '(max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel",cloudflare_tunnel_status!="healthy"} == 1) or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel"} == 1))) and on() (time() - max(cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="tunnels.status"}) < ' + str(TUNNELS_STATUS_FRESHNESS_SECONDS) + ')', 0, "NoData"),
     ("cf2otel-collector-stale", "cf2otel collector is stale", "Collector last-success timestamp is older than 15 minutes.", 401,
      'time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel"})', 900, "Alerting"),
     ("cf2otel-export-failure", "cf2otel export is failing", "OTLP export failures occurred in the last 15 minutes.", 403,

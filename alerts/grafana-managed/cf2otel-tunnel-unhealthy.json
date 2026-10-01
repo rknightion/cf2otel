@@ -14,7 +14,7 @@
     "annotations": {
       "__dashboardUid__": "cf2otel",
       "__panelId__": "2641",
-      "description": "The current (value 1) tunnel status has been non-healthy for five minutes, with collector last success less than three minutes old (three default polling intervals). Retired value-0 states are excluded. Collector is disabled by default; stale/absent data is not proof of health.",
+      "description": "The current (value 1) tunnel status has been non-healthy for five minutes, with collector last success less than 180 seconds old (three deployment polling intervals of 60 seconds). Retired value-0 states are excluded. Collector is disabled by default; stale/absent data is not proof of health.",
       "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
       "summary": "Cloudflare tunnel is not healthy"
     },

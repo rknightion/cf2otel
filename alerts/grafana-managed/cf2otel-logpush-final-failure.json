@@ -27,7 +27,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "sum by (cloudflare_logpush_scope, cloudflare_logpush_zone, cloudflare_logpush_job_id, cloudflare_logpush_destination_type) ((increase(cloudflare_logpush_failed_uploads_total{service_name=\"cf2otel\",cloudflare_logpush_final_attempt=\"true\",cloudflare_logpush_status_code=~\"[3-9][0-9][0-9]\"}[15m]) > 0) or (cloudflare_logpush_failed_uploads_total{service_name=\"cf2otel\",cloudflare_logpush_final_attempt=\"true\",cloudflare_logpush_status_code=~\"[3-9][0-9][0-9]\"} unless cloudflare_logpush_failed_uploads_total{service_name=\"cf2otel\",cloudflare_logpush_final_attempt=\"true\",cloudflare_logpush_status_code=~\"[3-9][0-9][0-9]\"} offset 15m))",
+          "expr": "sum by (cloudflare_logpush_scope, cloudflare_logpush_zone, cloudflare_logpush_job_id, cloudflare_logpush_destination_type) ((increase(cloudflare_logpush_failed_uploads_total{service_name=\"cf2otel\",cloudflare_logpush_final_attempt=\"true\",cloudflare_logpush_status_code=~\"[3-9][0-9][0-9]\"}[15m]) > 0) or (cloudflare_logpush_failed_uploads_total{service_name=\"cf2otel\",cloudflare_logpush_final_attempt=\"true\",cloudflare_logpush_status_code=~\"[3-9][0-9][0-9]\"} unless max_over_time(cloudflare_logpush_failed_uploads_total{service_name=\"cf2otel\",cloudflare_logpush_final_attempt=\"true\",cloudflare_logpush_status_code=~\"[3-9][0-9][0-9]\"}[15m] offset 15m)))",
           "instant": true,
           "range": false,
           "refId": "A"

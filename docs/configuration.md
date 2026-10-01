@@ -45,6 +45,29 @@ value is comma-separated (for example `country,method`); an empty value disables
 Collector environment forms are `WORKERS_INVOCATIONS`, `CERTS_PACKS` and `TUNNELS_STATUS`.
 Snapshot collectors use the polling interval, not the window or initial lookback.
 
+## Grafana rule-generation interval alignment
+
+`GRAFANA_TUNNELS_STATUS_INTERVAL_SECONDS` is a generator-only positive integer in seconds,
+defaulting to `60`. It is not a runtime `CF2OTEL_` environment variable and does not configure
+collector polling. Its value **must match the deployed `collectors.tunnels.status.interval`**
+when generating Grafana alerts. Invalid or nonpositive values stop generation before any rule
+is written.
+
+The tunnel-unhealthy alert requires collector last-success age strictly less than three times
+this interval. For a deployment polling every `5m`, generate its manifests with:
+
+```sh
+GRAFANA_TUNNELS_STATUS_INTERVAL_SECONDS=300 just gen </dev/null
+GRAFANA_TUNNELS_STATUS_INTERVAL_SECONDS=300 just gen-check </dev/null
+```
+
+Regenerate and provision the matching rules whenever the deployment interval changes. The
+checked-in rules use the default `60` seconds; use default generation for repository baseline
+checks, and generate deployment-specific artifacts in a separate staging checkout. An interval
+that is too short can reset the five-minute pending period between successful polls; one that is
+too long can treat stale snapshots as current. Stale or never-successful collectors do not establish
+health, and this setting does not enable the disabled-by-default collector.
+
 ## Delivery semantics
 
 Collected logs and spans have at-least-once delivery when their window is ultimately committed. The
