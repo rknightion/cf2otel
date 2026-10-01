@@ -3,9 +3,10 @@ id: CFO-0045
 title: >-
   DNS analytics metric overflows the OTel SDK cardinality cap; make the cap
   configurable
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-30 21:15'
+updated_date: '2026-10-01 07:32'
 labels:
   - parity
   - dns
@@ -24,16 +25,22 @@ On the live account cloudflare_dns_queries_total has exactly 2000 series and an 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A reproduction test shows the overflow before the fix and none after
-- [ ] #2 The DNS metric carries no attribute combination that can exceed its cap at default config; colo stays available on dns.query log events
-- [ ] #3 A documented config key sets the SDK cardinality limit (default unchanged unless justified), validated at load
-- [ ] #4 Any instrument reaching its cardinality limit is visible in cf2otel self-observability (metric or warning log naming the instrument), not only in the backend
+- [x] #1 A reproduction test shows the overflow before the fix and none after
+- [x] #2 The DNS metric carries no attribute combination that can exceed its cap at default config; colo stays available on dns.query log events
+- [x] #3 A documented config key sets the SDK cardinality limit (default unchanged unless justified), validated at load
+- [x] #4 Any instrument reaching its cardinality limit is visible in cf2otel self-observability (metric or warning log naming the instrument), not only in the backend
 - [ ] #5 After deploy, the live DNS metric has no otel_metric_overflow series over 24h
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
+- [x] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
-- [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
+- [x] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Loop14 exact candidate 6019ce7039e38ef8b5a9eef4926140324103f1e4 passed fresh independent review after the initial default-cardinality guarantee failed review. Registered DNS with real SDK and OTLP export proves the lifetime bound, fallback total preservation and churn behavior; provider limit/default/unlimited and overflow visibility tests pass. Landing d0387dfe728e1893f7a796a2cc80298aaa566528 passed root gate and CI 36826339268. AC5 remains pending deployment plus a full 24-hour window. Dockerfile and packaging unchanged; separate packaging gate not required.
+<!-- SECTION:NOTES:END -->
