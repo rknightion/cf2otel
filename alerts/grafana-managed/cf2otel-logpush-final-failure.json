@@ -8,15 +8,15 @@
     "labels": {
       "grafana.app/folder": "REPLACE_WITH_FOLDER_UID"
     },
-    "name": "cf2otel-tunnel-unhealthy"
+    "name": "cf2otel-logpush-final-failure"
   },
   "spec": {
     "annotations": {
       "__dashboardUid__": "cf2otel",
-      "__panelId__": "2641",
-      "description": "The current (value 1) tunnel status has been non-healthy for five minutes, with collector last success less than three minutes old (three default polling intervals). Retired value-0 states are excluded. Collector is disabled by default; stale/absent data is not proof of health.",
+      "__panelId__": "2650",
+      "description": "Final-attempt upload failures with destination status >=300 increased or were first observed in the last 15 minutes, grouped by scope, zone, job and destination. First-seen positive counters include startup/backfill observations. Requires opt-in logpush.failures; absent data is not proof of successful delivery.",
       "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
-      "summary": "Cloudflare tunnel is not healthy"
+      "summary": "Cloudflare Logpush final upload attempt failed"
     },
     "execErrState": "Error",
     "expressions": {
@@ -27,7 +27,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "(max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name=\"cf2otel\",cloudflare_tunnel_status!=\"healthy\"} == 1) or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name=\"cf2otel\"} == 1))) and on() (time() - max(cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"tunnels.status\"}) < 180)",
+          "expr": "sum by (cloudflare_logpush_scope, cloudflare_logpush_zone, cloudflare_logpush_job_id, cloudflare_logpush_destination_type) ((increase(cloudflare_logpush_failed_uploads_total{service_name=\"cf2otel\",cloudflare_logpush_final_attempt=\"true\",cloudflare_logpush_status_code=~\"[3-9][0-9][0-9]\"}[15m]) > 0) or (cloudflare_logpush_failed_uploads_total{service_name=\"cf2otel\",cloudflare_logpush_final_attempt=\"true\",cloudflare_logpush_status_code=~\"[3-9][0-9][0-9]\"} unless cloudflare_logpush_failed_uploads_total{service_name=\"cf2otel\",cloudflare_logpush_final_attempt=\"true\",cloudflare_logpush_status_code=~\"[3-9][0-9][0-9]\"} offset 15m))",
           "instant": true,
           "range": false,
           "refId": "A"
@@ -86,10 +86,10 @@
     "noDataState": "NoData",
     "panelRef": {
       "dashboardUID": "cf2otel",
-      "panelID": 2641
+      "panelID": 2650
     },
     "paused": false,
-    "title": "Cloudflare tunnel is not healthy",
+    "title": "Cloudflare Logpush final upload attempt failed",
     "trigger": {
       "interval": "1m"
     }

@@ -530,8 +530,18 @@ def http_tab(d: Dashboard) -> dict:
         d.ts(pid, title, "Per-window statistics by zone and host, in seconds; not fleet-wide percentiles. " + note,
             [prom(f'{metric}{{{HTTP}}}', "{{cloudflare_http_zone}} / {{cloudflare_http_host}} {{cloudflare_statistic}}")], unit="s", legend="table")
 
+    d.stat(2061, "Visits", "Zone-only adaptive Groups visits under the configured request-source policy; not filtered by host.",
+        [prom(f'sum(increase(cloudflare_http_visits_total{{{HTTP_ZONE}}}[$__range]))', instant=True)], decimals=0)
+    d.stat(2062, "Threats", "Zone-only complete UTC-hour threat rollups, held back at least ten minutes; not host-filtered or assumed eyeball-only.",
+        [prom(f'sum(increase(cloudflare_http_threats_total{{{HTTP_ZONE}}}[$__range]))', instant=True)], decimals=0)
+    d.stat(2063, "Account transfer month to date", "Account-wide eyeball response bytes from UTC month start through the latest held-back complete period. Not filtered by zone or host; refreshes hourly by default.",
+        [prom(f'max(cloudflare_http_account_transfer_month_to_date_bytes{{{S}}})', instant=True)], unit="bytes")
+    d.stat(2064, "Account projected monthly transfer", "Account-wide MTD eyeball bytes projected using exact UTC month duration and elapsed complete-period seconds. Not filtered by zone or host; an estimate, not a billing forecast.",
+        [prom(f'max(cloudflare_http_account_transfer_projected_month_total_bytes{{{S}}})', instant=True)], unit="bytes")
+
     return tab(TAB_HTTP, [
         row("Summary", [(2001, 4, 4), (2002, 4, 4), (2003, 4, 4), (2004, 4, 4), (2005, 4, 4), (2006, 4, 4)]),
+        row("Visits, threats and account transfer", [(2061, 6, 4), (2062, 6, 4), (2063, 6, 4), (2064, 6, 4)]),
         row("Traffic and cache", [(201, 12, 8), (2011, 12, 8), (2012, 8, 9), (2013, 16, 9)]),
         row("Bytes and country", [(2050, 12, 8), (2058, 12, 8), (2057, 24, 10)]),
         row("Zone breakdowns (not host-filtered)", [(pid, 12, 8) for pid, *_ in breakdowns]),
@@ -1033,6 +1043,40 @@ def platform_tab(d: Dashboard) -> dict:
         [prom(f'sum(rate(cloudflare_logpush_uploads_total{{{S}}}[$__rate_interval]))', "uploads", ref="A"),
          prom(f'sum(rate(cloudflare_logpush_records_total{{{S}}}[$__rate_interval]))', "records", ref="B")],
         unit="reqps", overrides=[by_name("records", custom={"axisPlacement": "right"})])
+    d.ts(2650, "Logpush failed uploads by job and destination", "Opt-in logpush.failures. Failure rates by scope, zone, job, destination, status and final attempt. Final-attempt status >=300 means final loss; earlier attempts may recover.",
+        [prom(f'sum by (cloudflare_logpush_scope, cloudflare_logpush_zone, cloudflare_logpush_job_id, cloudflare_logpush_destination_type, cloudflare_logpush_status_code, cloudflare_logpush_final_attempt) (rate(cloudflare_logpush_failed_uploads_total{{{S}}}[$__rate_interval]))',
+              "{{cloudflare_logpush_scope}} {{cloudflare_logpush_zone}} job {{cloudflare_logpush_job_id}} / {{cloudflare_logpush_destination_type}} / {{cloudflare_logpush_status_code}} final={{cloudflare_logpush_final_attempt}}")], unit="ops", legend="table")
+
+    d.ts(2651, "Durable Objects errors by script", "Invocation errors by bounded script name.",
+        [prom(f'sum by (cloudflare_workers_script_name) (rate(cloudflare_durableobjects_errors_total{{{WRK}}}[$__rate_interval]))', "{{cloudflare_workers_script_name}}")], unit="ops")
+    for pid, title, metric, unit in (
+        (2652, "Durable Objects wall-time statistics", "cloudflare_durableobjects_wall_time_seconds", "s"),
+        (2653, "Durable Objects response-size statistics", "cloudflare_durableobjects_response_size_bytes", "bytes"),
+        (2655, "D1 query batch-time statistics", "cloudflare_d1_query_batch_time_seconds", "s"),
+        (2656, "D1 query batch response-size statistics", "cloudflare_d1_query_batch_response_size_bytes", "bytes"),
+    ):
+        selector = WRK if pid in (2652, 2653) else S
+        d.ts(pid, title, "Latest complete five-minute bucket p50/p75/p99/p999; per script for Durable Objects, account aggregate for D1. Not fleet-wide percentiles; stale observations may persist after polling errors.",
+            [prom(f'{metric}{{{selector}}}', "{{cloudflare_workers_script_name}} {{cloudflare_statistic}}")], unit=unit, legend="table")
+    d.ts(2654, "D1 rows read and written", "Account aggregate row rates; no database or query identifiers.",
+        [prom(f'sum(rate(cloudflare_d1_rows_read_total{{{S}}}[$__rate_interval]))', "read", ref="A"),
+         prom(f'sum(rate(cloudflare_d1_rows_written_total{{{S}}}[$__rate_interval]))', "written", ref="B")], unit="ops")
+    d.ts(2657, "Queues maximum per-queue average lag", "ReadMessage only: maximum of per-queue average lag in the latest observed complete bucket, not an account-wide average. Missing/N/A is omitted; stale observations may persist.",
+        [prom(f'max(cloudflare_queues_message_max_queue_avg_lag_seconds{{{S}}})', "lag")], unit="s", interval=None)
+    d.ts(2658, "Queues maximum per-queue average retries", "ReadMessage only: maximum of per-queue average retries. Missing/negative N/A omitted, real zero retained; stale observations may persist.",
+        [prom(f'max(cloudflare_queues_message_max_queue_avg_retries{{{S}}})', "retries")], interval=None)
+    d.ts(2659, "Queues billable operations by action", "Billable operation rates split by action, consumer type and outcome; no queue identifiers.",
+        [prom(f'sum by (cloudflare_queues_action_type, cloudflare_queues_consumer_type, cloudflare_queues_outcome) (rate(cloudflare_queues_message_billable_operations_by_action_total{{{S}}}[$__rate_interval]))',
+              "{{cloudflare_queues_action_type}} / {{cloudflare_queues_consumer_type}} / {{cloudflare_queues_outcome}}")], unit="ops", legend="table")
+    hc = S + ',cloudflare_health_check_zone=~"$zone"'
+    d.ts(2660, "Health-check events by status and reason", "Pro-only opt-in healthchecks.events; event counts are separate from origin timing observations.",
+        [prom(f'sum by (cloudflare_health_check_zone, cloudflare_health_check_status, cloudflare_health_check_failure_reason) (rate(cloudflare_health_check_events_total{{{hc}}}[$__rate_interval]))',
+              "{{cloudflare_health_check_zone}} {{cloudflare_health_check_status}} / {{cloudflare_health_check_failure_reason}}")], unit="ops", legend="table")
+    for pid, title, metric in ((2661, "Health-check RTT", "rtt"), (2662, "Health-check TTFB", "ttfb"),
+                              (2663, "Health-check TCP connection", "tcp_connection"), (2664, "Health-check TLS handshake", "tls_handshake")):
+        d.ts(pid, title, "Latest complete origin bucket average in seconds, not event-weighted or grouped by status/reason. Pro-only opt-in; stale observations may persist after polling errors.",
+            [prom(f'cloudflare_health_check_{metric}_seconds{{{hc}}}', "{{cloudflare_health_check_zone}} / {{cloudflare_health_check_origin}}")], unit="s", legend="table")
+
     d.ts(2621, "Email Routing and Sending", "Email Routing and Email Sending event rates summed across account-owned zones.",
         [prom(f'sum(rate(cloudflare_email_routing_events_total{{{S}}}[$__rate_interval]))', "routing", ref="A"),
          prom(f'sum(rate(cloudflare_email_sending_events_total{{{S}}}[$__rate_interval]))', "sending", ref="B")], unit="reqps")
@@ -1076,7 +1120,11 @@ def platform_tab(d: Dashboard) -> dict:
         row("Tunnels", [(2641, 24, 8), (2642, 12, 8), (2643, 12, 8), (2644, 24, 8)]),
         row("D1 and KV", [(601, 9, 7), (603, 9, 7), (604, 6, 7), (605, 12, 7), (606, 6, 7), (607, 6, 7)]),
         row("R2", [(705, 12, 8), (701, 12, 8), (706, 8, 8), (707, 8, 8), (703, 8, 8), (708, 24, 5)]),
-        row("Durable Objects", [(801, 10, 7), (804, 10, 7), (803, 4, 7)]),
+        row("Durable Objects", [(801, 10, 7), (804, 10, 7), (803, 4, 7), (2651, 8, 7), (2652, 8, 7), (2653, 8, 7)]),
+        row("D1 rows and query batches", [(2654, 8, 7), (2655, 8, 7), (2656, 8, 7)]),
+        row("Queue lag, retries and actions", [(2657, 8, 7), (2658, 8, 7), (2659, 8, 7)]),
+        row("Logpush failures", [(2650, 24, 8)]),
+        row("Health checks (Pro-only opt-in)", [(2660, 24, 8), (2661, 12, 7), (2662, 12, 7), (2663, 12, 7), (2664, 12, 7)]),
         row("Queues", [(905, 12, 7), (901, 12, 7), (902, 12, 7), (903, 12, 7)]),
         row("Turnstile, Logpush and Email", [(502, 8, 7), (503, 8, 7), (2621, 8, 7)]),
     ])

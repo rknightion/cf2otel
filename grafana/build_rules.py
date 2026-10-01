@@ -13,12 +13,18 @@ OUT = ROOT / "alerts" / "grafana-managed"
 FOLDER = "REPLACE_WITH_FOLDER_UID"
 PROM = "grafanacloud-prom"
 
+# A newly observed positive counter has no zero baseline: increase() alone misses
+# its first failure. Include first-seen series until a 15-minute-old sample exists;
+# after that, only positive increases qualify. This also covers process restarts.
+LOGPUSH_FINAL = 'cloudflare_logpush_failed_uploads_total{service_name="cf2otel",cloudflare_logpush_final_attempt="true",cloudflare_logpush_status_code=~"[3-9][0-9][0-9]"}'
+LOGPUSH_FINAL_FAILURE = f'(increase({LOGPUSH_FINAL}[15m]) > 0) or ({LOGPUSH_FINAL} unless {LOGPUSH_FINAL} offset 15m)'
+
 # Certificate alerts are intentionally withheld: cumulative gauge attribute-series
 # retain old statuses/expiry values with fresh export timestamps. No PromQL selector
 # can establish current pack state from that output; snapshot retirement is required.
 RULES = [
-    ("cf2otel-tunnel-unhealthy", "Cloudflare tunnel is not healthy", "The current (value 1) tunnel status has been non-healthy for five minutes. Retired value-0 states are excluded. Collector is disabled by default; absent data is not proof of health.", 2641,
-     'max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel",cloudflare_tunnel_status!="healthy"} == 1) or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel"} == 1))', 0, "NoData"),
+    ("cf2otel-tunnel-unhealthy", "Cloudflare tunnel is not healthy", "The current (value 1) tunnel status has been non-healthy for five minutes, with collector last success less than three minutes old (three default polling intervals). Retired value-0 states are excluded. Collector is disabled by default; stale/absent data is not proof of health.", 2641,
+     '(max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel",cloudflare_tunnel_status!="healthy"} == 1) or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel"} == 1))) and on() (time() - max(cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="tunnels.status"}) < 180)', 0, "NoData"),
     ("cf2otel-collector-stale", "cf2otel collector is stale", "Collector last-success timestamp is older than 15 minutes.", 401,
      'time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel"})', 900, "Alerting"),
     ("cf2otel-export-failure", "cf2otel export is failing", "OTLP export failures occurred in the last 15 minutes.", 403,
@@ -29,6 +35,8 @@ RULES = [
      'sum(increase(cf2otel_window_commit_failures_total{service_name="cf2otel",outcome="dropped"}[15m])) or on() (0 * sum(increase(cf2otel_scrape_success_total{service_name="cf2otel"}[15m])))', 0, "Alerting"),
     ("cf2otel-access-checkpoint-age", "Access logins checkpoint age exceeds 12 hours", "Access logins checkpoint age is over 12 hours, approaching the Access REST log's roughly one-day reach; further delay risks permanent data loss.", 404,
      'max(cf2otel_checkpoint_age_seconds{service_name="cf2otel",cf2otel_collector="access.logins"})', 43200, "Alerting"),
+    ("cf2otel-logpush-final-failure", "Cloudflare Logpush final upload attempt failed", "Final-attempt upload failures with destination status >=300 increased or were first observed in the last 15 minutes, grouped by scope, zone, job and destination. First-seen positive counters include startup/backfill observations. Requires opt-in logpush.failures; absent data is not proof of successful delivery.", 2650,
+     f'sum by (cloudflare_logpush_scope, cloudflare_logpush_zone, cloudflare_logpush_job_id, cloudflare_logpush_destination_type) ({LOGPUSH_FINAL_FAILURE})', 0, "NoData"),
 ]
 
 
