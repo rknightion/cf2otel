@@ -23,6 +23,14 @@ type WindowCollector interface {
 	CollectWindow(context.Context, time.Time, time.Time, telemetry.Emitter) (time.Time, error)
 	Lag() time.Duration
 }
+
+// WindowLagAt optionally computes a window collector's lag from the same
+// clock instant the scheduler uses for its upper bound. Collectors with a
+// time-dependent lag can implement it without changing WindowCollector.
+type WindowLagAt interface {
+	LagAt(time.Time) time.Duration
+}
+
 type Entry struct {
 	Collector                            Collector
 	Interval, InitialLookback, MaxWindow time.Duration

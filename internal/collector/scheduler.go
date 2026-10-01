@@ -113,7 +113,14 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 	}
 	// GraphQL filters serialize RFC3339 seconds. Persisting a subsecond cursor
 	// would skip the final fractional second of every successful window.
-	to := s.Now().UTC().Add(-c.Lag()).Truncate(time.Second)
+	now := s.Now().UTC()
+	var lag time.Duration
+	if clocked, ok := c.(WindowLagAt); ok {
+		lag = clocked.LagAt(now)
+	} else {
+		lag = c.Lag()
+	}
+	to := now.Add(-lag).Truncate(time.Second)
 	from, ok := s.Checkpoints.Get(c.Name())
 	if ok {
 		from = from.Truncate(time.Second)

@@ -473,6 +473,71 @@ func TestCoverageTickWithoutAClosedWindowIsANoOp(t *testing.T) {
 	}
 }
 
+// Exercise the registered collector with the scheduler clock read just before
+// the collector clock read, as happens with time.Now in the running process.
+func TestCoverageRegisteredSchedulerUsesOneClockForWindowEnd(t *testing.T) {
+	b := coverageBucket
+	for _, tc := range []struct {
+		name string
+		now  time.Time
+	}{
+		{"fractional tick", b.Add(15*time.Minute + 30*time.Second)},
+		{"exact boundary", b.Add(15 * time.Minute)},
+		{"crossing boundary", b.Add(15*time.Minute - time.Nanosecond)},
+	} {
+		for _, cold := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/cold=%t", tc.name, cold), func(t *testing.T) {
+				cfg := coverageConfig("example-gateway")
+				cfg.Collectors["aigateway.logs"] = config.CollectorConfig{}
+				cfg.Collectors["aigateway.coverage"] = config.CollectorConfig{Enabled: true, InitialLookback: 30 * time.Minute}
+				api := &coverageAPI{settings: coverageSettings(), groups: []map[string]any{groupsRow("example-gateway", 3)}}
+				registry := collector.NewRegistry()
+				Register(collector.Deps{Config: cfg, API: api, Registry: registry})
+				entry := registry.Entries()[0]
+				cov := entry.Collector.(*coverage)
+				cov.now = func() time.Time { return tc.now.Add(time.Nanosecond) }
+				store, err := collector.NewFileStore(filepath.Join(t.TempDir(), "checkpoints.json"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !cold {
+					if err := store.Set(cov.Name(), b.Add(-5*time.Minute)); err != nil {
+						t.Fatal(err)
+					}
+				}
+				sink := &telemetry.Buffer{}
+				s := collector.NewScheduler(registry, sink, store)
+				s.Now = func() time.Time { return tc.now }
+				// Three runs drain a cold 30-minute lookback with the scheduler's
+				// four-window bound and leading-window deferral, including
+				// the previously failing tail.
+				for run := 0; run < 3; run++ {
+					if err := s.RunOnce(context.Background(), entry); err != nil {
+						t.Fatalf("registered startup run %d: %v", run, err)
+					}
+				}
+				wantEnd := tc.now.Add(-10 * time.Minute).Truncate(5 * time.Minute)
+				if mark, _ := store.Get(cov.Name()); !mark.Equal(wantEnd) {
+					t.Fatalf("checkpoint = %s, want held aligned end %s", mark, wantEnd)
+				}
+				if len(api.queries) == 0 || len(coverageValues(sink)) != len(api.queries) {
+					t.Fatalf("queries=%d coverage=%v, want each real window exported", len(api.queries), coverageValues(sink))
+				}
+				for _, q := range api.queries {
+					if !q.From.Equal(q.From.Truncate(5*time.Minute)) || q.To.Sub(q.From) != 5*time.Minute || q.To.After(tc.now.Add(-10*time.Minute)) {
+						t.Fatalf("unsafe query window %s..%s for scheduler clock %s", q.From, q.To, tc.now)
+					}
+				}
+				for _, value := range coverageValues(sink) {
+					if value != 3 {
+						t.Fatalf("coverage gap=%v, want Groups 3 minus REST 0", value)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestCoverageRefusesAWindowInsideTheHoldback(t *testing.T) {
 	b := coverageBucket
 	api := &coverageAPI{
