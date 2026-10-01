@@ -1,10 +1,11 @@
 ---
 id: CFO-0057
 title: Investigate zero values from RUM p75 and KV storage gauges
-status: Parked
-assignee: []
+status: In Progress
+assignee:
+  - '@loop15-root'
 created_date: '2026-09-30 21:44'
-updated_date: '2026-10-01 07:34'
+updated_date: '2026-10-01 18:47'
 labels:
   - rum
   - platform
@@ -33,6 +34,12 @@ The latest RUM p75 gauge value is 0 for most site/device pairs while max_over_ti
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Loop15 implementation follows the frozen lane packet; assertion-based red witness, local just check and CodeRabbit, independent REV where required, root linear landing and sustained live evidence where applicable.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 

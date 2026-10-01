@@ -3,10 +3,11 @@ id: CFO-0068
 title: >-
   HTTP zone metrics fail every cycle with duplicate host groups in the latency
   query
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@loop15-root'
 created_date: '2026-10-01 17:50'
-updated_date: '2026-10-01 18:41'
+updated_date: '2026-10-01 18:47'
 labels:
   - http
   - telemetry
@@ -36,6 +37,12 @@ Since the 0.10.0 deploy on 2026-10-01 the httpreq.metrics collector has succeede
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Loop15 implementation follows the frozen lane packet; assertion-based red witness, local just check and CodeRabbit, independent REV where required, root linear landing and sustained live evidence where applicable.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 

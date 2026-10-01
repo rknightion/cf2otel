@@ -1,9 +1,11 @@
 ---
 id: CFO-0067
 title: Validate newly reachable history before public pushes
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@loop15-root'
 created_date: '2026-10-01 11:17'
+updated_date: '2026-10-01 18:47'
 labels:
   - security
   - tooling
@@ -33,3 +35,9 @@ Loop14 independent drift review proved a net-tree added-line scan can miss prohi
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Loop15 implementation follows the frozen lane packet; assertion-based red witness, local just check and CodeRabbit, independent REV where required, root linear landing and sustained live evidence where applicable.
+<!-- SECTION:PLAN:END -->
