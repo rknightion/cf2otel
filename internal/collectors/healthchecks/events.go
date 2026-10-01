@@ -1,7 +1,9 @@
 package healthchecks
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -9,6 +11,7 @@ import (
 	"net"
 	"net/netip"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -127,12 +130,12 @@ func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out tele
 				if reason == "" {
 					reason = "none"
 				}
-				n, ok := number(row["count"])
-				if !ok || math.Trunc(n) != n {
+				n, ok := unsignedCount(row["count"])
+				if !ok {
 					return from, errors.New("health-check group has an invalid event count")
 				}
 				key := eventKey{zone.Name, bounded(status, 128), reason}
-				counts[key] += n
+				counts[key] += float64(n)
 				if math.IsInf(counts[key], 0) {
 					return from, errors.New("health-check event count overflow")
 				}
@@ -232,10 +235,26 @@ func validateSettings(s cfapi.DatasetSettings) error {
 	return nil
 }
 func (c *events) query(ctx context.Context, zone string, fields []string, at time.Time, limit int) ([]map[string]any, error) {
-	var rows []map[string]any
-	err := c.api.Query(ctx, cfapi.GraphQLRequest{Scope: cfapi.ZoneScope, ScopeID: zone, Dataset: dataset, WantedFields: append([]string{}, fields...), From: at, To: at.Add(bucketSize), Limit: limit}, &rows)
+	batch, ok := c.api.(cfapi.GraphQLBatchQuerier)
+	if !ok {
+		return nil, errors.New("health-check client does not expose raw GraphQL batches")
+	}
+	const alias = "healthcheck"
+	result, err := batch.QueryBatch(ctx, []cfapi.GraphQLBatchSelection{{Alias: alias, Request: cfapi.GraphQLRequest{Scope: cfapi.ZoneScope, ScopeID: zone, Dataset: dataset, WantedFields: append([]string{}, fields...), From: at, To: at.Add(bucketSize), Limit: limit}}})
 	if err != nil {
 		return nil, fmt.Errorf("query health-check complete bucket: %w", err)
+	}
+	// Query's ordinary decoding normalizes null to empty. Require the raw
+	// selection to be an array before decoding, and retain numeric lexemes.
+	raw := bytes.TrimSpace(result[alias])
+	if len(raw) == 0 || raw[0] != '[' {
+		return nil, errors.New("health-check selection is missing a row array")
+	}
+	var rows []map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&rows); err != nil {
+		return nil, fmt.Errorf("decode health-check row array: %w", err)
 	}
 	if len(rows) >= limit {
 		return nil, errors.New("health-check complete bucket saturated; cannot combine partial averages")
@@ -257,9 +276,25 @@ func rowDimensions(row map[string]any, at time.Time) (map[string]any, error) {
 	}
 	return dims, nil
 }
+
+// Counts are source uint64 values: validate their integer lexeme and range
+// before converting to the telemetry float64 representation. Decimal/exponent
+// spellings are not unsigned integer lexemes, even if they round to an integer.
+func unsignedCount(value any) (uint64, bool) {
+	n, ok := value.(json.Number)
+	if !ok {
+		return 0, false
+	}
+	parsed, err := strconv.ParseUint(n.String(), 10, 64)
+	return parsed, err == nil
+}
 func number(value any) (float64, bool) {
-	n, ok := value.(float64)
-	return n, ok && n >= 0 && !math.IsNaN(n) && !math.IsInf(n, 0)
+	n, ok := value.(json.Number)
+	if !ok {
+		return 0, false
+	}
+	parsed, err := n.Float64()
+	return parsed, err == nil && parsed >= 0 && !math.IsNaN(parsed) && !math.IsInf(parsed, 0)
 }
 func bounded(s string, limit int) string {
 	s = strings.TrimSpace(s)

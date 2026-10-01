@@ -23,6 +23,7 @@ type fixture struct {
 	budget, page, duration int
 	countRows, timingRows  []map[string]any
 	failTiming             bool
+	nullCount, nullTiming  bool
 	queries                []string
 }
 
@@ -68,6 +69,14 @@ func (f *fixture) server(t *testing.T) *httptest.Server {
 				node["healthCheckEventsAdaptiveGroups"] = rowsForQuery(f.timingRows, q)
 			} else {
 				node["healthCheckEventsAdaptiveGroups"] = rowsForQuery(f.countRows, q)
+			}
+			if strings.Contains(q, "avg{") && f.nullTiming || !strings.Contains(q, "avg{") && f.nullCount {
+				node["healthCheckEventsAdaptiveGroups"] = nil
+			}
+			// A batch alias names the same source dataset, not a different fixture.
+			if strings.Contains(q, "healthcheck:"+dataset) {
+				node["healthcheck"] = node["healthCheckEventsAdaptiveGroups"]
+				delete(node, "healthCheckEventsAdaptiveGroups")
 			}
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"viewer": map[string]any{"zones": []any{node}}}})
@@ -335,6 +344,104 @@ func TestFailuresBeforeAnyEmission(t *testing.T) {
 		})
 	}
 }
+func TestRawDatasetAndUnsignedCountFailures(t *testing.T) {
+	for _, name := range []string{"null count", "null timing", "both null", "overflow", "uint overflow", "rounded fraction", "missing", "null value", "negative", "fraction", "string"} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture()
+			f.countRows = []map[string]any{eventRow(4, "healthy", "")}
+			f.timingRows = []map[string]any{timingRow(start, "origin.example.com", "Primary", map[string]any{"rttMs": 100})}
+			switch name {
+			case "null count":
+				f.nullCount = true
+			case "null timing":
+				f.nullTiming = true
+			case "both null":
+				f.nullCount, f.nullTiming = true, true
+			case "overflow":
+				f.countRows[0]["count"] = json.Number("1e20")
+			case "uint overflow":
+				f.countRows[0]["count"] = json.Number("18446744073709551616")
+			case "rounded fraction":
+				f.countRows[0]["count"] = json.Number("1.00000000000000001")
+			case "missing":
+				delete(f.countRows[0], "count")
+			case "null value":
+				f.countRows[0]["count"] = nil
+			case "negative":
+				f.countRows[0]["count"] = -1
+			case "fraction":
+				f.countRows[0]["count"] = json.Number("1.5")
+			case "string":
+				f.countRows[0]["count"] = "4"
+			}
+			out, mark, err := collectFixture(t, f, nil, start.Add(5*time.Minute))
+			if err == nil || !mark.Equal(start) || len(out.Metrics) != 0 {
+				t.Fatalf("invalid source advanced/emitted: mark=%s err=%v metrics=%+v", mark, err, out.Metrics)
+			}
+		})
+	}
+}
+
+func TestSchedulerRejectsRawInvalidSource(t *testing.T) {
+	for _, name := range []string{"null count", "null timing", "overflow", "rounded fraction"} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture()
+			f.countRows = []map[string]any{eventRow(4, "healthy", "")}
+			f.timingRows = []map[string]any{timingRow(start, "origin.example.com", "Primary", map[string]any{"rttMs": 100})}
+			switch name {
+			case "null count":
+				f.nullCount = true
+			case "null timing":
+				f.nullTiming = true
+			case "overflow":
+				f.countRows[0]["count"] = json.Number("1e20")
+			case "rounded fraction":
+				f.countRows[0]["count"] = json.Number("1.00000000000000001")
+			}
+			s := f.server(t)
+			defer s.Close()
+			cfg := config.Default()
+			cfg.Cloudflare.APIBase, cfg.Cloudflare.AccountID = s.URL, "account-fixture"
+			entry := cfg.Collectors["healthchecks.events"]
+			entry.Enabled = true
+			cfg.Collectors["healthchecks.events"] = entry
+			reg := collector.NewRegistry()
+			Register(collector.Deps{Config: &cfg, API: cfapi.New(cfg.Cloudflare), Registry: reg})
+			c := reg.Entries()[0].Collector.(collector.WindowCollector)
+			out := &telemetry.Buffer{}
+			scheduler := collector.NewScheduler(reg, out, nil)
+			if err := scheduler.CollectRange(context.Background(), c, start, start.Add(5*time.Minute)); err == nil || len(out.Metrics) != 0 {
+				t.Fatalf("scheduler exported invalid source: err=%v metrics=%+v", err, out.Metrics)
+			}
+		})
+	}
+}
+
+func TestRawDatasetEmptyAndUnsignedControls(t *testing.T) {
+	for _, value := range []string{"empty", "0", "7", "18446744073709551615"} {
+		t.Run(value, func(t *testing.T) {
+			f := newFixture()
+			if value != "empty" {
+				f.countRows = []map[string]any{eventRow(json.Number(value), "healthy", "")}
+			}
+			out, mark, err := collectFixture(t, f, nil, start.Add(5*time.Minute))
+			if err != nil || !mark.Equal(start.Add(5*time.Minute)) {
+				t.Fatalf("valid source failed: mark=%s err=%v", mark, err)
+			}
+			if value == "empty" {
+				if len(out.Metrics) != 0 {
+					t.Fatalf("empty fabricated output: %+v", out.Metrics)
+				}
+			} else {
+				want, _ := json.Number(value).Float64()
+				if len(out.Metrics) != 1 || out.Metrics[0].Value != want {
+					t.Fatalf("valid count lost: %+v", out.Metrics)
+				}
+			}
+		})
+	}
+}
+
 func TestMetricSeriesCapAndZoneSelection(t *testing.T) {
 	f := newFixture()
 	f.countRows = []map[string]any{eventRow(4, "healthy", ""), eventRow(1, "unhealthy", "timeout")}
