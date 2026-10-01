@@ -18,7 +18,7 @@ import (
 
 // Exercises registration and the real REST discovery/GraphQL settings/query path.
 func TestLogpushFailuresRegisteredHTTP(t *testing.T) {
-	for _, scenario := range []string{"both scopes", "zone query failure", "invalid success", "missing final", "cap", "field budget", "retention", "saturation", "invalid final", "missing success", "fractional success", "string final", "negative success", "entitlement", "irreducible", "empty", "destination bound"} {
+	for _, scenario := range []string{"both scopes", "zone query failure", "invalid success", "missing final", "cap", "field budget", "retention", "saturation", "invalid final", "missing success", "fractional success", "string final", "negative success", "entitlement", "irreducible", "empty", "destination bound", "zone null dataset", "zone missing dataset", "zone nonarray dataset"} {
 		t.Run(scenario, func(t *testing.T) {
 			from := time.Now().UTC().Truncate(5 * time.Minute).Add(-20 * time.Minute)
 			queries := 0
@@ -126,7 +126,22 @@ func TestLogpushFailuresRegisteredHTTP(t *testing.T) {
 							raw.(map[string]any)["dimensions"].(map[string]any)["destinationType"] = strings.Repeat("x", 200)
 						}
 					}
-					node = map[string]any{logpushTestDataset: rows}
+					// Reply under the actual alias when the collector uses a batch selection.
+					responseKey := logpushTestDataset
+					if before, _, found := strings.Cut(q, ":"+logpushTestDataset+"("); found {
+						responseKey = before[strings.LastIndex(before, "{")+1:]
+					}
+					node = map[string]any{responseKey: rows}
+					if scope == "zones" {
+						switch scenario {
+						case "zone null dataset":
+							node = map[string]any{responseKey: nil}
+						case "zone missing dataset":
+							node = map[string]any{}
+						case "zone nonarray dataset":
+							node = map[string]any{responseKey: map[string]any{}}
+						}
+					}
 				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"viewer": map[string]any{scope: []any{node}}}})
 			}))

@@ -74,6 +74,10 @@ func (c *failureMetrics) CollectWindow(ctx context.Context, from, to time.Time, 
 	if !ok {
 		return from, errors.New("logpush failures requires dataset settings")
 	}
+	batch, ok := c.api.(cfapi.GraphQLBatchQuerier)
+	if !ok {
+		return from, errors.New("logpush failures requires raw batch queries")
+	}
 	zones, err := c.api.Zones(ctx)
 	if err != nil {
 		return from, fmt.Errorf("discover Logpush zones: %w", err)
@@ -127,11 +131,23 @@ func (c *failureMetrics) CollectWindow(ctx context.Context, from, to time.Time, 
 			}
 			rows, err := collector.Bisect(leafStart, leafEnd, logpushBucket, logpushBucket, func(a, b time.Time) ([]failureRow, bool, error) {
 				request := cfapi.GraphQLRequest{Scope: scope.scope, ScopeID: scope.id, Dataset: logpushDataset, WantedFields: append([]string(nil), failureFields...), From: a, To: b, Limit: limit}
+				const alias = "failures"
+				result, queryErr := batch.QueryBatch(ctx, []cfapi.GraphQLBatchSelection{{Alias: alias, Request: request}})
+				if queryErr != nil {
+					return nil, logpushIsSaturation(queryErr), queryErr
+				}
+				// Ordinary Query normalizes a null dataset into an empty array.
+				// Keep the raw boundary strict so a failed scope cannot advance a window.
+				raw := strings.TrimSpace(string(result[alias]))
+				if !strings.HasPrefix(raw, "[") {
+					return nil, false, errors.New("logpush failure response missing row array")
+				}
 				var rows []failureRow
-				queryErr := c.api.Query(ctx, request, &rows)
-				saturated := logpushIsSaturation(queryErr) || (queryErr == nil && len(rows) >= limit)
-				if saturated || queryErr != nil {
-					return nil, saturated, queryErr
+				if err := json.Unmarshal([]byte(raw), &rows); err != nil {
+					return nil, false, err
+				}
+				if len(rows) >= limit {
+					return nil, true, nil
 				}
 				for _, row := range rows {
 					bucket, e := time.Parse(time.RFC3339Nano, row.Dimensions.Bucket)
