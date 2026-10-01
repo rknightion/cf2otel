@@ -1,0 +1,97 @@
+{
+  "apiVersion": "rules.alerting.grafana.app/v0alpha1",
+  "kind": "AlertRule",
+  "metadata": {
+    "annotations": {
+      "grafana.app/folder": "REPLACE_WITH_FOLDER_UID"
+    },
+    "labels": {
+      "grafana.app/folder": "REPLACE_WITH_FOLDER_UID"
+    },
+    "name": "cf2otel-tunnel-unhealthy"
+  },
+  "spec": {
+    "annotations": {
+      "__dashboardUid__": "cf2otel",
+      "__panelId__": "2641",
+      "description": "The current (value 1) tunnel status has been non-healthy for five minutes. Retired value-0 states are excluded. Collector is disabled by default; absent data is not proof of health.",
+      "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
+      "summary": "Cloudflare tunnel is not healthy"
+    },
+    "execErrState": "Error",
+    "expressions": {
+      "A": {
+        "datasourceUID": "grafanacloud-prom",
+        "model": {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name=\"cf2otel\",cloudflare_tunnel_status!=\"healthy\"} == 1) or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name=\"cf2otel\"} == 1))",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        },
+        "queryType": "instant",
+        "relativeTimeRange": {
+          "from": "15m",
+          "to": "0s"
+        }
+      },
+      "B": {
+        "datasourceUID": "__expr__",
+        "model": {
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "reducer": "last",
+          "refId": "B",
+          "type": "reduce"
+        }
+      },
+      "C": {
+        "datasourceUID": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  0
+                ],
+                "type": "gt"
+              }
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "B",
+          "refId": "C",
+          "type": "threshold"
+        },
+        "source": true
+      }
+    },
+    "for": "5m",
+    "labels": {
+      "category": "collector",
+      "pipeline": "cf2otel",
+      "service": "cf2otel",
+      "severity": "warning",
+      "source": "cf2otel"
+    },
+    "noDataState": "NoData",
+    "panelRef": {
+      "dashboardUID": "cf2otel",
+      "panelID": 2641
+    },
+    "paused": false,
+    "title": "Cloudflare tunnel is not healthy",
+    "trigger": {
+      "interval": "1m"
+    }
+  }
+}

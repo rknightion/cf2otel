@@ -13,7 +13,12 @@ OUT = ROOT / "alerts" / "grafana-managed"
 FOLDER = "REPLACE_WITH_FOLDER_UID"
 PROM = "grafanacloud-prom"
 
+# Certificate alerts are intentionally withheld: cumulative gauge attribute-series
+# retain old statuses/expiry values with fresh export timestamps. No PromQL selector
+# can establish current pack state from that output; snapshot retirement is required.
 RULES = [
+    ("cf2otel-tunnel-unhealthy", "Cloudflare tunnel is not healthy", "The current (value 1) tunnel status has been non-healthy for five minutes. Retired value-0 states are excluded. Collector is disabled by default; absent data is not proof of health.", 2641,
+     'max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel",cloudflare_tunnel_status!="healthy"} == 1) or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel"} == 1))', 0, "NoData"),
     ("cf2otel-collector-stale", "cf2otel collector is stale", "Collector last-success timestamp is older than 15 minutes.", 401,
      'time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel"})', 900, "Alerting"),
     ("cf2otel-export-failure", "cf2otel export is failing", "OTLP export failures occurred in the last 15 minutes.", 403,
