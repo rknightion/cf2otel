@@ -32,6 +32,7 @@ func NewLogs(cfg *config.Config, api cfapi.Client) *logs { return &logs{cfg: cfg
 func (*logs) Name() string                               { return "aigateway.logs" }
 func (*logs) DefaultInterval() time.Duration             { return 5 * time.Minute }
 func (*logs) Lag() time.Duration                         { return time.Minute }
+func (*logs) AdaptiveCommitWindow() bool                 { return true }
 
 type logRow struct {
 	ID          string    `json:"id"`

@@ -13,9 +13,9 @@ const maxExportWindow = 15 * time.Minute
 func Register(deps collector.Deps) {
 	if c := deps.Config.Collector("aigateway.logs"); c.Enabled {
 		window := c.MaxWindow
-		// A three-hour catch-up can exceed the 90-second OTLP commit deadline
-		// because each captured body adds a separate bounded log export. Keep
-		// the configured lookback, but commit it in smaller windows.
+		// Start with the existing maximum and preserve the configured lookback.
+		// Logs opt into scheduler subdivision if captured content exhausts the
+		// aggregate commit budget; successful commits keep the learned bound.
 		if window > maxExportWindow {
 			window = maxExportWindow
 		}

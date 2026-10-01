@@ -31,6 +31,16 @@ type WindowLagAt interface {
 	LagAt(time.Time) time.Duration
 }
 
+// AdaptiveWindowCollector opts into whole-second source-window subdivision
+// after an aggregate commit deadline. It must filter [from,to) and return to
+// only after collecting the entire window, so equal-timestamp groups cannot be
+// split and a successful commit never persists a fractional high-water mark.
+// Reduced limits are process-local and retained until the scheduler restarts;
+// successful sparse windows alone are not evidence that a larger one is safe.
+type AdaptiveWindowCollector interface {
+	AdaptiveCommitWindow() bool
+}
+
 type Entry struct {
 	Collector                            Collector
 	Interval, InitialLookback, MaxWindow time.Duration
