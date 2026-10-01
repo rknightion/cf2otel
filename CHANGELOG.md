@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.12.0](https://github.com/rknightion/cf2otel/compare/v0.11.0...v0.12.0) (2026-10-01)
+
+
+### Features
+
+* **firewall:** bound opt-in rule metric dimensions ([8e5dcee](https://github.com/rknightion/cf2otel/commit/8e5dcee8d105e297ef68d29203c987985f1d5773))
+* **grafana:** add collector depth panels and Logpush failure alert ([24fb360](https://github.com/rknightion/cf2otel/commit/24fb36072e649e24ba3e6794bd7e9ddfde8b9287))
+* **pushscan:** scan newly reachable commits before publication ([7ce012a](https://github.com/rknightion/cf2otel/commit/7ce012a194f6119cde9a09ef10c130c35642fe9e))
+* **selfobs:** classify collector scrape errors ([59ce634](https://github.com/rknightion/cf2otel/commit/59ce6347ff6ce489f8081cd6c5350288f70e94ea))
+
+
+### Bug Fixes
+
+* **certs/telemetry:** publish paired snapshots atomically ([75c255d](https://github.com/rknightion/cf2otel/commit/75c255d6ab7e2b7e3a43c580c40a8adaae9f9a2b))
+* **certs:** replace certificate gauges with expiring snapshots ([c1fc373](https://github.com/rknightion/cf2otel/commit/c1fc3734a5f2194fda24456d473da2d75d85a115))
+* **grafana:** align tunnel freshness with deployment polling ([abf936c](https://github.com/rknightion/cf2otel/commit/abf936cfed87a05b6be499bdf11ab5668be250c9))
+* **httpreq:** select dominant latency host variant ([a126b8a](https://github.com/rknightion/cf2otel/commit/a126b8a305e60296a797af5113fadf569cb4457e))
+* **pushscan:** reject embedded IPv6 and contained literal lists ([80665a9](https://github.com/rknightion/cf2otel/commit/80665a97e5df736a0f6a1e58897b71209ee775f8))
+* **relnotes:** reject escaped-label link metadata ([df7da66](https://github.com/rknightion/cf2otel/commit/df7da6625818f2c5610405e0048c57961a942f04))
+* **relnotes:** reject multiline-label link metadata ([4ab6503](https://github.com/rknightion/cf2otel/commit/4ab65036fe869d134aef5d182bb9d342796794bc))
+* **relnotes:** require rendered release-note input ([dedb802](https://github.com/rknightion/cf2otel/commit/dedb802d6448b25f0dbaa9d7ce87326b3b7de395))
+* **rum:** omit missing web-vitals quantile points ([935007f](https://github.com/rknightion/cf2otel/commit/935007f28c2a64318c28b4e85b5a875d12f4be08))
+* **telemetry:** collect gauge snapshots coherently ([202ecf6](https://github.com/rknightion/cf2otel/commit/202ecf6892c6781a2e95e2f3d7ed244a14b29acc))
+
 ## [0.11.0](https://github.com/rknightion/cf2otel/compare/v0.10.1...v0.11.0) (2026-10-01)
 
 
