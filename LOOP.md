@@ -102,6 +102,28 @@ None recorded.
 - `GET /accounts/{a}/cfd_tunnel` without `Cloudflare Tunnel Read` returns `200` with an empty list, not a
   403; `Zero Trust Read` does not cover it. Treat an empty tunnel list as unproven until the token's
   permissions are confirmed (loop 14 preparation; both loop tokens now carry it).
+- A series that exists, or a checkpoint that advanced across two reads, is not live proof. Loop 14
+  passed `httpreq.metrics` on the series its single first cycle created and `aigateway.logs` on a
+  two-read advance; both collectors were failing within hours. A collector passes live only on
+  sustained evidence: a success on every scheduled cycle and no scrape error for 60 continuous
+  minutes, read from `cf2otel_scrape_success_total` and `cf2otel_scrape_errors_total` by collector
+  (loop 15 preparation).
+- Before closeout, read `time() - cf2otel_scrape_last_success_timestamp_seconds` for every collector.
+  A value near the current Unix time means the collector has never succeeded on the running version
+  (loop 15 preparation).
+- release-please regenerates its branch with a non-fast-forward move at every release, and
+  `loop-pi-audit closeout` exits 1 on any non-fast-forward move even when the ref is granted. Report
+  it under `### Blocked` as the bot's move with both SHAs; never widen the grants or rerun the audit
+  to get a clean exit (loop 14 closeout).
+- A diagnostic that reads runtime, exporter or compose settings drops every key matching token, key,
+  secret, password, authorization or headers before it writes or prints anything. Print key names and
+  value lengths only (loop 14 incident).
+- The push scan flags every email-shaped literal, `example.com` included, and a net-diff scan misses a
+  literal added in one commit and removed in a later one of the same push. Use opaque non-email
+  strings for identity fixtures, and scan newly reachable commits as well as the net diff
+  (`codex/scan-history-added-loop14.py` is the private witness until CFO-0067 lands) (loop 14).
+- The operator's Mac also suspends the root session itself: loop 14 lost 5.5 hours with a tool call
+  in flight. Start the launcher under `caffeinate -i` (loop 15 preparation).
 - On an external write's rejection, capture the full response body before deciding whether to roll
   back, and re-GET to confirm a state actually changed before rolling back a write that was itself
   rejected with nothing changed (evidence brief D8).
