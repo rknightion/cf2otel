@@ -9317,6 +9317,99 @@
           }
         }
       },
+      "panel-2423": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (cloudflare_ai_gateway_body_side) (increase(cloudflare_ai_gateway_body_non_json_total{service_name=\"cf2otel\"}[$__interval]))",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cloudflare_ai_gateway_body_side}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Non-JSON bodies fetched during opt-in body capture, counted by request/response side over each interval. Content is omitted, but request metadata continues to export. This counter has no gateway dimension: it covers all gateways, regardless of the gateway filter. One request can contribute both sides. Request logs and traces carry body_non_json flags.",
+          "id": 2423,
+          "links": [],
+          "title": "Non-JSON bodies omitted",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "bars",
+                    "fillOpacity": 80,
+                    "gradientMode": "none",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "decimals": 0,
+                  "noValue": "Body capture off or no non-JSON bodies",
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
       "panel-2431": {
         "kind": "Panel",
         "spec": {
@@ -18291,7 +18384,7 @@
               "transformations": []
             }
           },
-          "description": "Rolling p75 largest contentful paint, converted from GraphQL milliseconds to seconds. Dashed lines mark Google's good and poor thresholds.",
+          "description": "Rolling p75 largest contentful paint, exported in seconds after the collector converts GraphQL microseconds. Dashed lines mark Google's good and poor thresholds.",
           "id": 922,
           "links": [],
           "title": "RUM LCP p75",
@@ -18397,7 +18490,7 @@
               "transformations": []
             }
           },
-          "description": "Rolling p75 interaction to next paint, converted from GraphQL milliseconds to seconds. Dashed lines mark Google's good and poor thresholds.",
+          "description": "Rolling p75 interaction to next paint, exported in seconds after the collector converts GraphQL microseconds. Dashed lines mark Google's good and poor thresholds.",
           "id": 923,
           "links": [],
           "title": "RUM INP p75",
@@ -18610,7 +18703,7 @@
               "transformations": []
             }
           },
-          "description": "Rolling p75 first contentful paint, converted from GraphQL milliseconds to seconds. Dashed lines mark Google's good and poor thresholds.",
+          "description": "Rolling p75 first contentful paint, exported in seconds after the collector converts GraphQL microseconds. Dashed lines mark Google's good and poor thresholds.",
           "id": 925,
           "links": [],
           "title": "RUM FCP p75",
@@ -18716,7 +18809,7 @@
               "transformations": []
             }
           },
-          "description": "Rolling p75 time to first byte, converted from GraphQL milliseconds to seconds. Dashed lines mark Google's good and poor thresholds.",
+          "description": "Rolling p75 time to first byte, exported in seconds after the collector converts GraphQL microseconds. Dashed lines mark Google's good and poor thresholds.",
           "id": 926,
           "links": [],
           "title": "RUM TTFB p75",
@@ -20725,6 +20818,33 @@
                           }
                         },
                         "title": "DLP and log coverage"
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "collapse": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2423"
+                                  },
+                                  "height": 7,
+                                  "width": 24,
+                                  "x": 0,
+                                  "y": 0
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "title": "Body capture data quality (all gateways)"
                       }
                     },
                     {

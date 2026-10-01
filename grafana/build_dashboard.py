@@ -819,6 +819,13 @@ def ai_tab(d: Dashboard) -> dict:
         [prom(f'sum by (cloudflare_ai_gateway_gateway_name) (cloudflare_ai_gateway_log_coverage_gap{{{GW}}})', "{{cloudflare_ai_gateway_gateway_name}}")],
         unit="short", bars=True, min_zero=False, decimals=0, no_value="Coverage collector off or no data")
 
+    d.ts(2423, "Non-JSON bodies omitted", "Non-JSON bodies fetched during opt-in body capture, counted by request/response side over each interval. "
+        "Content is omitted, but request metadata continues to export. This counter has no gateway dimension: it covers all gateways, "
+        "regardless of the gateway filter. One request can contribute both sides. Request logs and traces carry body_non_json flags.",
+        [prom(f'sum by (cloudflare_ai_gateway_body_side) (increase(cloudflare_ai_gateway_body_non_json_total{{{S}}}[$__interval]))',
+              "{{cloudflare_ai_gateway_body_side}}")],
+        unit="short", bars=True, decimals=0, interval="5m", no_value="Body capture off or no non-JSON bodies")
+
     d.panel(2431, "Recent GenAI traces", "GenAI client spans that cf2otel builds from the AI Gateway REST log, newest first. Open a trace for model, "
         "provider, token usage, cost and timing attributes.", "table",
         [tempo('{resource.service.name="cf2otel" && span.gen_ai.operation.name != nil && span.cloudflare.ai_gateway.gateway.name =~ "${gateway:regex}"}')],
@@ -836,6 +843,7 @@ def ai_tab(d: Dashboard) -> dict:
         row("Latency", [(2412, 12, 9), (303, 12, 9), (2413, 24, 7)]),
         row("Tokens and cost", [(304, 12, 8), (307, 12, 8), (308, 16, 8), (2414, 8, 8)]),
         row("DLP and log coverage", [(310, 9, 8), (2421, 7, 8), (2422, 8, 8)]),
+        row("Body capture data quality (all gateways)", [(2423, 24, 7)]),
         row("Traces", [(2431, 24, 9)]),
         row("AI Gateway logs", [(2441, 24, 12), (2442, 24, 10)], collapse=True),
     ])
@@ -843,11 +851,11 @@ def ai_tab(d: Dashboard) -> dict:
 
 # Google's published Core Web Vitals thresholds: good at or below the first value, poor above the second.
 VITALS = [
-    ("lcp", "LCP", "cloudflare_rum_lcp_p75_seconds", "s", 2.5, 4.0, 922, "Rolling p75 largest contentful paint, converted from GraphQL milliseconds to seconds."),
-    ("inp", "INP", "cloudflare_rum_inp_p75_seconds", "s", 0.2, 0.5, 923, "Rolling p75 interaction to next paint, converted from GraphQL milliseconds to seconds."),
+    ("lcp", "LCP", "cloudflare_rum_lcp_p75_seconds", "s", 2.5, 4.0, 922, "Rolling p75 largest contentful paint, exported in seconds after the collector converts GraphQL microseconds."),
+    ("inp", "INP", "cloudflare_rum_inp_p75_seconds", "s", 0.2, 0.5, 923, "Rolling p75 interaction to next paint, exported in seconds after the collector converts GraphQL microseconds."),
     ("cls", "CLS", "cloudflare_rum_cls_p75_ratio", "none", 0.1, 0.25, 927, "Rolling p75 cumulative layout shift score gauge."),
-    ("fcp", "FCP", "cloudflare_rum_fcp_p75_seconds", "s", 1.8, 3.0, 925, "Rolling p75 first contentful paint, converted from GraphQL milliseconds to seconds."),
-    ("ttfb", "TTFB", "cloudflare_rum_ttfb_p75_seconds", "s", 0.8, 1.8, 926, "Rolling p75 time to first byte, converted from GraphQL milliseconds to seconds."),
+    ("fcp", "FCP", "cloudflare_rum_fcp_p75_seconds", "s", 1.8, 3.0, 925, "Rolling p75 first contentful paint, exported in seconds after the collector converts GraphQL microseconds."),
+    ("ttfb", "TTFB", "cloudflare_rum_ttfb_p75_seconds", "s", 0.8, 1.8, 926, "Rolling p75 time to first byte, exported in seconds after the collector converts GraphQL microseconds."),
 ]
 
 
