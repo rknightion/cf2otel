@@ -1,9 +1,11 @@
 ---
 id: CFO-0065
 title: Harden raw Markdown release-note coverage or reject that input explicitly
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@loop15-root'
 created_date: '2026-10-01 07:32'
+updated_date: '2026-10-01 19:13'
 labels:
   - release
 dependencies: []
@@ -31,3 +33,9 @@ Loop14 preserved an unshipped scratch parser after independent review proved fal
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Loop15 E65: rendered-text-only CLI contract; reject raw Markdown explicitly rather than extending the parked parser; assertion-based public CLI regression for hidden destinations and rendered issue references, retaining subject/distinct-entry/patch-equivalence checks; full local gate and CodeRabbit.
+<!-- SECTION:PLAN:END -->
