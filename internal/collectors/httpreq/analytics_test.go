@@ -155,6 +155,86 @@ func TestRegisteredAnalyticsEntitlementAndPolicy(t *testing.T) {
 		})
 	}
 }
+func TestRegisteredVisitsAdditiveOptionalAndZero(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		advertised bool
+		budget     int
+		null       bool
+		want       float64
+		wantErr    bool
+	}{
+		{name: "additive", advertised: true, budget: 20, want: 5},
+		{name: "zero", advertised: true, budget: 20},
+		{name: "unadvertised", budget: 20},
+		{name: "budget-preserves-old-fields", advertised: true, budget: 6},
+		{name: "null-not-zero", advertised: true, budget: 20, null: true, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.Cloudflare.AccountID = "account-fixture"
+			cfg.HTTP.MetricsScope = "all"
+			cfg.HTTP.Breakdowns = []string{}
+			settings := cfapi.DatasetSettings{Enabled: true, AvailableFields: []string{"count", "dimensions_clientRequestHTTPHost", "dimensions_edgeResponseStatus", "dimensions_cacheStatus", "avg_originResponseDurationMs", "sum_edgeResponseBytes"}, MaxNumberOfFields: tc.budget}
+			if tc.advertised {
+				settings.AvailableFields = append(settings.AvailableFields, "sum_visits")
+			}
+			visits := []any{float64(2), float64(3)}
+			if tc.name == "zero" {
+				visits = []any{0, 0}
+			}
+			if tc.null {
+				visits[1] = nil
+			}
+			rows := []map[string]any{}
+			for i, v := range visits {
+				rows = append(rows, map[string]any{"count": 7, "dimensions": map[string]any{"clientRequestHTTPHost": "www.example.com", "edgeResponseStatus": 200 + i*300, "cacheStatus": "hit"}, "sum": map[string]any{"edgeResponseBytes": 4096, "visits": v}, "avg": map[string]any{"originResponseDurationMs": 1000}})
+			}
+			api := &fakeAPI{groupSettings: &settings, rows: map[string][]map[string]any{"httpRequestsAdaptiveGroups": rows}}
+			reg := collector.NewRegistry()
+			Register(collector.Deps{Config: &cfg, API: api, Registry: reg})
+			for _, entry := range reg.Entries() {
+				if entry.Collector.Name() != "httpreq.metrics" {
+					continue
+				}
+				from := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC)
+				e := &fakeEmitter{}
+				_, err := entry.Collector.(collector.WindowCollector).CollectWindow(context.Background(), from, from.Add(5*time.Minute), e)
+				if (err != nil) != tc.wantErr {
+					t.Fatalf("err=%v", err)
+				}
+				if tc.wantErr {
+					if len(e.counts) != 0 || len(e.gauges) != 0 {
+						t.Fatalf("invalid visits emitted partial metrics: %+v", e)
+					}
+					return
+				}
+				found := false
+				requests, bytes := float64(0), float64(0)
+				for _, p := range e.counts {
+					switch p.name {
+					case semconv.MetricHTTPVisits:
+						found = true
+						if p.value != tc.want || len(p.attrs) != 1 {
+							t.Fatalf("visits=%+v want %g zone-only", p, tc.want)
+						}
+					case semconv.MetricHTTPRequests:
+						requests += p.value
+					case semconv.MetricHTTPResponseBytes:
+						bytes += p.value
+					}
+				}
+				if found != (tc.advertised && tc.budget > 6) {
+					t.Fatalf("optional visits emitted=%v", found)
+				}
+				if requests != 14 || bytes != 8192 || len(e.gauges) != 2 || e.gauges[0].value != 1 || e.gauges[1].value != 1 {
+					t.Fatalf("old metrics changed: %+v", e)
+				}
+			}
+		})
+	}
+}
+
 func TestRegisteredAnalyticsFieldBudget(t *testing.T) {
 	cfg := config.Default()
 	cfg.Cloudflare.AccountID = "account-fixture"
