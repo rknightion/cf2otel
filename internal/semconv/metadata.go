@@ -134,6 +134,7 @@ var metricSpecs = map[string]MetricSpec{
 	MetricWindowCatchupWindows:           {Unit: "1", Description: "Additional bounded collector windows committed in one scheduler tick."},
 	MetricEmailRoutingEvents:             {Unit: "1", Description: "Email Routing event count."},
 	MetricEmailSendingEvents:             {Unit: "1", Description: "Email Sending event count."},
+	MetricHTTPLatencyHostVariants:        {Unit: "{group}", Description: "Discarded HTTP latency source groups normalizing to an existing host, by zone; only the largest-count group's timings are exported."},
 }
 
 // Metric returns metadata for a metric declared by this package.

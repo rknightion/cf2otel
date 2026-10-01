@@ -73,6 +73,7 @@ These declarations reserve the following signals; this seam-only change does not
 | `cloudflare.http.response.bytes` | `By` | Response byte count on the HTTP request dimensions. (CFO-0046.01) |
 | `cloudflare.http.edge.ttfb` | `s` | Edge time to first byte by zone, host and statistic (avg, p50, p95, p99); Pro only. (CFO-0046.04) |
 | `cloudflare.http.origin.response_time` | `s` | Origin response time by zone, host and statistic (p50, p95, p99). (CFO-0046.04) |
+| `cf2otel.http.latency.host_variants` | Counter / `{group}` | Discarded latency source groups whose raw hosts normalize to the same host, zone only. Timings come from the largest-count group; equal counts prefer the raw host equal to the normalized host (then lexical raw-host order). Percentiles are never summed or averaged. Request, byte and breakdown totals remain additive across all groups. A latency query/validation failure fails the buffered window explicitly with its checkpoint unchanged, preserving all totals for retry. |
 | `cloudflare.http.requests.by_status` | `{request}` | Request count by enabled edge and origin status. Zone-level, without host. (CFO-0046.02) |
 | `cloudflare.http.requests.by_country` | `{request}` | Request count by client country. Zone-level, without host. (CFO-0046.02) |
 | `cloudflare.http.requests.by_protocol` | `{request}` | Request count by enabled HTTP and TLS protocol. Zone-level, without host. (CFO-0046.02) |

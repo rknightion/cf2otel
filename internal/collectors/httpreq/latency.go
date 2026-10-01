@@ -38,37 +38,58 @@ func (c metrics) requestSourceFilter() map[string]any {
 
 // Quantiles must be calculated by Cloudflare at host level, not averaged from
 // status/cache groups: percentiles cannot be combined into a host percentile.
-func (c metrics) collectLatencies(ctx context.Context, zone cfapi.Zone, from, to time.Time, fields []string, allowed map[string]bool, hostsByZone map[string]map[string]struct{}) ([]httpLatencyPoint, error) {
+func (c metrics) collectLatencies(ctx context.Context, zone cfapi.Zone, from, to time.Time, fields []string, allowed map[string]bool, hostsByZone map[string]map[string]struct{}) ([]httpLatencyPoint, int, error) {
 	req := cfapi.GraphQLRequest{Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: "httpRequestsAdaptiveGroups", WantedFields: fields, From: from, To: to, Limit: 10000, Filter: c.requestSourceFilter()}
 	var rows []map[string]any
 	if err := c.api.Query(ctx, req, &rows); err != nil {
-		return nil, fmt.Errorf("zone HTTP latencies: %w", err)
+		return nil, 0, fmt.Errorf("zone HTTP latencies: %w", err)
 	}
 	if len(rows) >= req.Limit {
-		return nil, errors.New("zone HTTP latencies reached the query limit; narrow the window")
+		return nil, 0, errors.New("zone HTTP latencies reached the query limit; narrow the window")
 	}
 	wanted := map[string]bool{}
 	for _, field := range fields {
 		wanted[field] = true
 	}
-	seen := map[string]bool{}
+	type hostGroup struct {
+		row   map[string]any
+		raw   string
+		count float64
+	}
+	groups := map[string]hostGroup{}
+	var hosts []string
+	variants := 0
 	var points []httpLatencyPoint
 	for _, row := range rows {
 		dims, _ := row["dimensions"].(map[string]any)
-		host := hostOf(str(dims["clientRequestHTTPHost"]))
+		raw := str(dims["clientRequestHTTPHost"])
+		host := hostOf(raw)
 		if host == "" {
-			return nil, errors.New("HTTP latency group has an empty host field")
+			return nil, 0, errors.New("HTTP latency group has an empty host field")
 		}
 		if !selected(host, allowed) {
 			continue
 		}
 		if net.ParseIP(host) != nil {
-			return nil, errors.New("HTTP latency host is an IP address; refusing it as a metric label")
+			return nil, 0, errors.New("HTTP latency host is an IP address; refusing it as a metric label")
 		}
-		if seen[host] {
-			return nil, errors.New("HTTP latency query returned duplicate host groups")
+		count, valid := metricNumber(row["count"])
+		if !valid || count < 0 {
+			return nil, 0, errors.New("HTTP latency group has invalid count")
 		}
-		seen[host] = true
+		if previous, exists := groups[host]; exists {
+			variants++
+			// Never merge percentiles. Prefer the largest source population;
+			// the canonical raw host wins equal-count ties. Lexical fallback
+			// makes ties between noncanonical variants independent of row order.
+			if count < previous.count || count == previous.count &&
+				(previous.raw == host || raw != host && raw >= previous.raw) {
+				continue
+			}
+		} else {
+			hosts = append(hosts, host)
+		}
+		groups[host] = hostGroup{row: row, raw: raw, count: count}
 		zoneHosts := hostsByZone[zone.ID]
 		if zoneHosts == nil {
 			zoneHosts = map[string]struct{}{}
@@ -76,8 +97,11 @@ func (c metrics) collectLatencies(ctx context.Context, zone cfapi.Zone, from, to
 		}
 		zoneHosts[host] = struct{}{}
 		if len(zoneHosts) > c.cfg.HTTP.MaxMetricHostsPerZone {
-			return nil, fmt.Errorf("HTTP metric host count exceeds the per-zone limit %d", c.cfg.HTTP.MaxMetricHostsPerZone)
+			return nil, 0, fmt.Errorf("HTTP metric host count exceeds the per-zone limit %d", c.cfg.HTTP.MaxMetricHostsPerZone)
 		}
+	}
+	for _, host := range hosts {
+		row := groups[host].row
 		for _, latency := range httpLatencyFields {
 			if !wanted[latency.field] {
 				continue
@@ -90,7 +114,7 @@ func (c metrics) collectLatencies(ctx context.Context, zone cfapi.Zone, from, to
 			}
 			milliseconds, valid := metricNumber(values[name])
 			if !valid || milliseconds < -1 {
-				return nil, fmt.Errorf("HTTP group has invalid latency %s", latency.field)
+				return nil, 0, fmt.Errorf("HTTP group has invalid latency %s", latency.field)
 			}
 			if milliseconds == -1 {
 				continue
@@ -98,5 +122,5 @@ func (c metrics) collectLatencies(ctx context.Context, zone cfapi.Zone, from, to
 			points = append(points, httpLatencyPoint{name: latency.metric, seconds: milliseconds / 1000, attrs: []telemetry.Attr{{Key: semconv.AttrHTTPZone, Value: zone.Name}, {Key: semconv.AttrHTTPHost, Value: host}, {Key: semconv.AttrStatistic, Value: latency.statistic}}})
 		}
 	}
-	return points, nil
+	return points, variants, nil
 }

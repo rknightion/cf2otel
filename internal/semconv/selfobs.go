@@ -35,4 +35,6 @@ const (
 	MetricAPIRetries           = "cf2otel.api.retries"
 	SpanAPIRequest             = "cf2otel.api.request"
 	AttrAPIMethod              = "cf2otel.api.method"
+
+	MetricHTTPLatencyHostVariants = "cf2otel.http.latency.host_variants"
 )

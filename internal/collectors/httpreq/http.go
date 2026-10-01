@@ -477,6 +477,7 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	totals := make(map[httpMetricLabels]httpMetricTotals)
 	visits := make(map[string]float64)
 	var latencyPoints []httpLatencyPoint
+	latencyVariants := make(map[string]int)
 	var breakdownPoints []breakdownPoint
 	hostsByZone := make(map[string]map[string]struct{}, len(zones))
 	var retentionGaps []error
@@ -497,7 +498,7 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 		}
 		includeOriginDuration, includeBytes, includeVisits := false, false, false
 		var requestFields []string
-		latencyFields := []string{"dimensions.clientRequestHTTPHost"}
+		latencyFields := []string{"count", "dimensions.clientRequestHTTPHost"}
 		for _, field := range fields {
 			isLatency := false
 			for _, latency := range httpLatencyFields {
@@ -613,8 +614,8 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 			}
 			totals[labels] = aggregate
 		}
-		if len(latencyFields) > 1 {
-			points, err := c.collectLatencies(ctx, zone, from, to, latencyFields, allowed, hostsByZone)
+		if len(latencyFields) > 2 {
+			points, variants, err := c.collectLatencies(ctx, zone, from, to, latencyFields, allowed, hostsByZone)
 			if err != nil {
 				var gap *cfapi.RetentionGapError
 				if errors.As(err, &gap) {
@@ -624,12 +625,15 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 				return from, err
 			}
 			latencyPoints = append(latencyPoints, points...)
+			if variants > 0 {
+				latencyVariants[zone.Name] += variants
+			}
 		}
 	}
 	if len(retentionGaps) > 0 {
 		return from, errors.Join(retentionGaps...)
 	}
-	series := len(latencyPoints) + len(breakdownPoints) + len(visits)
+	series := len(latencyPoints) + len(breakdownPoints) + len(visits) + len(latencyVariants)
 	for _, aggregate := range totals {
 		series++ // request counter
 		if aggregate.hasBytes {
@@ -693,6 +697,11 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	}
 	for _, point := range breakdownPoints {
 		if err := e.Counter(ctx, point.name, point.value, point.attrs...); err != nil {
+			return from, err
+		}
+	}
+	for zone, variants := range latencyVariants {
+		if err := e.Counter(ctx, semconv.MetricHTTPLatencyHostVariants, float64(variants), telemetry.Attr{Key: semconv.AttrHTTPZone, Value: zone}); err != nil {
 			return from, err
 		}
 	}
