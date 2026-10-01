@@ -224,17 +224,17 @@ func httpGroupFieldName(field string) string {
 	return field
 }
 
-func httpGroupQueryFields(ctx context.Context, api cfapi.Client, zoneID string) ([]string, error) {
+func httpGroupQueryFields(ctx context.Context, api cfapi.Client, zoneID string) ([]string, cfapi.DatasetSettings, error) {
 	provider, ok := api.(httpGroupSettingsProvider)
 	if !ok {
-		return nil, errors.New("HTTP groups settings discovery is unavailable")
+		return nil, cfapi.DatasetSettings{}, errors.New("HTTP groups settings discovery is unavailable")
 	}
 	settings, err := provider.DatasetSettings(ctx, cfapi.ZoneScope, zoneID, "httpRequestsAdaptiveGroups")
 	if err != nil {
-		return nil, fmt.Errorf("HTTP groups settings: %w", err)
+		return nil, settings, fmt.Errorf("HTTP groups settings: %w", err)
 	}
 	if !settings.Enabled {
-		return nil, errors.New("HTTP groups dataset is disabled for a discovered zone")
+		return nil, settings, errors.New("HTTP groups dataset is disabled for a discovered zone")
 	}
 	available := make(map[string]bool, len(settings.AvailableFields))
 	for _, field := range settings.AvailableFields {
@@ -242,23 +242,25 @@ func httpGroupQueryFields(ctx context.Context, api cfapi.Client, zoneID string) 
 	}
 	for _, field := range requiredHTTPGroupFields {
 		if !available[httpGroupFieldName(field)] {
-			return nil, fmt.Errorf("HTTP groups is missing required field %q", field)
+			return nil, settings, fmt.Errorf("HTTP groups is missing required field %q", field)
 		}
 	}
 	if settings.MaxNumberOfFields > 0 && settings.MaxNumberOfFields < len(requiredHTTPGroupFields) {
-		return nil, fmt.Errorf("HTTP groups field limit %d is below the required field count %d", settings.MaxNumberOfFields, len(requiredHTTPGroupFields))
+		return nil, settings, fmt.Errorf("HTTP groups field limit %d is below the required field count %d", settings.MaxNumberOfFields, len(requiredHTTPGroupFields))
 	}
 	fields := append([]string(nil), requiredHTTPGroupFields...)
 	optional := []string{"avg.originResponseDurationMs", "sum.edgeResponseBytes"}
 	for _, latency := range httpLatencyFields {
 		optional = append(optional, latency.field)
 	}
+	// Visits is lowest priority so adding it never displaces an old field.
+	optional = append(optional, "sum.visits")
 	for _, field := range optional {
 		if available[httpGroupFieldName(field)] && (settings.MaxNumberOfFields <= 0 || settings.MaxNumberOfFields > len(fields)) {
 			fields = append(fields, field)
 		}
 	}
-	return fields, nil
+	return fields, settings, nil
 }
 
 type httpMetricLabels struct {
@@ -473,6 +475,7 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	// zone leaves the caller's checkpoint unchanged without producing partial
 	// metric points. Host labels in all scope remain bounded by both limits.
 	totals := make(map[httpMetricLabels]httpMetricTotals)
+	visits := make(map[string]float64)
 	var latencyPoints []httpLatencyPoint
 	var breakdownPoints []breakdownPoint
 	hostsByZone := make(map[string]map[string]struct{}, len(zones))
@@ -488,11 +491,11 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 			return from, err
 		}
 		breakdownPoints = append(breakdownPoints, points...)
-		fields, err := httpGroupQueryFields(ctx, c.api, zone.ID)
+		fields, settings, err := httpGroupQueryFields(ctx, c.api, zone.ID)
 		if err != nil {
 			return from, err
 		}
-		includeOriginDuration, includeBytes := false, false
+		includeOriginDuration, includeBytes, includeVisits := false, false, false
 		var requestFields []string
 		latencyFields := []string{"dimensions.clientRequestHTTPHost"}
 		for _, field := range fields {
@@ -509,10 +512,18 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 			}
 			includeOriginDuration = includeOriginDuration || field == "avg.originResponseDurationMs"
 			includeBytes = includeBytes || field == "sum.edgeResponseBytes"
+			includeVisits = includeVisits || field == "sum.visits"
 		}
 		var rows []map[string]any
 		req := cfapi.GraphQLRequest{Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: "httpRequestsAdaptiveGroups", WantedFields: requestFields, From: from, To: to, Limit: 10000, Filter: c.requestSourceFilter()}
-		if err := c.api.Query(ctx, req, &rows); err != nil {
+		if includeVisits {
+			// A raw selection distinguishes a successful [] from a null dataset.
+			// Without advertised visits, retain the legacy Query contract.
+			rows, err = c.kpiWindowRows(ctx, req, settings, time.Now().UTC())
+		} else {
+			err = c.api.Query(ctx, req, &rows)
+		}
+		if err != nil {
 			var gap *cfapi.RetentionGapError
 			if errors.As(err, &gap) {
 				retentionGaps = append(retentionGaps, fmt.Errorf("zone HTTP groups: %w", err))
@@ -522,6 +533,9 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 		}
 		if len(rows) >= req.Limit {
 			return from, fmt.Errorf("zone HTTP groups reached the query limit; narrow the window")
+		}
+		if includeVisits {
+			visits[zone.Name] = 0
 		}
 		for _, row := range rows {
 			dims, _ := row["dimensions"].(map[string]any)
@@ -541,6 +555,14 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 			count, ok := metricNumber(row["count"])
 			if !ok || count < 0 {
 				return from, errors.New("HTTP group has an invalid count field")
+			}
+			if includeVisits {
+				sum, _ := row["sum"].(map[string]any)
+				value, valid := metricNumber(sum["visits"])
+				if !valid || value < 0 || math.IsInf(visits[zone.Name]+value, 0) {
+					return from, errors.New("HTTP group has invalid visits")
+				}
+				visits[zone.Name] += value
 			}
 			if count == 0 {
 				continue
@@ -607,7 +629,7 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	if len(retentionGaps) > 0 {
 		return from, errors.Join(retentionGaps...)
 	}
-	series := len(latencyPoints) + len(breakdownPoints)
+	series := len(latencyPoints) + len(breakdownPoints) + len(visits)
 	for _, aggregate := range totals {
 		series++ // request counter
 		if aggregate.hasBytes {
@@ -657,6 +679,16 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 			if err := e.Gauge(ctx, semconv.MetricHTTPOriginDuration, seconds, attrs...); err != nil {
 				return from, err
 			}
+		}
+	}
+	visitZones := make([]string, 0, len(visits))
+	for zone := range visits {
+		visitZones = append(visitZones, zone)
+	}
+	sort.Strings(visitZones)
+	for _, zone := range visitZones {
+		if err := e.Counter(ctx, semconv.MetricHTTPVisits, visits[zone], telemetry.Attr{Key: semconv.AttrHTTPZone, Value: zone}); err != nil {
+			return from, err
 		}
 	}
 	for _, point := range breakdownPoints {

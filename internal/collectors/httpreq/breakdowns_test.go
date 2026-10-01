@@ -16,6 +16,235 @@ import (
 	"github.com/rknightion/cf2otel/internal/semconv"
 )
 
+func TestRegisteredVisitsDatasetValidityHTTP(t *testing.T) {
+	for _, tc := range []struct {
+		name, raw, visits                       string
+		missing, upstreamError, wantErr, legacy bool
+		wantVisits                              float64
+	}{
+		{name: "null", raw: `null`, wantErr: true},
+		{name: "missing-dataset", missing: true, wantErr: true},
+		{name: "graphql-error", upstreamError: true, wantErr: true},
+		{name: "empty", raw: `[]`},
+		{name: "fractional-visits", visits: "0.5", wantErr: true},
+		{name: "near-integer-fraction", visits: "1.0000000000000000001", wantErr: true},
+		{name: "uint64-overflow", visits: "18446744073709551616", wantErr: true},
+		{name: "exponent-overflow", visits: "1e20", wantErr: true},
+		{name: "negative-visits", visits: "-1", wantErr: true},
+		{name: "uint64-maximum", visits: "18446744073709551615", wantVisits: float64(^uint64(0))},
+		{name: "legacy-null-no-visits", raw: `null`, legacy: true},
+		{name: "true-zero", raw: `[{"count":7,"dimensions":{"clientRequestHTTPHost":"www.example.com","edgeResponseStatus":200,"cacheStatus":"hit"},"sum":{"visits":0}}]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.Cloudflare.AccountID = "account-fixture"
+			cfg.HTTP.MetricsScope = "all"
+			cfg.HTTP.Breakdowns = []string{}
+			from := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet {
+					_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "result": []cfapi.Zone{zoneForAccount("zone-fixture", "example.com", "account-fixture")}})
+					return
+				}
+				var body struct {
+					Query string `json:"query"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&body)
+				node := map[string]any{}
+				if strings.Contains(body.Query, "settings{") {
+					fields := []string{"count", "dimensions_clientRequestHTTPHost", "dimensions_edgeResponseStatus", "dimensions_cacheStatus"}
+					if !tc.legacy {
+						fields = append(fields, "sum_visits")
+					}
+					node["settings"] = map[string]any{"httpRequestsAdaptiveGroups": cfapi.DatasetSettings{Enabled: true, AvailableFields: fields, MaxNumberOfFields: 5, MaxDuration: 300}}
+				} else {
+					if tc.upstreamError {
+						_ = json.NewEncoder(w).Encode(map[string]any{"errors": []any{map[string]any{"message": "fixture failure"}}})
+						return
+					}
+					if !tc.missing {
+						key := "httpRequestsAdaptiveGroups"
+						if alias := regexp.MustCompile(`(\w+):httpRequestsAdaptiveGroups\(`).FindStringSubmatch(body.Query); len(alias) > 1 {
+							key = alias[1]
+						}
+						raw := tc.raw
+						if tc.visits != "" {
+							raw = `[{"count":7,"dimensions":{"clientRequestHTTPHost":"www.example.com","edgeResponseStatus":200,"cacheStatus":"hit"},"sum":{"visits":` + tc.visits + `}}]`
+						}
+						node[key] = json.RawMessage(raw)
+					}
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"viewer": map[string]any{"zones": []any{node}}}})
+			}))
+			defer srv.Close()
+			cfg.Cloudflare.APIBase = srv.URL
+			cfg.Cloudflare.APIToken = "fixture"
+			reg := collector.NewRegistry()
+			Register(collector.Deps{Config: &cfg, API: cfapi.New(cfg.Cloudflare), Registry: reg})
+			store, err := collector.NewFileStore(t.TempDir() + "/checkpoints.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Set("httpreq.metrics", from); err != nil {
+				t.Fatal(err)
+			}
+			e := &fakeEmitter{}
+			scheduler := collector.NewScheduler(nil, e, store)
+			scheduler.Now = func() time.Time { return from.Add(7 * time.Minute) }
+			found := false
+			for _, entry := range reg.Entries() {
+				if entry.Collector.Name() != "httpreq.metrics" {
+					continue
+				}
+				found = true
+				err := scheduler.RunOnce(context.Background(), entry)
+				if tc.wantErr && err == nil {
+					t.Fatalf("invalid dataset succeeded: counters=%+v", e.counts)
+				}
+				if !tc.wantErr && err != nil {
+					t.Fatal(err)
+				}
+			}
+			if !found {
+				t.Fatal("metrics not registered")
+			}
+			mark, _ := store.Get("httpreq.metrics")
+			if tc.wantErr {
+				if !mark.Equal(from) || len(e.counts) != 0 || len(e.gauges) != 0 || len(e.logs) != 0 {
+					t.Fatalf("invalid dataset exported/advanced: mark=%s emitter=%+v", mark, e)
+				}
+			} else {
+				if !mark.Equal(from.Add(5 * time.Minute)) {
+					t.Fatalf("valid data did not advance: %s", mark)
+				}
+				found := false
+				for _, p := range e.counts {
+					if p.name == semconv.MetricHTTPVisits {
+						found = true
+						if p.value != tc.wantVisits {
+							t.Fatalf("valid visits=%+v want %g", p, tc.wantVisits)
+						}
+					}
+				}
+				if found == tc.legacy {
+					t.Fatal("visits emission does not match entitlement")
+				}
+			}
+		})
+	}
+}
+
+// TestRegisteredKPIsHTTPBoundary exercises the real entitlement and GraphQL path.
+func TestRegisteredKPIsHTTPBoundary(t *testing.T) {
+	for _, name := range []string{"httpreq.threats", "httpreq.transfer", "httpreq.metrics"} {
+		t.Run(name, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.Cloudflare.AccountID = "account-fixture"
+			cfg.HTTP.MetricsScope = "all"
+			cfg.HTTP.RequestSource = "all"
+			cfg.HTTP.Breakdowns = []string{}
+			var queries []string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet {
+					_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "result": []cfapi.Zone{zoneForAccount("zone-fixture", "example.com", "account-fixture")}})
+					return
+				}
+				var body struct {
+					Query string `json:"query"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&body)
+				q := body.Query
+				node := map[string]any{}
+				dataset := "httpRequestsAdaptiveGroups"
+				if strings.Contains(q, "httpRequests1hGroups") {
+					dataset = "httpRequests1hGroups"
+				}
+				if strings.Contains(q, "settings{") {
+					node["settings"] = map[string]any{dataset: cfapi.DatasetSettings{Enabled: true, AvailableFields: []string{"count", "dimensions_clientRequestHTTPHost", "dimensions_edgeResponseStatus", "dimensions_cacheStatus", "sum_visits", "sum_edgeResponseBytes", "sum_threats", "dimensions_datetime"}, MaxNumberOfFields: 10, MaxDuration: 86400, MaxPageSize: 10000}}
+				} else {
+					queries = append(queries, q)
+					rows := []any{map[string]any{"count": 7, "dimensions": map[string]any{"clientRequestHTTPHost": "www.example.com", "edgeResponseStatus": 200, "cacheStatus": "hit", "datetime": time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Hour).Format(time.RFC3339)}, "sum": map[string]any{"visits": 3, "edgeResponseBytes": 4096, "threats": 2}}}
+					alias := regexp.MustCompile(`(\w+):` + dataset + `\(`).FindStringSubmatch(q)
+					key := dataset
+					if len(alias) > 1 {
+						key = alias[1]
+					}
+					node[key] = rows
+				}
+				scope := "zones"
+				if strings.Contains(q, "accounts(") {
+					scope = "accounts"
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"viewer": map[string]any{scope: []any{node}}}})
+			}))
+			defer srv.Close()
+			cfg.Cloudflare.APIBase = srv.URL
+			cfg.Cloudflare.APIToken = "fixture"
+			reg := collector.NewRegistry()
+			Register(collector.Deps{Config: &cfg, API: cfapi.New(cfg.Cloudflare), Registry: reg})
+			e := &fakeEmitter{}
+			found := false
+			for _, entry := range reg.Entries() {
+				if entry.Collector.Name() != name {
+					continue
+				}
+				found = true
+				if c, ok := entry.Collector.(collector.SnapshotCollector); ok {
+					if err := c.Collect(context.Background(), e); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					from := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Hour)
+					if _, err := entry.Collector.(collector.WindowCollector).CollectWindow(context.Background(), from, from.Add(time.Hour), e); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if !found {
+				t.Fatalf("%s collector not registered", name)
+			}
+			metric := semconv.MetricHTTPVisits
+			value := float64(3)
+			points := e.counts
+			if name == "httpreq.threats" {
+				metric = semconv.MetricHTTPThreats
+				value = 2
+			}
+			if name == "httpreq.transfer" {
+				metric = semconv.MetricHTTPAccountTransferMTD
+				points = e.gauges
+				value = 4096 * float64(len(queries))
+			}
+			seen := false
+			for _, point := range points {
+				if point.name == metric {
+					seen = true
+					if point.value != value {
+						t.Fatalf("%s=%g want %g", metric, point.value, value)
+					}
+					if name == "httpreq.transfer" && len(point.attrs) != 0 {
+						t.Fatalf("account aggregate leaked labels: %+v", point)
+					}
+					if name != "httpreq.transfer" && (len(point.attrs) != 1 || !hasAttr(point.attrs, semconv.AttrHTTPZone, "example.com")) {
+						t.Fatalf("KPI not zone-only: %+v", point)
+					}
+				}
+			}
+			if !seen {
+				t.Fatalf("%s missing from registered collection", metric)
+			}
+			for _, q := range queries {
+				if name == "httpreq.transfer" && (!strings.Contains(q, `requestSource:"eyeball"`) || !strings.Contains(q, "accounts(")) {
+					t.Fatalf("transfer must force account eyeball: %s", q)
+				}
+				if name != "httpreq.transfer" && strings.Contains(q, "requestSource:") {
+					t.Fatalf("all/rollup source restricted: %s", q)
+				}
+			}
+		})
+	}
+}
+
 func TestRegisteredBreakdownsHTTPBoundary(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
