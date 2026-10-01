@@ -58,6 +58,16 @@ collectors:
     enabled: true
   httpreq.metrics:
     enabled: true
+  httpreq.threats: # Complete UTC-hour rollups, at least 10m holdback.
+    enabled: true
+    interval: 1h
+    initial_lookback: 1h
+    max_window: 1h
+  httpreq.transfer: # Account eyeball-only MTD snapshot, no checkpoint.
+    enabled: true
+    interval: 1h
+    initial_lookback: 0s
+    max_window: 0s
   aigateway.logs:
     enabled: true
   aigateway.metrics:
@@ -89,6 +99,16 @@ collectors:
     enabled: true
   logpush.health:
     enabled: true
+  logpush.failures: # Explicit opt-in to bounded job-ID labels.
+    enabled: false
+    interval: 5m
+    initial_lookback: 30m
+    max_window: 1h
+  healthchecks.events: # Pro-only; explicit opt-in to bounded origin labels.
+    enabled: false
+    interval: 5m
+    initial_lookback: 30m
+    max_window: 1h
   d1.analytics:
     enabled: true
   d1.queries:

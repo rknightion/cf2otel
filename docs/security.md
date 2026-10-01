@@ -18,6 +18,10 @@ The table maps every configured collector name to its expected read group. For G
 | `inventory.access` | `Access: Apps Read` and `Access: Users Read` (Account) | Unverified |
 | `tunnels.status` | `Cloudflare Tunnel Read` (Account) | Loop 14 preparation verified the required group; without it the list can be an empty 200, so an empty result does not prove permission |
 | `httpreq.events` | `Analytics Read` (Zone); `Access: Apps Read` (Account) when `http.scope` is `access_protected` | Unverified |
+| `httpreq.threats` | `Analytics Read` (Zone) | Free/Pro rollup entitlement verified; least permission group unverified. (CFO-0046.05) |
+| `httpreq.transfer` | `Account Analytics Read` (Account) | Account aggregate, no account ID or host labels; least permission group unverified. (CFO-0046.05) |
+| `logpush.failures` | `Account Analytics Read` (Account) and `Analytics Read` (Zone) | Disabled by default; explicit opt-in to numeric job-ID labels, bounded by the platform series cap. Destination/status/final flags only, never raw error text; zone names rather than zone IDs. Least permission groups unverified. (CFO-0047.03) |
+| `healthchecks.events` | `Analytics Read` (Zone) | Disabled by default; Pro entitlement verified, Free disabled and skipped. Explicit origin-label opt-in: bounded non-IP FQDN or human name, never origin IP or health-check ID. Omit timings without usable identity. Least permission group unverified; this seam registers no collector yet. (CFO-0050.03) |
 | `httpreq.metrics` | `Analytics Read` (Zone) | Unverified |
 | `aigateway.logs` | `AI Gateway Metadata Read` (Account); add `AI Gateway Read` (Account) when body capture is enabled | Live-verified in `doc-0003` |
 | `aigateway.metrics` | `Account Analytics Read` (Account); collector is disabled while GraphQL Groups ingestion lag is unbounded | Unverified |

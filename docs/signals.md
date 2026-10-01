@@ -21,6 +21,51 @@ All signals carry `service.name=cf2otel`. Cloudflare-specific names begin `cloud
 
 Loki stores the OTLP log attributes as structured metadata. Filter from `{service_name="cf2otel"}`, then use `| event_name="cloudflare.http.request"` or another event value. Paths, IPs, emails, user agents and ray IDs stay on logs or spans, never on metric series.
 
+## Extension declarations (collector implementations pending)
+
+These declarations reserve the following signals; this seam-only change does not emit them. Existing outputs remain unchanged. Every selection uses advertised `settings.availableFields` names in `part_field` form and respects field budgets, `maxDuration` and `notOlderThan`. Health checks are disabled on Free and enabled on the verified Pro plan; disabled scopes are skipped, not queried. HTTP visits are available on Free/Pro adaptive Groups. Threat rollups have observed retention of about three days on Free and seven days on Pro, with a three-day maximum query duration on both. Account adaptive HTTP settings permit 32 days, sufficient for a 31-day UTC month. Zone Logpush settings permit one day on Free and seven on Pro (retention includes about one extra hour); account Logpush permits about 30 days. Account DO/D1/Queue settings permit 32-day windows and 90-day retention. These are observed plan settings, not universal guarantees; runtime settings remain authoritative. No new permission or resource is provisioned.
+
+| Name | Kind / unit | Meaning |
+| --- | --- | --- |
+| `cloudflare.logpush.failed_uploads` | Counter / `{upload}` | Upload failures by scope, zone name for zone scope, job ID, destination type, status code and final attempt. Source success/final are uint8 flags, job ID is uint64; success=0 means failure, final=1 with status>=300 means final loss. Explicit opt-in and platform cap; old uploads/records unchanged. (CFO-0047.03) |
+| `cloudflare.http.visits` | Counter / `{visit}` | Additive `sum.visits`, zone only, inside existing adaptive Groups metrics with configured request-source policy. (CFO-0046.05) |
+| `cloudflare.http.threats` | Counter / `{request}` | `sum.threats` from complete UTC-hour rollups, held back at least ten minutes; zone only, not assumed eyeball-filterable. (CFO-0046.05) |
+| `cloudflare.http.account.transfer.month_to_date` | Gauge / `By` | UTC month-to-date eyeball response bytes through latest held-back complete five-minute end; no account ID/host. Snapshot without checkpoint. Successful empty results mean zero; errors/null do not. (CFO-0046.05) |
+| `cloudflare.http.account.transfer.projected_month_total` | Gauge / `By` | MTD bytes * exact UTC month seconds / elapsed complete-period seconds; zero when no complete elapsed period, including month rollover. Always eyeball-only. (CFO-0046.05) |
+| `cloudflare.durableobjects.errors` | Counter / `{error}` | Invocation error sum by bounded Workers script name; old request totals preserved. (CFO-0047.02) |
+| `cloudflare.durableobjects.wall_time` | Gauge / `s` | Latest complete five-minute script bucket wall-time p50/p75/p99/p999, microseconds to seconds; never combine status-group quantiles. (CFO-0047.02) |
+| `cloudflare.durableobjects.response_size` | Gauge / `By` | Latest complete five-minute script bucket responseBodySize p50/p75/p99/p999, bytes. No namespace/object IDs. (CFO-0047.02) |
+| `cloudflare.d1.rows_read` | Counter / `{row}` | Account aggregate rows read, no database ID. (CFO-0047.02) |
+| `cloudflare.d1.rows_written` | Counter / `{row}` | Account aggregate rows written, no database ID. (CFO-0047.02) |
+| `cloudflare.d1.query.batch_time` | Gauge / `s` | Latest complete account bucket queryBatchTimeMs p50/p75/p99/p999, milliseconds to seconds. (CFO-0047.02) |
+| `cloudflare.d1.query.batch_response_size` | Gauge / `By` | Latest complete account bucket queryBatchResponseBytes p50/p75/p99/p999. No query text/identifier. (CFO-0047.02) |
+| `cloudflare.queues.message.max_queue_avg_lag` | Gauge / `s` | Latest observed complete bucket maximum of per-queue average lag, ReadMessage only; milliseconds to seconds, no queue ID. Not a universal snapshot-retirement policy. (CFO-0047.02) |
+| `cloudflare.queues.message.max_queue_avg_retries` | Gauge / `{retry}` | Latest observed complete bucket maximum of per-queue average retries, ReadMessage only; no queue ID. Missing/negative N/A values omitted, real zero retained. (CFO-0047.02) |
+| `cloudflare.queues.message.billable_operations.by_action` | Counter / `{operation}` | `sum.billableOperations` by action type, consumer type and outcome; no queue ID, old aggregate unchanged. (CFO-0047.02) |
+| `cloudflare.health_check.events` | Counter / `{event}` | Pro-only opt-in event count by zone name, source healthStatus string and failure reason; separate from timing grouping. (CFO-0050.03) |
+| `cloudflare.health_check.rtt` | Gauge / `s` | Latest complete per-origin bucket average rttMs / 1000, bounded non-IP identity; omit absent/N/A, no fabricated zero. (CFO-0050.03) |
+| `cloudflare.health_check.ttfb` | Gauge / `s` | Latest complete per-origin bucket average timeToFirstByteMs / 1000. (CFO-0050.03) |
+| `cloudflare.health_check.tcp_connection` | Gauge / `s` | Latest complete per-origin bucket average tcpConnMs / 1000. (CFO-0050.03) |
+| `cloudflare.health_check.tls_handshake` | Gauge / `s` | Latest complete per-origin bucket average tlsHandshakeMs / 1000. (CFO-0050.03) |
+
+| Attribute | Meaning |
+| --- | --- |
+| `cloudflare.logpush.scope` | `account` or `zone`. (CFO-0047.03) |
+| `cloudflare.logpush.zone` | Zone name, never account/zone ID. (CFO-0047.03) |
+| `cloudflare.logpush.job_id` | Source numeric job ID; explicit opt-in and platform cap. (CFO-0047.03) |
+| `cloudflare.logpush.destination_type` | Bounded source destination type. (CFO-0047.03) |
+| `cloudflare.logpush.status_code` | Source destination status code as string. (CFO-0047.03) |
+| `cloudflare.logpush.final_attempt` | `true`/`false` from source final 0/1. (CFO-0047.03) |
+| `cloudflare.queues.action_type` | Source action type. (CFO-0047.02) |
+| `cloudflare.queues.consumer_type` | Source consumer type. (CFO-0047.02) |
+| `cloudflare.queues.outcome` | Source outcome. (CFO-0047.02) |
+| `cloudflare.health_check.zone` | Zone name. (CFO-0050.03) |
+| `cloudflare.health_check.status` | Source string healthStatus, not an invented boolean mapping. (CFO-0050.03) |
+| `cloudflare.health_check.failure_reason` | Bounded source reason; empty maps to `none`. (CFO-0050.03) |
+| `cloudflare.health_check.origin` | Non-IP FQDN or human health-check name, bounded to 128 characters; no originIP/raw resource ID, omit timings without usable identity. (CFO-0050.03) |
+| `cloudflare.workers.script_name` (reused by DO) | Bounded script name; omit new per-script points when unavailable. (CFO-0047.02) |
+| `cloudflare.statistic` (reused by DO/D1) | p50/p75/p99/p999 for extension quantiles; old statistic values unchanged. (CFO-0047.02) |
+
 ## Metrics
 
 | Name | Unit | Meaning |

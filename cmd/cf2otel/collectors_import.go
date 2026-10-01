@@ -12,6 +12,7 @@ import (
 	"github.com/rknightion/cf2otel/internal/collectors/email"
 	"github.com/rknightion/cf2otel/internal/collectors/firewall"
 	"github.com/rknightion/cf2otel/internal/collectors/gateway"
+	"github.com/rknightion/cf2otel/internal/collectors/healthchecks"
 	"github.com/rknightion/cf2otel/internal/collectors/httpreq"
 	"github.com/rknightion/cf2otel/internal/collectors/inventory"
 	"github.com/rknightion/cf2otel/internal/collectors/kv"
@@ -49,4 +50,5 @@ func registerCollectors(deps collector.Deps) {
 	selfobs.Register(deps)
 	certs.Register(deps)
 	tunnels.Register(deps)
+	healthchecks.Register(deps)
 }

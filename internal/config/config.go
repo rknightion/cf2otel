@@ -133,7 +133,7 @@ var collectorNames = []string{
 	"email.routing", "email.sending", "selfobs",
 }
 
-var disabledCollectorNames = []string{"aigateway.coverage"}
+var disabledCollectorNames = []string{"aigateway.coverage", "logpush.failures", "healthchecks.events"}
 
 func Default() Config {
 	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{RequestSource: "eyeball", Breakdowns: []string{"status", "origin_status", "country", "protocol", "tls_protocol", "method", "content_type"}, Scope: "access_protected", MaxMetricHostsPerZone: 1000, MaxMetricSeriesPerWindow: 10000}, Platform: PlatformConfig{MaxMetricSeriesPerWindow: 500}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{MetricCardinalityLimit: 10000, Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
@@ -146,6 +146,9 @@ func Default() Config {
 	// Snapshot collectors have no lookback window or checkpoint key.
 	c.Collectors["certs.packs"] = CollectorConfig{Interval: time.Hour}
 	c.Collectors["tunnels.status"] = CollectorConfig{Interval: time.Minute}
+	c.Collectors["httpreq.transfer"] = CollectorConfig{Enabled: true, Interval: time.Hour}
+	// Threat rollups use complete UTC hours; alignment and holdback belong to the collector.
+	c.Collectors["httpreq.threats"] = CollectorConfig{Enabled: true, Interval: time.Hour, InitialLookback: time.Hour, MaxWindow: time.Hour}
 	// GraphQL AI Gateway Groups showed unbounded ingestion lag in the verified
 	// account. REST logs provide the wave-1 metrics; do not schedule Groups.
 	metrics := c.Collectors["aigateway.metrics"]
@@ -293,7 +296,7 @@ func (c Config) Validate() error {
 		if v.Enabled {
 			add(v.Interval > 0, name+".interval must be positive")
 			add(v.InitialLookback >= 0, name+".initial_lookback must be nonnegative")
-			if name != "certs.packs" && name != "tunnels.status" {
+			if name != "certs.packs" && name != "tunnels.status" && name != "httpreq.transfer" {
 				add(v.MaxWindow > 0, name+".max_window must be positive")
 			}
 		}
