@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 
-from build_dashboard import render
+from build_dashboard import CERT_FRESH, CERTS_PACKS_FRESHNESS_SECONDS, CERTS_PACKS_INTERVAL_SECONDS, render
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "alerts" / "grafana-managed"
@@ -40,10 +40,20 @@ TUNNELS_STATUS_FRESHNESS_SECONDS = 3 * TUNNELS_STATUS_INTERVAL_SECONDS
 LOGPUSH_FINAL = 'cloudflare_logpush_failed_uploads_total{service_name="cf2otel",cloudflare_logpush_final_attempt="true",cloudflare_logpush_status_code=~"[3-9][0-9][0-9]"}'
 LOGPUSH_FINAL_FAILURE = f'(increase({LOGPUSH_FINAL}[15m]) > 0) or ({LOGPUSH_FINAL} unless max_over_time({LOGPUSH_FINAL}[15m] offset 15m))'
 
-# Certificate alerts are intentionally withheld: cumulative gauge attribute-series
-# retain old statuses/expiry values with fresh export timestamps. No PromQL selector
-# can establish current pack state from that output; snapshot retirement is required.
+# Snapshot gauges retire removed packs and old status labels atomically. Match
+# presence before aggregating expiry, so an unknown expiry never becomes zero.
+CERT_PACK = 'cloudflare_certificate_pack{service_name="cf2otel"}'
+CERT_ID = 'cloudflare_certificate_zone, cloudflare_certificate_pack_id'
+CERT_EXPIRY = f'max by ({CERT_ID}) (((cloudflare_certificate_expiry_seconds{{service_name="cf2otel"}} < bool 1209600) and ({CERT_PACK} == 1)) and on(instance) {CERT_FRESH})'
+CERT_STATUS = f'(max by ({CERT_ID}) ((cloudflare_certificate_pack{{service_name="cf2otel",cloudflare_certificate_status!="active"}} == 1) and on(instance) {CERT_FRESH}) or on ({CERT_ID}) (0 * max by ({CERT_ID}) (({CERT_PACK} == 1) and on(instance) {CERT_FRESH})))'
+CERT_DESCRIPTION = (f"Requires opt-in certs.packs and collector last success less than {CERTS_PACKS_FRESHNESS_SECONDS} seconds old "
+                    f"(three deployment polling intervals of {CERTS_PACKS_INTERVAL_SECONDS} seconds). Removed packs and previous statuses retire. "
+                    "Absent/stale data is not proof of health. For a non-default interval regenerate with GRAFANA_CERTS_PACKS_INTERVAL_SECONDS matching the deployment.")
 RULES = [
+    ("cf2otel-certificate-expiry", "Cloudflare certificate expires in under 14 days", "Earliest observed expiry in a present pack is under 14 days, including already expired packs. Seconds to expiry are observed at the last successful poll, not a live countdown. " + CERT_DESCRIPTION, 2640,
+     CERT_EXPIRY, 0, "NoData"),
+    ("cf2otel-certificate-status", "Cloudflare certificate pack is not active", "A present certificate pack has a non-active status, including packs with unknown expiry. " + CERT_DESCRIPTION, 2645,
+     CERT_STATUS, 0, "NoData"),
     ("cf2otel-tunnel-unhealthy", "Cloudflare tunnel is not healthy", f"The current (value 1) tunnel status has been non-healthy for five minutes, with collector last success less than {TUNNELS_STATUS_FRESHNESS_SECONDS} seconds old (three deployment polling intervals of {TUNNELS_STATUS_INTERVAL_SECONDS} seconds). Retired value-0 states are excluded. Collector is disabled by default; stale/absent data is not proof of health.", 2641,
      '(max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel",cloudflare_tunnel_status!="healthy"} == 1) or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel"} == 1))) and on() (time() - max(cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="tunnels.status"}) < ' + str(TUNNELS_STATUS_FRESHNESS_SECONDS) + ')', 0, "NoData"),
     ("cf2otel-collector-stale", "cf2otel collector is stale", "Collector last-success timestamp is older than 15 minutes.", 401,
@@ -78,18 +88,80 @@ def resource(name: str, title: str, description: str, panel_id: int, expr: str, 
         "panelRef": {"dashboardUID": "cf2otel", "panelID": panel_id}}}
 
 
+def certificate_fixtures() -> dict:
+    """Promtool cases exercise generated queries against atomic snapshot exports.
+
+    Expectations come from the alert contract, not the generated expression.
+    Identity labels are opaque, and both gauges retire in the same export.
+    """
+    expressions = {r[0]: r[4] for r in RULES}
+    identity = '{cloudflare_certificate_pack_id="pack-demo",cloudflare_certificate_zone="zone-demo"}'
+    labels = 'service_name="cf2otel",cloudflare_certificate_zone="zone-demo",cloudflare_certificate_pack_id="pack-demo"'
+    tests = []
+    cases = [
+        # name, expiry, status, age, expected expiry/status scores
+        ("under fourteen days", 1209599, "active", 0, 1, 0),
+        ("exactly fourteen days", 1209600, "active", 0, 0, 0),
+        ("expired", -1, "active", 0, 1, 0),
+        ("pending unknown expiry", None, "pending", 0, None, 1),
+        ("fresh just inside three intervals", 100, "pending", CERTS_PACKS_FRESHNESS_SECONDS - 1, 1, 1),
+        ("stale at three intervals", 100, "pending", CERTS_PACKS_FRESHNESS_SECONDS, None, None),
+        ("stale beyond three intervals", 100, "pending", CERTS_PACKS_FRESHNESS_SECONDS + 1, None, None),
+    ]
+    for name, expiry, status, age, expiry_score, status_score in cases:
+        series = [{"series": f'cloudflare_certificate_pack{{{labels},cloudflare_certificate_status="{status}"}}', "values": "1 1"},
+                  {"series": 'cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="certs.packs"}', "values": f'{300 - age} {300 - age}'}]
+        if expiry is not None:
+            series.append({"series": f'cloudflare_certificate_expiry_seconds{{{labels},cloudflare_certificate_status="{status}"}}', "values": f'{expiry} {expiry}'})
+        checks = []
+        for suffix, score in (("expiry", expiry_score), ("status", status_score)):
+            checks.append({"expr": expressions[f"cf2otel-certificate-{suffix}"], "eval_time": "5m",
+                           "exp_samples": [] if score is None else [{"labels": identity, "value": score}]})
+        tests.append({"name": name, "interval": "5m", "input_series": series, "promql_expr_test": checks})
+    # Old pending/expiring series disappear, rather than remaining as freshly
+    # exported synchronous gauges. Include both a healthy replacement and empty inventory.
+    for replacement in (True, False):
+        series = [{"series": f'{metric}{{{labels},cloudflare_certificate_status="pending"}}', "values": f'{value} stale'}
+                  for metric, value in (("cloudflare_certificate_pack", 1), ("cloudflare_certificate_expiry_seconds", 100))]
+        series.append({"series": 'cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="certs.packs"}', "values": "0 60"})
+        if replacement:
+            series.extend({"series": f'{metric}{{{labels},cloudflare_certificate_status="active"}}', "values": f'_ {value}'}
+                          for metric, value in (("cloudflare_certificate_pack", 1), ("cloudflare_certificate_expiry_seconds", 2000000)))
+        checks = [{"expr": expressions[f"cf2otel-certificate-{suffix}"], "eval_time": when,
+                   "exp_samples": [{"labels": identity, "value": score}] if score is not None else []}
+                  for suffix in ("expiry", "status") for when, score in (("0s", 1), ("1m", 0 if replacement else None))]
+        tests.append({"name": "healthy replacement" if replacement else "empty snapshot retirement", "interval": "1m", "input_series": series, "promql_expr_test": checks})
+    # A fresh exporter must not resurrect a stale exporter's pending pack.
+    mixed = []
+    for instance, status, expiry, timestamp in (("stale-demo", "pending", 100, -CERTS_PACKS_FRESHNESS_SECONDS), ("fresh-demo", "active", 2000000, 0)):
+        mixed.extend({"series": f'{metric}{{{labels},instance="{instance}",cloudflare_certificate_status="{status}"}}', "values": str(value)}
+                     for metric, value in (("cloudflare_certificate_pack", 1), ("cloudflare_certificate_expiry_seconds", expiry)))
+        mixed.append({"series": f'cf2otel_scrape_last_success_timestamp_seconds{{service_name="cf2otel",cf2otel_collector="certs.packs",instance="{instance}"}}', "values": str(timestamp)})
+    tests.append({"name": "stale exporter alongside fresh exporter", "interval": "1m", "input_series": mixed,
+                  "promql_expr_test": [{"expr": expressions[f"cf2otel-certificate-{suffix}"], "eval_time": "0s",
+                                        "exp_samples": [{"labels": identity, "value": 0}]} for suffix in ("expiry", "status")]})
+    # Presence without a last-success signal must never prove freshness.
+    tests.append({"name": "absent collector freshness", "interval": "1m",
+                  "input_series": [{"series": f'{metric}{{{labels},cloudflare_certificate_status="pending"}}', "values": str(value)}
+                                   for metric, value in (("cloudflare_certificate_pack", 1), ("cloudflare_certificate_expiry_seconds", 100))],
+                  "promql_expr_test": [{"expr": expressions[f"cf2otel-certificate-{suffix}"], "eval_time": "0s", "exp_samples": []}
+                                       for suffix in ("expiry", "status")]})
+    return {"rule_files": [], "evaluation_interval": "1m", "tests": tests}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    for rule in RULES:
-        path = OUT / f"{rule[0]}.json"
-        content = json.dumps(resource(*rule), indent=2, sort_keys=True) + "\n"
+    artifacts = [(OUT / f"{rule[0]}.json", resource(*rule)) for rule in RULES]
+    artifacts.append((OUT / "fixtures" / "certificates.test.yaml", certificate_fixtures()))
+    for path, artifact in artifacts:
+        content = json.dumps(artifact, indent=2, sort_keys=True) + "\n"
         if args.check:
             if not path.exists() or path.read_text(encoding="utf-8") != content:
                 raise SystemExit(f"generated rule drift: {path.relative_to(ROOT)}")
         else:
-            OUT.mkdir(parents=True, exist_ok=True)
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
 
 

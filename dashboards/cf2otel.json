@@ -13867,7 +13867,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=~\"$zone\"}",
+                        "expr": "(cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=~\"$zone\"} and cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=~\"$zone\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "",
@@ -13902,7 +13902,7 @@
                         "Value": "Observed seconds to expiry",
                         "cloudflare_certificate_authority": "Authority",
                         "cloudflare_certificate_pack_id": "Pack",
-                        "cloudflare_certificate_status": "Observed status",
+                        "cloudflare_certificate_status": "Status",
                         "cloudflare_certificate_type": "Type",
                         "cloudflare_certificate_zone": "Zone"
                       }
@@ -13912,10 +13912,10 @@
               ]
             }
           },
-          "description": "Disabled by default. Each row is an observed pack attribute-series, with seconds-to-expiry at its last poll. The cumulative SDK retains old status and expiry series and reexports them with fresh timestamps: rows cannot establish current status or expiry. Values are not a live countdown; no certificate alert is shipped until snapshot retirement/freshness is fixed.",
+          "description": "Disabled by default. Latest atomic snapshot, excluding packs without a parsable expiry; removed packs and prior statuses retire. Seconds to earliest expiry are observed at the last successful poll, not a live countdown. Requires collector last success less than 10800 seconds old (three polling intervals). Expiry under 14 days includes already expired packs. No data is not proof of health. If certs.packs uses a non-default interval, regenerate with GRAFANA_CERTS_PACKS_INTERVAL_SECONDS matching the deployment.",
           "id": 2640,
           "links": [],
-          "title": "Certificate expiry observations (not current inventory)",
+          "title": "Current certificate expiry",
           "vizConfig": {
             "group": "table",
             "kind": "VizConfig",
@@ -14300,6 +14300,106 @@
                 "showTime": true,
                 "sortOrder": "Descending",
                 "wrapLogMessage": true
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2645": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=~\"$zone\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "",
+                        "range": false,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "organize",
+                  "spec": {
+                    "id": "organize",
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "Value": true
+                      },
+                      "indexByName": {
+                        "cloudflare_certificate_authority": 3,
+                        "cloudflare_certificate_pack_id": 1,
+                        "cloudflare_certificate_status": 4,
+                        "cloudflare_certificate_type": 2,
+                        "cloudflare_certificate_zone": 0
+                      },
+                      "renameByName": {
+                        "cloudflare_certificate_authority": "Authority",
+                        "cloudflare_certificate_pack_id": "Pack",
+                        "cloudflare_certificate_status": "Status",
+                        "cloudflare_certificate_type": "Type",
+                        "cloudflare_certificate_zone": "Zone"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "description": "Disabled by default. Present packs from the latest atomic snapshot, including pending packs with unknown expiry. Collector last success must be less than 10800 seconds old (three polling intervals). Non-active status alerts read pack presence, not expiry. Removed packs and old status series retire; no data is not proof of health.",
+          "id": 2645,
+          "links": [],
+          "title": "Current certificate pack status",
+          "vizConfig": {
+            "group": "table",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": false
+                  },
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "options": {
+                "cellHeight": "sm",
+                "footer": {
+                  "countRows": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "show": false
+                },
+                "showHeader": true
               }
             },
             "version": "12.1.0"
@@ -25783,15 +25883,28 @@
                                     "name": "panel-2640"
                                   },
                                   "height": 10,
-                                  "width": 24,
+                                  "width": 12,
                                   "x": 0,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2645"
+                                  },
+                                  "height": 10,
+                                  "width": 12,
+                                  "x": 12,
                                   "y": 0
                                 }
                               }
                             ]
                           }
                         },
-                        "title": "Certificates (observations only)"
+                        "title": "Certificates (current snapshot)"
                       }
                     },
                     {

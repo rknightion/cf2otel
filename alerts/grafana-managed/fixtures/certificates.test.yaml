@@ -1,0 +1,453 @@
+{
+  "evaluation_interval": "1m",
+  "rule_files": [],
+  "tests": [
+    {
+      "input_series": [
+        {
+          "series": "cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"active\"}",
+          "values": "1 1"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}",
+          "values": "300 300"
+        },
+        {
+          "series": "cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"active\"}",
+          "values": "1209599 1209599"
+        }
+      ],
+      "interval": "5m",
+      "name": "under fourteen days",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 1
+            }
+          ],
+          "expr": "max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (((cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\"} < bool 1209600) and (cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1)) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))"
+        },
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 0
+            }
+          ],
+          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!=\"active\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"active\"}",
+          "values": "1 1"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}",
+          "values": "300 300"
+        },
+        {
+          "series": "cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"active\"}",
+          "values": "1209600 1209600"
+        }
+      ],
+      "interval": "5m",
+      "name": "exactly fourteen days",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 0
+            }
+          ],
+          "expr": "max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (((cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\"} < bool 1209600) and (cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1)) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))"
+        },
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 0
+            }
+          ],
+          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!=\"active\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"active\"}",
+          "values": "1 1"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}",
+          "values": "300 300"
+        },
+        {
+          "series": "cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"active\"}",
+          "values": "-1 -1"
+        }
+      ],
+      "interval": "5m",
+      "name": "expired",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 1
+            }
+          ],
+          "expr": "max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (((cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\"} < bool 1209600) and (cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1)) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))"
+        },
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 0
+            }
+          ],
+          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!=\"active\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "1 1"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}",
+          "values": "300 300"
+        }
+      ],
+      "interval": "5m",
+      "name": "pending unknown expiry",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [],
+          "expr": "max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (((cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\"} < bool 1209600) and (cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1)) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))"
+        },
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 1
+            }
+          ],
+          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!=\"active\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "1 1"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}",
+          "values": "-10499 -10499"
+        },
+        {
+          "series": "cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "100 100"
+        }
+      ],
+      "interval": "5m",
+      "name": "fresh just inside three intervals",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 1
+            }
+          ],
+          "expr": "max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (((cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\"} < bool 1209600) and (cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1)) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))"
+        },
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 1
+            }
+          ],
+          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!=\"active\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "1 1"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}",
+          "values": "-10500 -10500"
+        },
+        {
+          "series": "cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "100 100"
+        }
+      ],
+      "interval": "5m",
+      "name": "stale at three intervals",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [],
+          "expr": "max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (((cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\"} < bool 1209600) and (cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1)) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))"
+        },
+        {
+          "eval_time": "5m",
+          "exp_samples": [],
+          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!=\"active\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "1 1"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}",
+          "values": "-10501 -10501"
+        },
+        {
+          "series": "cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "100 100"
+        }
+      ],
+      "interval": "5m",
+      "name": "stale beyond three intervals",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [],
+          "expr": "max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (((cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\"} < bool 1209600) and (cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1)) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))"
+        },
+        {
+          "eval_time": "5m",
+          "exp_samples": [],
+          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!=\"active\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "1 stale"
+        },
+        {
+          "series": "cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "100 stale"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}",
+          "values": "0 60"
+        },
+        {
+          "series": "cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"active\"}",
+          "values": "_ 1"
+        },
+        {
+          "series": "cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"active\"}",
+          "values": "_ 2000000"
+        }
+      ],
+      "interval": "1m",
+      "name": "healthy replacement",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 1
+            }
+          ],
+          "expr": "max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (((cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\"} < bool 1209600) and (cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1)) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))"
+        },
+        {
+          "eval_time": "1m",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 0
+            }
+          ],
+          "expr": "max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (((cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\"} < bool 1209600) and (cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1)) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 1
+            }
+          ],
+          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!=\"active\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))"
+        },
+        {
+          "eval_time": "1m",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 0
+            }
+          ],
+          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!=\"active\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "1 stale"
+        },
+        {
+          "series": "cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "100 stale"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}",
+          "values": "0 60"
+        }
+      ],
+      "interval": "1m",
+      "name": "empty snapshot retirement",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 1
+            }
+          ],
+          "expr": "max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (((cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\"} < bool 1209600) and (cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1)) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))"
+        },
+        {
+          "eval_time": "1m",
+          "exp_samples": [],
+          "expr": "max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (((cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\"} < bool 1209600) and (cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1)) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 1
+            }
+          ],
+          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!=\"active\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))"
+        },
+        {
+          "eval_time": "1m",
+          "exp_samples": [],
+          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!=\"active\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",instance=\"stale-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "1"
+        },
+        {
+          "series": "cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",instance=\"stale-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "100"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\",instance=\"stale-demo\"}",
+          "values": "-10800"
+        },
+        {
+          "series": "cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",instance=\"fresh-demo\",cloudflare_certificate_status=\"active\"}",
+          "values": "1"
+        },
+        {
+          "series": "cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",instance=\"fresh-demo\",cloudflare_certificate_status=\"active\"}",
+          "values": "2000000"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\",instance=\"fresh-demo\"}",
+          "values": "0"
+        }
+      ],
+      "interval": "1m",
+      "name": "stale exporter alongside fresh exporter",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 0
+            }
+          ],
+          "expr": "max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (((cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\"} < bool 1209600) and (cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1)) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_zone=\"zone-demo\"}",
+              "value": 0
+            }
+          ],
+          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!=\"active\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "1"
+        },
+        {
+          "series": "cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=\"zone-demo\",cloudflare_certificate_pack_id=\"pack-demo\",cloudflare_certificate_status=\"pending\"}",
+          "values": "100"
+        }
+      ],
+      "interval": "1m",
+      "name": "absent collector freshness",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [],
+          "expr": "max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (((cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\"} < bool 1209600) and (cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1)) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [],
+          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!=\"active\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))"
+        }
+      ]
+    }
+  ]
+}

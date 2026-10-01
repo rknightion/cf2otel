@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +25,31 @@ S = 'service_name="cf2otel"'
 HTTP = S + ',cloudflare_http_zone=~"$zone",cloudflare_http_host=~"$host"'
 HTTP_ZONE = S + ',cloudflare_http_zone=~"$zone"'
 CERT = S + ',cloudflare_certificate_zone=~"$zone"'
+
+
+def certs_packs_interval_seconds() -> int:
+    """Generator setting must match the deployment's certs.packs interval.
+
+    The default is config.Default().Collectors["certs.packs"].Interval (1h).
+    This is not a new exporter configuration key.
+    """
+    key = "GRAFANA_CERTS_PACKS_INTERVAL_SECONDS"
+    value = os.environ.get(key, "3600")
+    if not value.isascii() or not value.isdecimal():
+        raise SystemExit(f"{key} must be a positive integer in seconds")
+    try:
+        interval = int(value)
+    except ValueError:
+        raise SystemExit(f"{key} must be a positive integer in seconds") from None
+    if interval <= 0:
+        raise SystemExit(f"{key} must be a positive integer in seconds")
+    return interval
+
+
+CERTS_PACKS_INTERVAL_SECONDS = certs_packs_interval_seconds()
+CERTS_PACKS_FRESHNESS_SECONDS = 3 * CERTS_PACKS_INTERVAL_SECONDS
+# OTLP service.instance.id translates to the Prometheus instance label.
+CERT_FRESH = '(time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="certs.packs"}) < ' + str(CERTS_PACKS_FRESHNESS_SECONDS) + ')'
 FW = S + ',cloudflare_firewall_zone=~"$zone"'
 DNS = S + ',cloudflare_dns_zone=~"$zone"'
 GW = S + ',cloudflare_ai_gateway_gateway_name=~"$gateway"'
@@ -1092,15 +1118,25 @@ def platform_tab(d: Dashboard) -> dict:
                               (2635, "Workers request-duration statistics", "cloudflare_workers_request_duration_seconds")):
         d.ts(pid, title, "Per-script window p50/p75/p99/p999 in seconds, not aggregate percentiles. Workers GB*s duration fields are not exported.",
             [prom(f'{metric}{{{WRK}}}', "{{cloudflare_workers_script_name}} {{cloudflare_statistic}}")], unit="s", legend="table")
-    d.table(2640, "Certificate expiry observations (not current inventory)",
-        "Disabled by default. Each row is an observed pack attribute-series, with seconds-to-expiry at its last poll. "
-        "The cumulative SDK retains old status and expiry series and reexports them with fresh timestamps: rows cannot establish current status or expiry. "
-        "Values are not a live countdown; no certificate alert is shipped until snapshot retirement/freshness is fixed.",
-        [table_q(f'cloudflare_certificate_expiry_seconds{{{CERT}}}')],
+    d.table(2640, "Current certificate expiry",
+        "Disabled by default. Latest atomic snapshot, excluding packs without a parsable expiry; removed packs and prior statuses retire. "
+        "Seconds to earliest expiry are observed at the last successful poll, not a live countdown. "
+        f"Requires collector last success less than {CERTS_PACKS_FRESHNESS_SECONDS} seconds old (three polling intervals). "
+        "Expiry under 14 days includes already expired packs. No data is not proof of health. "
+        "If certs.packs uses a non-default interval, regenerate with GRAFANA_CERTS_PACKS_INTERVAL_SECONDS matching the deployment.",
+        [table_q(f'(cloudflare_certificate_expiry_seconds{{{CERT}}} and cloudflare_certificate_pack{{{CERT}}} == 1) and on(instance) {CERT_FRESH}')],
         columns={"cloudflare_certificate_zone": "Zone", "cloudflare_certificate_pack_id": "Pack", "cloudflare_certificate_type": "Type",
-                 "cloudflare_certificate_authority": "Authority", "cloudflare_certificate_status": "Observed status", "Value": "Observed seconds to expiry"},
+                 "cloudflare_certificate_authority": "Authority", "cloudflare_certificate_status": "Status", "Value": "Observed seconds to expiry"},
         order=["cloudflare_certificate_zone", "cloudflare_certificate_pack_id", "cloudflare_certificate_type", "cloudflare_certificate_authority", "cloudflare_certificate_status", "Value"],
         overrides=[by_name("Observed seconds to expiry", unit="s", decimals=0)])
+    d.table(2645, "Current certificate pack status",
+        "Disabled by default. Present packs from the latest atomic snapshot, including pending packs with unknown expiry. "
+        f"Collector last success must be less than {CERTS_PACKS_FRESHNESS_SECONDS} seconds old (three polling intervals). "
+        "Non-active status alerts read pack presence, not expiry. Removed packs and old status series retire; no data is not proof of health.",
+        [table_q(f'(cloudflare_certificate_pack{{{CERT}}} == 1) and on(instance) {CERT_FRESH}')],
+        columns={"cloudflare_certificate_zone": "Zone", "cloudflare_certificate_pack_id": "Pack", "cloudflare_certificate_type": "Type",
+                 "cloudflare_certificate_authority": "Authority", "cloudflare_certificate_status": "Status"},
+        hide=["Value"], order=["cloudflare_certificate_zone", "cloudflare_certificate_pack_id", "cloudflare_certificate_type", "cloudflare_certificate_authority", "cloudflare_certificate_status"])
     d.table(2641, "Current tunnel status", "Disabled by default. Only value-1 status series are current; retired status series have value zero and are excluded.",
         [table_q(f'cloudflare_tunnel_status{{{S}}} == 1')],
         columns={"cloudflare_tunnel_name": "Tunnel", "cloudflare_tunnel_id": "ID", "cloudflare_tunnel_status": "Status"},
@@ -1116,7 +1152,7 @@ def platform_tab(d: Dashboard) -> dict:
         row("At a glance", [(pid, 3, 4) for pid, *_ in glance]),
         row("Workers", [(501, 16, 9), (2611, 8, 9)]),
         row("Workers invocation health", [(2630, 12, 8), (2631, 12, 8), (2632, 12, 8), (2633, 12, 8), (2634, 12, 8), (2635, 12, 8)]),
-        row("Certificates (observations only)", [(2640, 24, 10)]),
+        row("Certificates (current snapshot)", [(2640, 12, 10), (2645, 12, 10)]),
         row("Tunnels", [(2641, 24, 8), (2642, 12, 8), (2643, 12, 8), (2644, 24, 8)]),
         row("D1 and KV", [(601, 9, 7), (603, 9, 7), (604, 6, 7), (605, 12, 7), (606, 6, 7), (607, 6, 7)]),
         row("R2", [(705, 12, 8), (701, 12, 8), (706, 8, 8), (707, 8, 8), (703, 8, 8), (708, 24, 5)]),
