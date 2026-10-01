@@ -18,8 +18,10 @@ var (
 	conventionalHeader = regexp.MustCompile(`^([a-z][a-z0-9-]*)(?:\(([^()\r\n]+)\))?(!)?:[ \t]+([^\r\n]+)$`)
 	markdownListEntry  = regexp.MustCompile(`^(?:[-*+]\s+|[0-9]+[.)]\s+)`)
 	// Reject link metadata rather than attempting to render or strip Markdown.
+	// Treat backslash-escaped label characters as part of the label so an
+	// escaped closing bracket cannot hide the following destination or title.
 	// The input contract remains rendered text, including for ambiguous literals.
-	rawMarkdownMetadata = regexp.MustCompile(`(?m)\[[^\]\r\n]*\][ \t\r\n]*(?:\(|\[)|^[ \t]{0,3}\[[^\]\r\n]+\]:|<!--|</?[A-Za-z][^>]*>`)
+	rawMarkdownMetadata = regexp.MustCompile(`(?m)\[(?:\\[^\r\n]|[^\]\\\r\n])*\][ \t\r\n]*(?:\(|\[)|^[ \t]{0,3}\[(?:\\[^\r\n]|[^\]\\\r\n])+\]:|<!--|</?[A-Za-z][^>]*>`)
 	stableTag           = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:\+[0-9A-Za-z.-]+)?$`)
 )
 
