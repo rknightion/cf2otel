@@ -35,6 +35,16 @@ type statusCollector struct {
 	accountID string
 	mu        sync.Mutex
 	previous  map[string]string
+	metrics   map[string]telemetry.BufferedMetric
+	pending   *pendingSnapshot
+}
+
+// Only the last successful and one pending snapshot are retained. A pending
+// snapshot freezes event timestamps across partial emission failures.
+type pendingSnapshot struct {
+	statuses map[string]string
+	metrics  map[string]telemetry.BufferedMetric
+	buffer   *telemetry.Buffer
 }
 
 func (*statusCollector) Name() string                   { return "tunnels.status" }
@@ -76,7 +86,8 @@ func (c *statusCollector) rows(ctx context.Context) ([]tunnelRow, error) {
 
 // Collect reads one complete snapshot before emitting anything. Previous status is
 // process-local: the first observation of a tunnel (including after restart) emits
-// no event. Failed reads or emissions never advance the previous-status snapshot.
+// no event. Failed reads never clear state. Partial emissions retain a pending
+// snapshot, replayed with the same event dedupe keys before reconciling a new poll.
 func (c *statusCollector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -86,7 +97,7 @@ func (c *statusCollector) Collect(ctx context.Context, e telemetry.Emitter) erro
 	}
 	observed := time.Now()
 	next := make(map[string]string, len(rows))
-	b := &telemetry.Buffer{}
+	// Validate the entire new read before emitting even a pending snapshot.
 	for _, row := range rows {
 		if row.DeletedAt != nil {
 			continue
@@ -98,6 +109,15 @@ func (c *statusCollector) Collect(ctx context.Context, e telemetry.Emitter) erro
 			return fmt.Errorf("duplicate tunnel in snapshot")
 		}
 		next[row.ID] = row.Status
+	}
+	if err := c.finishPending(ctx, e); err != nil {
+		return err
+	}
+	b := &telemetry.Buffer{}
+	for _, row := range rows {
+		if row.DeletedAt != nil {
+			continue
+		}
 		base := []telemetry.Attr{{Key: semconv.AttrTunnelID, Value: row.ID}, {Key: semconv.AttrTunnelName, Value: row.Name}}
 		current := append(append([]telemetry.Attr(nil), base...), telemetry.Attr{Key: semconv.AttrTunnelStatus, Value: row.Status})
 		if err := b.Gauge(ctx, semconv.MetricTunnelStatus, 1, current...); err != nil {
@@ -141,17 +161,49 @@ func (c *statusCollector) Collect(ctx context.Context, e telemetry.Emitter) erro
 			}
 		}
 	}
+	current := make(map[string]telemetry.BufferedMetric, len(b.Metrics))
 	for _, m := range b.Metrics {
+		current[metricKey(m)] = m
+	}
+	// Synchronous cumulative gauges retain old attribute sets in the SDK.
+	// Retire only previously observed series; a first empty poll emits nothing.
+	var retired []telemetry.BufferedMetric
+	for _, key := range sortedKeys(c.metrics) {
+		if _, exists := current[key]; !exists {
+			m := c.metrics[key]
+			m.Value = 0
+			retired = append(retired, m)
+		}
+	}
+	b.Metrics = append(retired, b.Metrics...)
+	c.pending = &pendingSnapshot{statuses: next, metrics: current, buffer: b}
+	return c.finishPending(ctx, e)
+}
+
+func metricKey(m telemetry.BufferedMetric) string {
+	// Attributes are constructed in a fixed order; JSON avoids delimiter
+	// collisions in API-provided names and dimensions.
+	attrs, _ := json.Marshal(m.Attrs)
+	return m.Name + "\x00" + string(attrs)
+}
+
+func (c *statusCollector) finishPending(ctx context.Context, e telemetry.Emitter) error {
+	if c.pending == nil {
+		return nil
+	}
+	for _, m := range c.pending.buffer.Metrics {
 		if err := m.Replay(ctx, e); err != nil {
 			return err
 		}
 	}
-	for _, r := range b.Records {
+	for _, r := range c.pending.buffer.Records {
 		if err := r.Replay(ctx, e); err != nil {
 			return err
 		}
 	}
-	c.previous = next
+	c.previous = c.pending.statuses
+	c.metrics = c.pending.metrics
+	c.pending = nil
 	return nil
 }
 
