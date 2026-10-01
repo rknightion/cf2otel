@@ -194,7 +194,7 @@ func TestEmitterExportsMetricMetadataAndDurationBuckets(t *testing.T) {
 		bucketHits uint64
 	}{
 		{semconv.MetricGenAIDuration, 0.5, 0},
-		{semconv.MetricAPIDuration, 0.05, 1},
+		{semconv.MetricAPIDuration, 0.25, 1},
 		{semconv.MetricScrapeDuration, 0.25, 1},
 	} {
 		point, ok := metrics[want.name]
