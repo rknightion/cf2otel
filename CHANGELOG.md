@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.11.0](https://github.com/rknightion/cf2otel/compare/v0.10.1...v0.11.0) (2026-10-01)
+
+
+### Features
+
+* **collectors:** add Durable Objects D1 and Queues depth ([7e69463](https://github.com/rknightion/cf2otel/commit/7e69463460b6002282dfc9225d1facc3edd814a3))
+* **collectors:** add fail-closed platform depth preserving legacy metrics ([e82fc61](https://github.com/rknightion/cf2otel/commit/e82fc617ae508027042df584b2b928a456f3e17a))
+* **healthchecks:** add fail-closed opt-in event analytics ([a5954e7](https://github.com/rknightion/cf2otel/commit/a5954e78445757b89822fcd86b8d57f236f3745c))
+* **healthchecks:** collect opt-in event analytics ([5489f91](https://github.com/rknightion/cf2otel/commit/5489f911d426ce350725df23ece194b55492ccd5))
+* **httpreq:** add verified visits threats and transfer KPIs ([69e47a7](https://github.com/rknightion/cf2otel/commit/69e47a758295ab7921a95f890b26f3ebee61f46e))
+* **httpreq:** add visits threats and monthly transfer KPIs ([731ab6a](https://github.com/rknightion/cf2otel/commit/731ab6a0150ce4115ed97a320b29f2e8abefe988))
+* **logpush:** add fail-closed account and zone failure metrics ([2bc151b](https://github.com/rknightion/cf2otel/commit/2bc151b3dce64250aacda4e5eb72e2f179c3482a))
+* **logpush:** collect bounded failed uploads across account and zone scopes ([f8ebf96](https://github.com/rknightion/cf2otel/commit/f8ebf964e3e289b084c162f82a74a7c613ec0e05))
+* **seam:** freeze extension signals configuration and API contracts ([58617c8](https://github.com/rknightion/cf2otel/commit/58617c833aad23448db04230b6d8e48f934f6967))
+* **seam:** freeze verified extension collector contracts ([9705290](https://github.com/rknightion/cf2otel/commit/9705290995e3a7ccf80f1470458b20b6f2132035))
+
+
+### Bug Fixes
+
+* **aigateway:** bound each log commit by payload so a dense burst keeps delivering ([58ad345](https://github.com/rknightion/cf2otel/commit/58ad34531919688ed88131d4c69b0f59e9fed6dd))
+* **collectors:** preserve legacy series before admitting depth metrics ([6b5326c](https://github.com/rknightion/cf2otel/commit/6b5326c9d02ed7761d9061e0283d377c55fc4a5b))
+* **collectors:** reject invalid selected depth counts and null datasets ([531aec3](https://github.com/rknightion/cf2otel/commit/531aec3073f5ce453cda8122a99af029144eaf3f))
+* **healthchecks:** validate raw datasets and unsigned counts ([89f4991](https://github.com/rknightion/cf2otel/commit/89f4991aadddd9ff7637919e4f805c5b129e817b))
+* **httpreq:** reject null datasets when visits are selected ([1832b29](https://github.com/rknightion/cf2otel/commit/1832b29f8b627411045588b06aeb065e54c0488d))
+* **httpreq:** validate visits as raw unsigned integers ([6145796](https://github.com/rknightion/cf2otel/commit/614579686dbad3ffa322b935bccfbc73735c6a72))
+* **logpush:** reject null failure datasets before emission ([dbc47b5](https://github.com/rknightion/cf2otel/commit/dbc47b5c373b5e5316eb758589a785287f8ed20f))
+
 ## [0.10.1](https://github.com/rknightion/cf2otel/compare/v0.10.0...v0.10.1) (2026-10-01)
 
 
