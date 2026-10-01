@@ -92,6 +92,7 @@ type metricPoint struct {
 	name  string
 	kind  metricKind
 	value float64
+	attrs []telemetry.Attr
 }
 
 func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (time.Time, error) {
@@ -174,16 +175,20 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 	if err != nil {
 		return from, fmt.Errorf("aggregate %s: %w", c.spec.dataset, err)
 	}
-	if !found {
-		return completeTo, nil
+	points, err := c.collectDepth(ctx, request, settings, completeFrom, completeTo)
+	if err != nil {
+		return from, err
 	}
-	points := capMetricSeries(c.spec.name, []metricPoint{{name: c.spec.metric, kind: c.spec.kind, value: value}}, seriesLimit, slog.Default())
+	if found {
+		points = append(points, metricPoint{name: c.spec.metric, kind: c.spec.kind, value: value})
+	}
+	points = capMetricSeries(c.spec.name, points, seriesLimit, slog.Default())
 	for _, point := range points {
 		var emitErr error
 		if point.kind == gaugeMetric {
-			emitErr = out.Gauge(ctx, point.name, point.value)
+			emitErr = out.Gauge(ctx, point.name, point.value, point.attrs...)
 		} else {
-			emitErr = out.Counter(ctx, point.name, point.value)
+			emitErr = out.Counter(ctx, point.name, point.value, point.attrs...)
 		}
 		if emitErr != nil {
 			return from, emitErr
@@ -377,7 +382,7 @@ func ceilBucket(value time.Time) time.Time {
 }
 
 func capMetricSeries(collectorName string, points []metricPoint, limit int, logger *slog.Logger) []metricPoint {
-	sort.Slice(points, func(i, j int) bool { return points[i].name < points[j].name })
+	sort.Slice(points, func(i, j int) bool { return metricPointKey(points[i]) < metricPointKey(points[j]) })
 	if len(points) <= limit {
 		return points
 	}

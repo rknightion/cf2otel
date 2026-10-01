@@ -1,0 +1,142 @@
+package queues
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/rknightion/cf2otel/internal/cfapi"
+	"github.com/rknightion/cf2otel/internal/semconv"
+	"github.com/rknightion/cf2otel/internal/telemetry"
+)
+
+func TestDepthRegisterHTTP(t *testing.T) {
+	for _, mode := range []string{"success", "absent", "error", "duplicate", "cap"} {
+		t.Run(mode, func(t *testing.T) {
+			from := time.Now().UTC().Truncate(5 * time.Minute).Add(-30 * time.Minute)
+			fields := []string{"count", "sum_billableOperations", "dimensions_datetimeFiveMinutes", "dimensions_queueId", "avg_lagTime", "avg_retryCount", "dimensions_actionType", "dimensions_consumerType", "dimensions_outcome"}
+			if mode == "absent" {
+				fields = fields[:3]
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var req struct {
+					Query string `json:"query"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&req)
+				q := req.Query
+				var node map[string]any
+				if strings.Contains(q, "settings{") {
+					node = map[string]any{"settings": map[string]any{"queueMessageOperationsAdaptiveGroups": map[string]any{"enabled": true, "availableFields": fields, "maxNumberOfFields": 5, "maxPageSize": 100, "maxDuration": 300, "notOlderThan": 86400}}}
+				} else {
+					if strings.Contains(q, "lagTime") || strings.Contains(q, "retryCount") {
+						if !strings.Contains(q, "actionType:\"ReadMessage\"") || !strings.Contains(q, "queueId") {
+							t.Error("missing validated ReadMessage filter/internal queue grouping")
+						}
+						if strings.Contains(q, "consumerType") || strings.Contains(q, "outcome") {
+							t.Error("average split by action dimensions")
+						}
+					}
+					if mode == "error" && strings.Contains(q, "lagTime") {
+						_ = json.NewEncoder(w).Encode(map[string]any{"errors": []map[string]string{{"message": "fixture failure"}}})
+						return
+					}
+					rows := []map[string]any{}
+					for i := 0; i < 2; i++ {
+						at := from.Add(time.Duration(i) * 5 * time.Minute)
+						if !strings.Contains(q, "datetime_geq:\""+at.Format(time.RFC3339)+"\"") {
+							continue
+						}
+						queues := 1
+						if strings.Contains(q, "queueId") {
+							queues = 2
+						}
+						for j := 0; j < queues; j++ {
+							lag := 9000
+							retries := 9
+							if i == 1 {
+								lag = 1000 + j*1500
+								retries = j * 2
+							}
+							row := map[string]any{"dimensions": map[string]any{"datetimeFiveMinutes": at.Format(time.RFC3339), "queueId": []string{"invented-q-a", "invented-q-b"}[j], "actionType": "ReadMessage", "consumerType": "worker", "outcome": "success"}, "count": 7, "sum": map[string]any{"billableOperations": 11}, "avg": map[string]any{"lagTime": lag, "retryCount": retries}}
+							if strings.Contains(q, "consumerType") {
+								row["sum"] = map[string]any{"billableOperations": 8}
+								row["dimensions"].(map[string]any)["outcome"] = "none"
+								rows = append(rows, map[string]any{"dimensions": map[string]any{"datetimeFiveMinutes": at.Format(time.RFC3339), "actionType": "SendMessage", "consumerType": "", "outcome": "none"}, "sum": map[string]any{"billableOperations": 3}})
+							}
+							rows = append(rows, row)
+							if mode == "duplicate" && strings.Contains(q, "lagTime") {
+								rows = append(rows, row)
+							}
+						}
+					}
+					node = map[string]any{"queueMessageOperationsAdaptiveGroups": rows}
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"viewer": map[string]any{"accounts": []any{node}}}})
+			}))
+			defer server.Close()
+			cfg := queueTestConfig("queues.message_operations")
+			cfg.Cloudflare.APIBase = server.URL
+			if mode == "cap" {
+				cfg.Platform.MaxMetricSeriesPerWindow = 1
+			}
+			window := queueWindow(t, cfg, cfapi.New(cfg.Cloudflare), "queues.message_operations")
+			out := &telemetry.Buffer{}
+			_, err := window.CollectWindow(context.Background(), from, from.Add(10*time.Minute), out)
+			if mode == "error" || mode == "duplicate" {
+				if err == nil || len(out.Metrics) != 0 {
+					t.Fatalf("failure must emit nothing: err=%v metrics=%v", err, out.Metrics)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mode == "cap" {
+				if len(out.Metrics) != 1 {
+					t.Fatalf("cap metrics=%v", out.Metrics)
+				}
+				return
+			}
+			got := queueMetrics(out.Metrics)
+			if got[semconv.MetricQueuesMessageOperations].Value != 14 || got[semconv.MetricQueuesBillableOperations].Value != 22 {
+				t.Fatalf("old aggregate changed: %v", out.Metrics)
+			}
+			if mode == "absent" {
+				if len(out.Metrics) != 2 {
+					t.Fatalf("unentitled extension emitted: %v", out.Metrics)
+				}
+				return
+			}
+			if got[semconv.MetricQueuesMessageLag].Value != 2.5 || got[semconv.MetricQueuesMessageRetries].Value != 2 {
+				t.Fatalf("missing latest max averages/units: %v", out.Metrics)
+			}
+			actions := map[string]float64{}
+			for _, m := range out.Metrics {
+				if m.Name != semconv.MetricQueuesBillableOperationsByAction {
+					continue
+				}
+				if len(m.Attrs) != 3 {
+					t.Fatalf("missing action dimensions: %v", m)
+				}
+				actions[m.Attrs[0].Value] = m.Value
+				if m.Attrs[0].Value == "SendMessage" && m.Attrs[1].Value != "" {
+					t.Fatalf("consumer N/A source value reinterpreted: %v", m)
+				}
+			}
+			if actions["ReadMessage"] != 16 || actions["SendMessage"] != 6 {
+				t.Fatalf("missing grouped action counts including inapplicable consumer: %v", out.Metrics)
+			}
+			for _, m := range out.Metrics {
+				for _, a := range m.Attrs {
+					if a.Key != semconv.AttrQueuesActionType && a.Key != semconv.AttrQueuesConsumerType && a.Key != semconv.AttrQueuesOutcome {
+						t.Fatalf("queue identifier leaked: %v", m)
+					}
+				}
+			}
+		})
+	}
+}

@@ -99,6 +99,7 @@ type metricValue struct {
 	name  string
 	value float64
 	kind  metricKind
+	attrs []telemetry.Attr
 }
 
 // Register installs each enabled account-level Queue Groups window collector.
@@ -167,6 +168,11 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 	if err != nil {
 		return from, err
 	}
+	depth, err := c.collectDepth(ctx, request, settings)
+	if err != nil {
+		return from, err
+	}
+	values = append(values, depth...)
 	if err := ctx.Err(); err != nil {
 		return from, err
 	}
@@ -174,9 +180,9 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 	for _, point := range points {
 		var emitErr error
 		if point.kind == gaugeMetric {
-			emitErr = out.Gauge(ctx, point.name, point.value)
+			emitErr = out.Gauge(ctx, point.name, point.value, point.attrs...)
 		} else {
-			emitErr = out.Counter(ctx, point.name, point.value)
+			emitErr = out.Counter(ctx, point.name, point.value, point.attrs...)
 		}
 		if emitErr != nil {
 			return from, emitErr
@@ -471,7 +477,7 @@ func capSeries(collectorName string, values []metricValue, limit int) []metricVa
 	if limit <= 0 {
 		limit = queueDefaultSeriesLimit
 	}
-	sort.Slice(values, func(i, j int) bool { return values[i].name < values[j].name })
+	sort.Slice(values, func(i, j int) bool { return metricValueKey(values[i]) < metricValueKey(values[j]) })
 	dropped := len(values) - limit
 	if dropped > 0 {
 		values = values[:limit]

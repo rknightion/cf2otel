@@ -79,6 +79,7 @@ type metricValue struct {
 	name  string
 	value float64
 	kind  metricKind
+	attrs []telemetry.Attr
 }
 
 func newGroupsCollector(cfg *config.Config, api cfapi.Client, spec datasetSpec) *groupsCollector {
@@ -143,6 +144,11 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 	if err != nil {
 		return from, err
 	}
+	depth, err := c.collectDepth(ctx, request, settings)
+	if err != nil {
+		return from, err
+	}
+	values = append(values, depth...)
 	values, err = c.applySeriesCap(ctx, values)
 	if err != nil {
 		return from, err
@@ -150,9 +156,9 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 	for _, metric := range values {
 		var err error
 		if metric.kind == gaugeMetric {
-			err = out.Gauge(ctx, metric.name, metric.value)
+			err = out.Gauge(ctx, metric.name, metric.value, metric.attrs...)
 		} else {
-			err = out.Counter(ctx, metric.name, metric.value)
+			err = out.Counter(ctx, metric.name, metric.value, metric.attrs...)
 		}
 		if err != nil {
 			return from, err
@@ -357,11 +363,9 @@ func numericField(row map[string]any, field string) (float64, bool) {
 	return number, number >= 0 && !math.IsNaN(number) && !math.IsInf(number, 0)
 }
 
-// There are no D1 resource metric attributes in the frozen contract, so
-// 500 synthetic resources still collapse to at most two account series.
-// The default 500-series drop path is therefore unreachable for these datasets.
+// Account/statistic series never carry database identifiers.
 func (c *groupsCollector) applySeriesCap(ctx context.Context, values []metricValue) ([]metricValue, error) {
-	sort.Slice(values, func(i, j int) bool { return values[i].name < values[j].name })
+	sort.Slice(values, func(i, j int) bool { return metricValueKey(values[i]) < metricValueKey(values[j]) })
 	limit := c.cfg.Platform.MaxMetricSeriesPerWindow
 	if limit <= 0 {
 		return nil, errors.New("platform metric series cap must be positive")
