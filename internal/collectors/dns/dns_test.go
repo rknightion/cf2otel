@@ -172,7 +172,7 @@ func TestMetricsUsePerZoneGroupsAndBoundedDimensions(t *testing.T) {
 	}
 	for _, metric := range out.Metrics {
 		for _, attr := range metric.Attrs {
-			if attr.Key == semconv.AttrDNSQueryName || attr.Key == semconv.AttrDNSSourceIP || attr.Key == semconv.AttrDNSDestinationIP || attr.Key == semconv.AttrDNSUpstreamIP {
+			if attr.Key == semconv.AttrDNSColo || attr.Key == semconv.AttrDNSQueryName || attr.Key == semconv.AttrDNSSourceIP || attr.Key == semconv.AttrDNSDestinationIP || attr.Key == semconv.AttrDNSUpstreamIP {
 				t.Fatalf("high-cardinality field %q used as a metric attribute", attr.Key)
 			}
 		}
@@ -183,7 +183,7 @@ func TestMetricsUsePerZoneGroupsAndBoundedDimensions(t *testing.T) {
 	if want := []string{"count", "dimensions.queryType", "dimensions.responseCode"}; !reflect.DeepEqual(api.queries[0].WantedFields, want) {
 		t.Fatalf("first zone fields = %v, want maxNumberOfFields-limited %v", api.queries[0].WantedFields, want)
 	}
-	if containsField(api.queries[1].WantedFields, "dimensions.queryName") || containsField(api.queries[1].WantedFields, "dimensions.sourceIP") {
+	if containsField(api.queries[1].WantedFields, "dimensions.coloName") || containsField(api.queries[1].WantedFields, "dimensions.queryName") || containsField(api.queries[1].WantedFields, "dimensions.sourceIP") {
 		t.Fatalf("high-cardinality fields requested for metrics: %v", api.queries[1].WantedFields)
 	}
 	if !reflect.DeepEqual(api.readSettings, []string{"zone-one/dnsAnalyticsAdaptiveGroups", "zone-two/dnsAnalyticsAdaptiveGroups"}) {

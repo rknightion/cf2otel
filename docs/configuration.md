@@ -27,7 +27,7 @@ See [Security and PII](security.md) before enabling AI Gateway body capture or w
 
 | Key | Default | Contract |
 | --- | --- | --- |
-| `otlp.metric_cardinality_limit` | `10000` | Nonnegative integer; `0` means no limit. The application maps config `0` to provider option `-1`; a zero-valued provider option retains the SDK default for existing callers. (CFO-0045) |
+| `otlp.metric_cardinality_limit` | `10000` | Nonnegative integer; `0` means no limit. The application maps config `0` to provider option `-1`; a zero-valued provider option retains the SDK default for existing callers. Independently, DNS uses a lifetime series budget of `9999`, or `min(9999, max(1, limit-1))` for a positive configured limit, including one reserved coarse fallback series (see signals). Config `0` does not disable that DNS budget. Explicit limit `1` cannot avoid the SDK's reserved overflow series; SDK overflow observability remains active. (CFO-0045) |
 | `http.request_source` | `eyeball` | `eyeball` or `all`; applies only to `httpreq.metrics` Groups queries, never raw events. Eyeball-only totals exclude internal traffic and Worker subrequests. (CFO-0046.01) |
 | `http.breakdowns` | `[status, origin_status, country, protocol, tls_protocol, method, content_type]` | Each value must be in this set and enables one attribute. An instrument is emitted when any of its attributes is enabled and carries only enabled attributes. `[]` disables breakdown instruments. Breakdowns are zone-level, without host. (CFO-0046.02) |
 | `collectors.workers.invocations` | Enabled, `5m` interval | Aggregate Groups metrics only, with the usual lookback/window settings; no raw invocation events. (CFO-0047.01) |
