@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-10-01 07:12'
+updated_date: '2026-10-01 14:28'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -252,3 +252,20 @@ Preparation introspection and read-only entitlement probes were followed by an i
 RUM Web Vitals introspection explicitly describes every timing quantile as microseconds, with negative values indicating N/A. CLS is dimensionless. The exporter must convert timing quantiles to seconds, not milliseconds, and must not infer a successful empty-window sample from absent or N/A quantiles.
 
 AI Gateway raw request/response body endpoints can return non-JSON text. Such content is not suitable for JSON-only redaction and is omitted from exports; request metadata remains usable. This observation does not expand token permissions or permit exporting unredacted bodies.
+
+## 15. Loop 14 extension API-shape observations (2026-10-01)
+
+Read-only introspection, exact live selections and the integrated contract canary at commit `9705290995e3a7ccf80f1470458b20b6f2132035` verified the following extension surfaces. The canary reported `Cloudflare API contract matched`; ordinary CI at that SHA passed. These observations establish fields, types, units and entitlement, not deployed collection or dashboard/alert acceptance. Extension collectors are not carried by v0.10.1 and require later release and live proof.
+
+| Surface | Verified selection and source meaning | Observed limits and entitlement |
+| --- | --- | --- |
+| Account and zone `logpushHealthAdaptiveGroups` | Numeric `sum.uploads`; `dimensions.datetimeFiveMinutes`, numeric `jobId`, string `destinationType`, numeric `status`, and uint8 `final`/`success`. Failure selection is `success=0`, not an HTTP status guess. `final=1` with `status>=300` describes terminal failed uploads. Groups upload sums are used, not raw-row counts. | Account enabled: maxDuration 2592000 s, notOlderThan 2595600 s, field cap 30. Free zones enabled: 86400/90000 s; Pro zones enabled: 604800/608400 s; field cap 30. Source job-ID labels require the explicitly enabled, bounded-cardinality failure collector; zone identity is a name, not an ID. |
+| Zone `httpRequestsAdaptiveGroups` visits | Numeric `sum.visits`, additive by zone under the configured request-source policy. | Advertised on Free and Pro; maxDuration 2592000 s, notOlderThan 2678400 s, field cap 40. Existing request, byte and latency selections remain unchanged. |
+| Zone `httpRequests1hGroups` threats | Numeric `sum.threats` with `dimensions.datetime`; complete UTC-hour rollup. No eyeball filter was established for this rollup. | Enabled on Free and Pro. maxDuration 259200 s; notOlderThan 262800 s Free and 608400 s Pro; field cap 30. |
+| Account `httpRequestsAdaptiveGroups` transfer | Numeric `sum.edgeResponseBytes`, with a live-valid `requestSource: "eyeball"` selection. Account aggregate has no resource identifier. | Enabled; maxDuration and notOlderThan 2764800 s, field cap 40. A month-to-date implementation must respect these constraints and the latest complete held-back period, rather than querying outside retention. Projection is derived arithmetic, not an API billing estimate. |
+| Account `durableObjectsInvocationsAdaptiveGroups` depth | Numeric `sum.errors`; `quantiles.wallTimeP50/P75/P99/P999` are microseconds; `responseBodySizeP50/P75/P99/P999` are bytes; script name and complete five-minute bucket dimensions are available. | Enabled; maxDuration 2764800 s, notOlderThan 7776000 s, field cap 30. Latest script-bucket statistics must not be combined by averaging independent grouped quantiles. |
+| Account `d1AnalyticsAdaptiveGroups` depth | Numeric `sum.rowsRead`, `sum.rowsWritten`; `queryBatchTimeMsP50/P75/P99/P999` are milliseconds; `queryBatchResponseBytesP50/P75/P99/P999` are bytes. | Enabled; maxDuration 2764800 s, notOlderThan 7776000 s, field cap 30. No database or query identifier is needed for account aggregates. |
+| Account `queueMessageOperationsAdaptiveGroups` depth | Numeric `avg.lagTime` in milliseconds, `avg.retryCount`, and `sum.billableOperations`; dimensions `datetimeFiveMinutes`, `queueId`, `actionType`, `consumerType`, `outcome`. Queue ID is internal grouping only. | Enabled; maxDuration 2764800 s, notOlderThan 7776000 s, field cap 30. Live input introspection established `actionType` as a string filter. A `ReadMessage` filtered query returned a row with exactly that action; an invented control action returned no rows. This is positive value proof, not merely successful empty-query syntax. Lag/retries represent a maximum across per-queue source averages in the latest complete bucket, not a maximum individual message latency. |
+| Zone `healthCheckEventsAdaptiveGroups` | Numeric `count`; average `rttMs`, `timeToFirstByteMs`, `tcpConnMs`, `tlsHandshakeMs`; source dimensions include health status, failure reason, health-check name and FQDN. | Free disabled, zero duration/retention; Pro enabled, maxDuration and notOlderThan 262800 s; field cap 30. Disabled Free scopes are not queried. Origin timing identity is explicit opt-in, bounded, non-IP and never raw `originIP`; counts and origin-average selections are separate to avoid invalid unweighted averages. |
+
+Source timing values convert to seconds only where declared above; negative N/A or missing optional values are omitted, not fabricated as zero. Latest observed bucket gauges do not establish universal snapshot retirement. No new permissions, health-check creation or other resource writes were used to verify these selections.
