@@ -17,6 +17,18 @@ import (
 	"github.com/rknightion/cf2otel/internal/telemetry"
 )
 
+// Zone-discovery gauges are self-observation, not firewall event series, and
+// therefore do not consume the firewall domain's per-window series budget.
+func firewallEventPoints(out *telemetry.Buffer) []telemetry.BufferedMetric {
+	var points []telemetry.BufferedMetric
+	for _, point := range out.Metrics {
+		if point.Name == semconv.MetricFirewallEvents {
+			points = append(points, point)
+		}
+	}
+	return points
+}
+
 // A finer grouping can saturate the endpoint's page limit. Split source windows,
 // but apply the series cap only once after all leaves and zones succeed.
 func TestRegisteredFirewallSplitsSaturatedMetrics(t *testing.T) {
@@ -58,8 +70,9 @@ func TestRegisteredFirewallSplitsSaturatedMetrics(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !mark.Equal(to) || len(out.Metrics) != 1 || out.Metrics[0].Value != 240 {
-				t.Fatalf("split window: mark=%s points=%v; want one capped point retaining 240 events", mark, out.Metrics)
+			points := firewallEventPoints(out)
+			if !mark.Equal(to) || len(points) != 1 || points[0].Value != 240 {
+				t.Fatalf("split window: mark=%s points=%v; want one capped point retaining 240 events", mark, points)
 			}
 		})
 	}
@@ -156,12 +169,13 @@ func TestRegisteredHTTPFirewallCapConservesEvents(t *testing.T) {
 			if !mark.Equal(to) {
 				t.Fatal("window did not advance")
 			}
-			if len(out.Metrics) != tc.wantPoints {
-				t.Fatalf("points=%d want=%d under total cap=%d", len(out.Metrics), tc.wantPoints, tc.cap)
+			points := firewallEventPoints(out)
+			if len(points) != tc.wantPoints {
+				t.Fatalf("points=%d want=%d under total cap=%d", len(points), tc.wantPoints, tc.cap)
 			}
 			var total, remainder float64
 			var preserved, enriched bool
-			for _, m := range out.Metrics {
+			for _, m := range points {
 				total += m.Value
 				a := attrMap(m.Attrs)
 				if a[semconv.AttrFirewallRuleID] == "other" {

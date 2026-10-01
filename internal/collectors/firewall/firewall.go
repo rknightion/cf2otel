@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
+	"github.com/rknightion/cf2otel/internal/collector"
 	"github.com/rknightion/cf2otel/internal/config"
 )
 
@@ -27,7 +28,7 @@ func zones(ctx context.Context, cfg *config.Config, api cfapi.Client) ([]cfapi.Z
 	}
 	wanted := cfg.Cloudflare.Zones
 	if len(wanted) == 0 {
-		return all, nil
+		return collector.SelectPollZones(ctx, all, all, cfg.Zones.Exclude, ""), nil
 	}
 	selected := make([]cfapi.Zone, 0, len(wanted))
 	matched := make([]bool, len(wanted))
@@ -48,7 +49,7 @@ func zones(ctx context.Context, cfg *config.Config, api cfapi.Client) ([]cfapi.Z
 			return nil, fmt.Errorf("configured firewall zone absent from discovery")
 		}
 	}
-	return selected, nil
+	return collector.SelectPollZones(ctx, all, selected, cfg.Zones.Exclude, ""), nil
 }
 
 func datasetSettings(ctx context.Context, api cfapi.Client, zoneID, dataset string) (cfapi.DatasetSettings, error) {

@@ -295,10 +295,11 @@ func TestMetricsChooseGroupsDatasetPerZoneAndLimitAttributes(t *testing.T) {
 	if len(api.queries[1].WantedFields) != 1 || api.queries[1].WantedFields[0] != "count" {
 		t.Fatalf("ByTimeGroups selected %v; live schema supports only count", api.queries[1].WantedFields)
 	}
-	if len(out.Metrics) != 2 {
-		t.Fatalf("metrics = %d, want one per zone", len(out.Metrics))
+	data := firewallDataMetrics(out)
+	if len(data) != 2 {
+		t.Fatalf("metrics = %d, want one per zone", len(data))
 	}
-	for _, metric := range out.Metrics {
+	for _, metric := range data {
 		if metric.Name != semconv.MetricFirewallEvents || metric.Value != 5 {
 			t.Errorf("metric = %#v", metric)
 		}
@@ -359,8 +360,8 @@ func TestMetricsReportMissingDimensionsAndEmitAvailableOnes(t *testing.T) {
 	if _, err := NewMetrics(&config.Config{}, api).CollectWindow(context.Background(), from, to, out); err != nil {
 		t.Fatal(err)
 	}
-	if len(out.Metrics) != 1 {
-		t.Fatalf("metrics = %d, want available metric", len(out.Metrics))
+	if len(firewallDataMetrics(out)) != 1 {
+		t.Fatalf("metrics = %d, want available metric", len(firewallDataMetrics(out)))
 	}
 	attrs := attrMap(out.Metrics[0].Attrs)
 	if attrs[semconv.AttrFirewallAction] != "block" || attrs[semconv.AttrFirewallSource] != "" {

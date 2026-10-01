@@ -36,6 +36,7 @@ Configuration loads defaults, then YAML, then `CF2OTEL_` environment overrides. 
 | `health.listen` | `CF2OTEL_HEALTH__LISTEN` |
 | `log.level` | `CF2OTEL_LOG__LEVEL` |
 | `log.format` | `CF2OTEL_LOG__FORMAT` |
+| `zones.exclude` | `CF2OTEL_ZONES__EXCLUDE` |
 
 For a collector setting, use `CF2OTEL_COLLECTORS__<NAME>__<SETTING>`. Form `<NAME>` by uppercasing the collector name and replacing dots with underscores, while retaining existing underscores: `aigateway.coverage` becomes `AIGATEWAY_COVERAGE` and `r2.catalog_data` becomes `R2_CATALOG_DATA`. `<SETTING>` is `ENABLED`, `INTERVAL`, `INITIAL_LOOKBACK` or `MAX_WINDOW`. For example, `CF2OTEL_COLLECTORS__AIGATEWAY_COVERAGE__ENABLED=true` overrides YAML. The `otlp.headers` map contains secret values, so set each header through an environment variable, for example `CF2OTEL_OTLP__HEADERS__AUTHORIZATION`.
 

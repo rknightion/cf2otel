@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
+	"github.com/rknightion/cf2otel/internal/collector"
 	"github.com/rknightion/cf2otel/internal/semconv"
 	"github.com/rknightion/cf2otel/internal/telemetry"
 )
@@ -153,7 +154,9 @@ func addKPISum(rows []map[string]any, key string) (float64, error) {
 	}
 	return total, nil
 }
-func (c *threats) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
+func (c *threats) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (mark time.Time, collectErr error) {
+	ctx, poll := collector.StartZonePoll(ctx)
+	defer poll.Finish(ctx, e, c.Name(), &collectErr)
 	// Advance a legacy/fractional cursor past its incomplete first hour, but
 	// never query or emit that partial rollup. Persist only complete-hour ends.
 	start := from.UTC().Truncate(time.Hour)
@@ -182,6 +185,7 @@ func (c *threats) CollectWindow(ctx context.Context, from, to time.Time, e telem
 		if err != nil {
 			return from, err
 		}
+		poll.Process(z.ID)
 		rows, err := c.kpiRows(ctx, cfapi.GraphQLRequest{Scope: cfapi.ZoneScope, ScopeID: z.ID, Dataset: "httpRequests1hGroups", WantedFields: fields, From: start, To: end, Limit: 10000}, s, now)
 		if err != nil {
 			return from, err

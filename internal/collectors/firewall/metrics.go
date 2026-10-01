@@ -39,7 +39,9 @@ type firewallMetric struct {
 	attrs []telemetry.Attr
 }
 
-func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (time.Time, error) {
+func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (mark time.Time, collectErr error) {
+	ctx, poll := collector.StartZonePoll(ctx)
+	defer poll.Finish(ctx, out, c.Name(), &collectErr)
 	if !from.Before(to) {
 		return from, fmt.Errorf("invalid firewall metrics window")
 	}
@@ -85,6 +87,7 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 			}
 		}
 
+		poll.Process(zone.ID)
 		rows, err := c.queryWindow(ctx, zone.ID, dataset, wanted, from, to)
 		if err != nil {
 			var gap *cfapi.RetentionGapError

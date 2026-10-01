@@ -52,7 +52,9 @@ type observation struct {
 	values map[string]any
 }
 
-func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (time.Time, error) {
+func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (mark time.Time, collectErr error) {
+	ctx, poll := collector.StartZonePoll(ctx)
+	defer poll.Finish(ctx, out, c.Name(), &collectErr)
 	end := to.UTC().Truncate(bucketSize)
 	begin := from.UTC().Truncate(bucketSize)
 	if begin.Before(from) {
@@ -76,17 +78,21 @@ func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out tele
 	if err != nil {
 		return from, fmt.Errorf("discover health-check zones: %w", err)
 	}
+	eligible := make([]cfapi.Zone, 0, len(zones))
+	for _, zone := range zones {
+		if zone.Account.ID == c.cfg.Cloudflare.AccountID && selectedZone(zone, c.cfg.Cloudflare.Zones) {
+			if zone.ID == "" || zone.Name == "" {
+				return from, errors.New("health-check zone discovery returned an incomplete zone")
+			}
+			eligible = append(eligible, zone)
+		}
+	}
+	zones = collector.SelectPollZones(ctx, zones, eligible, c.cfg.Zones.Exclude, c.cfg.Cloudflare.AccountID)
 	counts := map[eventKey]float64{}
 	latest := map[originKey]observation{}
 	now := time.Now()
 	seenZones := map[string]bool{}
 	for _, zone := range zones {
-		if zone.Account.ID != c.cfg.Cloudflare.AccountID || !selectedZone(zone, c.cfg.Cloudflare.Zones) {
-			continue
-		}
-		if zone.ID == "" || zone.Name == "" {
-			return from, errors.New("health-check zone discovery returned an incomplete zone")
-		}
 		if seenZones[zone.ID] {
 			continue
 		}
@@ -97,6 +103,7 @@ func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out tele
 		}
 		// Disabled datasets (including Free zones) are expected, not query errors.
 		if !settings.Enabled {
+			poll.Skip(zone.ID, "unentitled")
 			continue
 		}
 		if err := validateSettings(settings); err != nil {
@@ -109,6 +116,7 @@ func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out tele
 		// Query exactly one complete bucket at a time. Splitting a bucket at a
 		// duration/page boundary would make its source averages non-composable.
 		for at := begin; at.Before(end); at = at.Add(bucketSize) {
+			poll.Process(zone.ID)
 			countRows, err := c.query(ctx, zone.ID, countFields, at, limit)
 			if err != nil {
 				return from, err

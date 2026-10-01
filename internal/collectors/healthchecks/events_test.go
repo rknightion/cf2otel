@@ -115,6 +115,19 @@ func collectFixture(t *testing.T, f *fixture, change func(*config.Config), to ti
 	}
 	out := &telemetry.Buffer{}
 	mark, err := c.CollectWindow(context.Background(), start, to, out)
+	// This fixture returns domain metrics for the existing timing/count tests.
+	// Retain all output on failures so no-partial-output assertions remain strict.
+	if err == nil {
+		data := make([]telemetry.BufferedMetric, 0, len(out.Metrics))
+		for _, m := range out.Metrics {
+			switch m.Name {
+			case semconv.MetricZonesDiscovered, semconv.MetricZonesFiltered, semconv.MetricZonesProcessed, semconv.MetricZonesSkipped:
+				continue
+			}
+			data = append(data, m)
+		}
+		out.Metrics = data
+	}
 	return out, mark, err
 }
 func attr(m telemetry.BufferedMetric, key string) string {

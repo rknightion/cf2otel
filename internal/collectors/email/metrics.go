@@ -60,7 +60,9 @@ func (c *metrics) Name() string                   { return c.spec.name }
 func (c *metrics) DefaultInterval() time.Duration { return 5 * time.Minute }
 func (*metrics) Lag() time.Duration               { return 10 * time.Minute }
 
-func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (time.Time, error) {
+func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (mark time.Time, collectErr error) {
+	ctx, poll := collector.StartZonePoll(ctx)
+	defer poll.Finish(ctx, out, c.Name(), &collectErr)
 	if !from.Before(to) {
 		return from, errors.New("invalid email metrics window")
 	}
@@ -94,6 +96,10 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 		return from, fmt.Errorf("select zones for %s: %w", c.spec.name, err)
 	}
 
+	selectedZones = collector.SelectPollZones(ctx, zones, selectedZones, c.cfg.Zones.Exclude, c.cfg.Cloudflare.AccountID)
+	if len(selectedZones) == 0 {
+		return windowEnd, nil
+	}
 	total := float64(0)
 	enabledZones := 0
 	for _, zone := range selectedZones {
@@ -102,6 +108,7 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 			return from, fmt.Errorf("read %s dataset settings: %w", c.spec.name, err)
 		}
 		if !settings.Enabled {
+			poll.Skip(zone.ID, "unentitled")
 			continue
 		}
 		enabledZones++
@@ -122,6 +129,7 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 			if segmentEnd.After(windowEnd) {
 				segmentEnd = windowEnd
 			}
+			poll.Process(zone.ID)
 			count, err := c.queryCompleteBuckets(ctx, zone.ID, segmentStart, segmentEnd, queryLimit)
 			if err != nil {
 				return from, fmt.Errorf("query %s for account-owned zone: %w", c.spec.name, err)

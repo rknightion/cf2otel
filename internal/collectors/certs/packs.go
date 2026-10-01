@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
+	"github.com/rknightion/cf2otel/internal/collector"
 	"github.com/rknightion/cf2otel/internal/semconv"
 	"github.com/rknightion/cf2otel/internal/telemetry"
 )
@@ -31,6 +32,7 @@ type pack struct {
 }
 
 type packs struct {
+	exclude  []string
 	api      cfapi.Client
 	interval time.Duration
 	mu       sync.Mutex
@@ -99,7 +101,9 @@ func earliestExpiry(p pack) (time.Time, bool) {
 	return earliest, !earliest.IsZero()
 }
 
-func (c *packs) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *packs) Collect(ctx context.Context, e telemetry.Emitter) (collectErr error) {
+	ctx, poll := collector.StartZonePoll(ctx)
+	defer poll.Finish(ctx, e, c.Name(), &collectErr)
 	if c.api == nil {
 		return errors.New("certificate packs requires API")
 	}
@@ -107,10 +111,13 @@ func (c *packs) Collect(ctx context.Context, e telemetry.Emitter) error {
 	if err != nil {
 		return fmt.Errorf("certificate zones: %w", err)
 	}
+	all := zones
+	zones = collector.SelectPollZones(ctx, all, all, c.exclude, "")
 	now := time.Now()
 	var expiryPoints, packPoints []telemetry.GaugePoint
 	var failures []error
 	for _, zone := range zones {
+		poll.Process(zone.ID)
 		rows, err := c.readZone(ctx, zone.ID)
 		if err != nil {
 			if ctx.Err() != nil {

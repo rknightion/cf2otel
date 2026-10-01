@@ -2,6 +2,25 @@
 
 All signals carry `service.name=cf2otel`. Cloudflare-specific names begin `cloudflare.*`; GenAI names follow `gen_ai.*`; the poller's own measurements begin `cf2otel.*`. Names are declared in `internal/semconv` and this page is the public inventory.
 
+## Zone selection and poll gauges
+
+`zones.exclude` (or comma-separated `CF2OTEL_ZONES__EXCLUDE`) defaults to empty.
+Selectors match exact zone IDs or case-insensitive zone names, with no regex or
+wildcard expansion. Each zone consumer first applies its existing include and
+account-ownership rules and validates them, then removes excluded zones. An
+unmatched exclusion is ignored; an unmatched include still has its existing
+behavior. A valid selection entirely removed by exclusions is a successful empty
+zone poll. Account-level queries, including Logpush's account scope, are unchanged.
+
+The four `cf2otel.zones.*` gauges use only `cf2otel.collector`; filtered and skipped
+also use `cf2otel.zone.reason`. Reasons are bounded to `include`, `exclude`,
+`unentitled`, `no_account`, and `other`. Discovered counts the API discovery result;
+filtered counts zones removed by selection; processed counts distinct zones
+actually queried, not settings reads, query subdivisions, or datasets; skipped
+counts remaining eligible zones not queried. No zone name or ID is a gauge label.
+Every successful complete poll emits zero for absent reason series. Failed polls
+retain the existing no-partial-output behavior and do not refresh these gauges.
+
 ## Logs and traces
 
 | Event or span | Source | Notes |
@@ -158,6 +177,10 @@ These declarations reserve the following signals; this seam-only change does not
 | `gen_ai.client.inference.operation.input_tokens` | `{token}` | Input tokens by operation. |
 | `gen_ai.client.inference.operation.output_tokens` | `{token}` | Output tokens by operation. |
 | `cf2otel.scrape.success` | `1` | Collector scrape success state. |
+| `cf2otel.zones.discovered` | `{zone}` | Zones returned by discovery for a complete collector poll. |
+| `cf2otel.zones.filtered` | `{zone}` | Zones removed by include, ownership or exclusion selection, by reason. |
+| `cf2otel.zones.processed` | `{zone}` | Distinct eligible zones queried in a complete collector poll. |
+| `cf2otel.zones.skipped` | `{zone}` | Eligible zones not queried in a complete collector poll, by reason. |
 | `cf2otel.scrape.duration` | `s` | Collector scrape duration. Explicit histogram boundaries in seconds: 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 7.5, 10, 15, 20, 30, 45, 60, 90, 120. |
 | `cf2otel.scrape.errors` | `1` | Collector scrape errors. |
 | `cf2otel.scrape.last_success_timestamp` | `s` | Time of last successful collector scrape. |
@@ -236,6 +259,11 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cf2otel.scrape.errors` |
 | Metric | `cf2otel.scrape.last_success_timestamp` |
 | Metric | `cf2otel.scrape.success` |
+| Metric | `cf2otel.zones.discovered` |
+| Metric | `cf2otel.zones.filtered` |
+| Metric | `cf2otel.zones.processed` |
+| Metric | `cf2otel.zones.skipped` |
+| Attribute | `cf2otel.zone.reason` |
 | Metric | `cf2otel.window.commit_failures` |
 | Metric | `cf2otel.window.catchup_windows` |
 | Metric | `cf2otel.window.gap` |

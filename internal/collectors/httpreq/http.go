@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
+	"github.com/rknightion/cf2otel/internal/collector"
 	"github.com/rknightion/cf2otel/internal/collectors/access"
 	"github.com/rknightion/cf2otel/internal/config"
 	"github.com/rknightion/cf2otel/internal/identity"
@@ -133,12 +134,13 @@ func (b base) zones(ctx context.Context) ([]cfapi.Zone, error) {
 	if err != nil {
 		return nil, err
 	}
+	all := zones
 	wanted := b.cfg.HTTP.Zones
 	if len(wanted) == 0 {
 		wanted = b.cfg.Cloudflare.Zones
 	}
 	if len(wanted) == 0 {
-		return zones, nil
+		return collector.SelectPollZones(ctx, all, zones, b.cfg.Zones.Exclude, ""), nil
 	}
 	selected := make([]cfapi.Zone, 0, len(zones))
 	for _, z := range zones {
@@ -149,7 +151,7 @@ func (b base) zones(ctx context.Context) ([]cfapi.Zone, error) {
 			}
 		}
 	}
-	return selected, nil
+	return collector.SelectPollZones(ctx, all, selected, b.cfg.Zones.Exclude, ""), nil
 }
 func (b base) metricsScope() string {
 	if b.cfg.HTTP.MetricsScope != "" {
@@ -162,6 +164,7 @@ func (b base) metricZones(ctx context.Context) ([]cfapi.Zone, error) {
 	if err != nil {
 		return nil, err
 	}
+	all := zones
 	if b.cfg.Cloudflare.AccountID != "" {
 		owned := make([]cfapi.Zone, 0, len(zones))
 		for _, zone := range zones {
@@ -189,7 +192,7 @@ func (b base) metricZones(ctx context.Context) ([]cfapi.Zone, error) {
 		wanted = b.cfg.Cloudflare.Zones
 	}
 	if len(wanted) == 0 {
-		return zones, nil
+		return collector.SelectPollZones(ctx, all, zones, b.cfg.Zones.Exclude, b.cfg.Cloudflare.AccountID), nil
 	}
 	selected := make([]cfapi.Zone, 0, len(zones))
 	for _, zone := range zones {
@@ -203,7 +206,7 @@ func (b base) metricZones(ctx context.Context) ([]cfapi.Zone, error) {
 	if len(selected) == 0 {
 		return nil, errors.New("HTTP metrics zone selectors matched no discovered zones")
 	}
-	return selected, nil
+	return collector.SelectPollZones(ctx, all, selected, b.cfg.Zones.Exclude, b.cfg.Cloudflare.AccountID), nil
 }
 
 var requiredHTTPGroupFields = []string{
@@ -370,7 +373,9 @@ func statusClass(status any) string {
 	return strconv.Itoa(n/100) + "xx"
 }
 
-func (c events) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
+func (c events) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (mark time.Time, collectErr error) {
+	ctx, poll := collector.StartZonePoll(ctx)
+	defer poll.Finish(ctx, e, c.Name(), &collectErr)
 	if c.hydrate != nil {
 		if err := c.hydrate(ctx, from, to); err != nil {
 			return from, fmt.Errorf("HTTP identity hydration: %w", err)
@@ -387,6 +392,7 @@ func (c events) CollectWindow(ctx context.Context, from, to time.Time, e telemet
 	seen := map[string]bool{}
 	var retentionGaps []error
 	for _, zone := range zones {
+		poll.Process(zone.ID)
 		var rows []map[string]any
 		req := cfapi.GraphQLRequest{Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: "httpRequestsAdaptive", WantedFields: eventFields, JoinFields: []string{"rayName", "datetime"}, From: from, To: to, Limit: 10000}
 		if err := c.api.Query(ctx, req, &rows); err != nil {
@@ -454,7 +460,9 @@ func (c events) CollectWindow(ctx context.Context, from, to time.Time, e telemet
 	return to, nil
 }
 
-func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
+func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (mark time.Time, collectErr error) {
+	ctx, poll := collector.StartZonePoll(ctx)
+	defer poll.Finish(ctx, e, c.Name(), &collectErr)
 	scope := c.metricsScope()
 	allowed, err := c.hostsFor(ctx, scope)
 	if err != nil {
@@ -482,6 +490,7 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	hostsByZone := make(map[string]map[string]struct{}, len(zones))
 	var retentionGaps []error
 	for _, zone := range zones {
+		poll.Process(zone.ID)
 		points, err := c.collectBreakdowns(ctx, zone, from, to)
 		if err != nil {
 			var gap *cfapi.RetentionGapError

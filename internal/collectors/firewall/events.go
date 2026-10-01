@@ -44,7 +44,9 @@ type firewallEvent struct {
 	row  map[string]any
 }
 
-func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (time.Time, error) {
+func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (mark time.Time, collectErr error) {
+	ctx, poll := collector.StartZonePoll(ctx)
+	defer poll.Finish(ctx, out, c.Name(), &collectErr)
 	if !from.Before(to) {
 		return from, errors.New("invalid firewall event window")
 	}
@@ -57,6 +59,7 @@ func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out tele
 	seen := make(map[string]struct{})
 	var retentionGaps []error
 	for _, zone := range selected {
+		poll.Process(zone.ID)
 		rows, err := c.queryWindow(ctx, zone, from, to)
 		if err != nil {
 			var gap *cfapi.RetentionGapError

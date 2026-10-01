@@ -102,8 +102,8 @@ func TestEventsEmitRawDNSQueryFields(t *testing.T) {
 	if !mark.Equal(to) {
 		t.Fatalf("mark = %s, want %s", mark, to)
 	}
-	if len(out.Records) != 1 || len(out.Metrics) != 0 {
-		t.Fatalf("records=%d metrics=%d, want one raw log and no metrics", len(out.Records), len(out.Metrics))
+	if len(out.Records) != 1 || len(dnsDataMetrics(out)) != 0 {
+		t.Fatalf("records=%d metrics=%d, want one raw log and no DNS metrics", len(out.Records), len(dnsDataMetrics(out)))
 	}
 	record := out.Records[0]
 	if record.Event != semconv.EventDNSQuery || !record.At.Equal(from) {
@@ -158,7 +158,7 @@ func TestMetricsUsePerZoneGroupsAndBoundedDimensions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !mark.Equal(to) || len(out.Records) != 0 || len(out.Metrics) != 2 {
+	if !mark.Equal(to) || len(out.Records) != 0 || len(dnsDataMetrics(out)) != 2 {
 		t.Fatalf("mark=%s records=%d metrics=%d", mark, len(out.Records), len(out.Metrics))
 	}
 	if out.Metrics[0].Name != semconv.MetricDNSQueries || out.Metrics[0].Value != 11 || out.Metrics[1].Value != 7 {

@@ -27,12 +27,18 @@ type point struct {
 }
 type recordingEmitter struct {
 	points     []point
+	zonePoints []point
 	counters   []point
 	counterErr error
 }
 
 func (e *recordingEmitter) Gauge(_ context.Context, n string, v float64, a ...telemetry.Attr) error {
-	e.points = append(e.points, point{n, v, a})
+	switch n {
+	case semconv.MetricZonesDiscovered, semconv.MetricZonesFiltered, semconv.MetricZonesProcessed, semconv.MetricZonesSkipped:
+		e.zonePoints = append(e.zonePoints, point{n, v, a})
+	default:
+		e.points = append(e.points, point{n, v, a})
+	}
 	return nil
 }
 func (e *recordingEmitter) Counter(_ context.Context, n string, v float64, a ...telemetry.Attr) error {
@@ -206,6 +212,40 @@ func TestEmptyAndFailedSnapshots(t *testing.T) {
 				t.Fatalf("unknown expiry emitted: %+v", e.points)
 			}
 		})
+	}
+}
+
+func TestExcludedZonesPublishEmptySnapshots(t *testing.T) {
+	reads := 0
+	c := snapshot(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/zones" {
+			zones(w)
+			return
+		}
+		reads++
+		_, _ = fmt.Fprint(w, `{"result":[{"id":"pack-demo","certificates":[{"expires_on":"2040-01-01T00:00:00Z"}]}]}`)
+	}, nil)
+	e := &snapshotRecorder{}
+	ctx := context.Background()
+	if err := c.Collect(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{semconv.MetricCertificateExpiry, semconv.MetricCertificatePack} {
+		if len(e.calls[name]) != 1 {
+			t.Fatalf("initial %s snapshot=%v", name, e.calls[name])
+		}
+	}
+	c.(*packs).exclude = []string{"zone-demo"}
+	if err := c.Collect(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+	if reads != 1 {
+		t.Fatalf("excluded zone was read: reads=%d", reads)
+	}
+	for _, name := range []string{semconv.MetricCertificateExpiry, semconv.MetricCertificatePack} {
+		if points, ok := e.calls[name]; !ok || len(points) != 0 {
+			t.Fatalf("excluded %s snapshot not cleared: %v", name, points)
+		}
 	}
 }
 

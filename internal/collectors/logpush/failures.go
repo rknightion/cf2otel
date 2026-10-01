@@ -55,7 +55,9 @@ type failureKey struct{ Scope, Zone, Job, Destination, Status, Final string }
 // CollectWindow counts source Groups upload sums, not raw rows or sampled events.
 // Only success=0 denotes a failure. A final=true/status>=300 series identifies
 // terminal loss per the source schema; retries and final failures remain distinct.
-func (c *failureMetrics) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (time.Time, error) {
+func (c *failureMetrics) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (mark time.Time, collectErr error) {
+	ctx, poll := collector.StartZonePoll(ctx)
+	defer poll.Finish(ctx, out, c.Name(), &collectErr)
 	if c.cfg == nil || c.api == nil || c.cfg.Cloudflare.AccountID == "" || out == nil {
 		return from, errors.New("logpush failures requires account, API and emitter")
 	}
@@ -82,8 +84,7 @@ func (c *failureMetrics) CollectWindow(ctx context.Context, from, to time.Time, 
 	if err != nil {
 		return from, fmt.Errorf("discover Logpush zones: %w", err)
 	}
-	scopes := []failureScope{{scope: cfapi.AccountScope, id: c.cfg.Cloudflare.AccountID}}
-	seen := map[string]bool{}
+	eligible := make([]cfapi.Zone, 0, len(zones))
 	for _, zone := range zones {
 		if zone.Account.ID != c.cfg.Cloudflare.AccountID {
 			continue
@@ -91,6 +92,12 @@ func (c *failureMetrics) CollectWindow(ctx context.Context, from, to time.Time, 
 		if zone.ID == "" || strings.TrimSpace(zone.Name) == "" {
 			return from, errors.New("incomplete owned Logpush zone")
 		}
+		eligible = append(eligible, zone)
+	}
+	zones = collector.SelectPollZones(ctx, zones, eligible, c.cfg.Zones.Exclude, c.cfg.Cloudflare.AccountID)
+	scopes := []failureScope{{scope: cfapi.AccountScope, id: c.cfg.Cloudflare.AccountID}}
+	seen := map[string]bool{}
+	for _, zone := range zones {
 		if seen[zone.ID] {
 			continue
 		}
@@ -124,6 +131,9 @@ func (c *failureMetrics) CollectWindow(ctx context.Context, from, to time.Time, 
 		}
 		limit := min(logpushQueryLimit, settings.MaxPageSize)
 		maxDuration := (time.Duration(settings.MaxDuration) * time.Second).Truncate(logpushBucket)
+		if scope.scope == cfapi.ZoneScope {
+			poll.Process(scope.id)
+		}
 		for leafStart := start; leafStart.Before(end); {
 			leafEnd := leafStart.Add(maxDuration)
 			if leafEnd.After(end) {

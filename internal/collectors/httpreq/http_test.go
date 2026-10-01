@@ -129,10 +129,15 @@ type emission struct {
 	attrs []telemetry.Attr
 	body  string
 }
-type fakeEmitter struct{ logs, counts, gauges []emission }
+type fakeEmitter struct{ logs, counts, gauges, zoneGauges []emission }
 
 func (f *fakeEmitter) Gauge(_ context.Context, n string, v float64, a ...telemetry.Attr) error {
-	f.gauges = append(f.gauges, emission{n, v, a, ""})
+	switch n {
+	case semconv.MetricZonesDiscovered, semconv.MetricZonesFiltered, semconv.MetricZonesProcessed, semconv.MetricZonesSkipped:
+		f.zoneGauges = append(f.zoneGauges, emission{n, v, a, ""})
+	default:
+		f.gauges = append(f.gauges, emission{n, v, a, ""})
+	}
 	return nil
 }
 func (f *fakeEmitter) Counter(_ context.Context, n string, v float64, a ...telemetry.Attr) error {

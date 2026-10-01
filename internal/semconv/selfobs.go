@@ -37,4 +37,10 @@ const (
 	AttrAPIMethod              = "cf2otel.api.method"
 
 	MetricHTTPLatencyHostVariants = "cf2otel.http.latency.host_variants"
+
+	MetricZonesDiscovered = "cf2otel.zones.discovered"
+	MetricZonesFiltered   = "cf2otel.zones.filtered"
+	MetricZonesProcessed  = "cf2otel.zones.processed"
+	MetricZonesSkipped    = "cf2otel.zones.skipped"
+	AttrZoneReason        = "cf2otel.zone.reason"
 )

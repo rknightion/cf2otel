@@ -10,6 +10,6 @@ import (
 func Register(deps collector.Deps) {
 	cfg := deps.Config.Collector("certs.packs")
 	if cfg.Enabled {
-		deps.Registry.RegisterSnapshot(&packs{api: deps.API, interval: cfg.Interval, warned: make(map[string]time.Time)}, cfg.Interval)
+		deps.Registry.RegisterSnapshot(&packs{api: deps.API, interval: cfg.Interval, exclude: append([]string(nil), deps.Config.Zones.Exclude...), warned: make(map[string]time.Time)}, cfg.Interval)
 	}
 }

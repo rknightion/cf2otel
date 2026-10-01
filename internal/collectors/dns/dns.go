@@ -106,7 +106,9 @@ type dnsEvent struct {
 	attrs []telemetry.Attr
 }
 
-func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (time.Time, error) {
+func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (mark time.Time, collectErr error) {
+	ctx, poll := collector.StartZonePoll(ctx)
+	defer poll.Finish(ctx, out, c.Name(), &collectErr)
 	if !from.Before(to) {
 		return from, errors.New("invalid DNS event window")
 	}
@@ -124,6 +126,7 @@ func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out tele
 			return from, fmt.Errorf("DNS event dataset settings: %w", err)
 		}
 		if !settings.Enabled && len(c.cfg.Cloudflare.Zones) == 0 {
+			poll.Skip(zone.ID, "unentitled")
 			continue
 		}
 		wanted, err := fieldsForZone(settings, []string{"datetime", "queryName", "queryType", "responseCode", "responseCached", "protocol", "coloName"}, rawOptionalFields)
@@ -137,6 +140,7 @@ func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out tele
 			Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: rawDataset,
 			WantedFields: wanted, From: from, To: to, Limit: queryLimit,
 		}
+		poll.Process(zone.ID)
 		gap, err := queryZone(ctx, c.api, req, &rows, zone.Name)
 		if err != nil {
 			return from, fmt.Errorf("zone DNS events: %w", err)
@@ -168,7 +172,7 @@ func (c *events) CollectWindow(ctx context.Context, from, to time.Time, out tele
 			records = append(records, dnsEvent{at: at, body: string(body), attrs: attrs})
 		}
 	}
-	if enabledZones == 0 {
+	if enabledZones == 0 && len(zones) > 0 {
 		return from, errors.New("DNS event dataset is disabled in every discovered zone")
 	}
 	if err := emitDNSGaps(ctx, out, c.Name(), to, gaps); err != nil {
@@ -187,7 +191,9 @@ type dnsMetric struct {
 	attrs []telemetry.Attr
 }
 
-func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (time.Time, error) {
+func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (mark time.Time, collectErr error) {
+	ctx, poll := collector.StartZonePoll(ctx)
+	defer poll.Finish(ctx, out, c.Name(), &collectErr)
 	if !from.Before(to) {
 		return from, errors.New("invalid DNS metrics window")
 	}
@@ -205,6 +211,7 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 			return from, fmt.Errorf("DNS Groups dataset settings: %w", err)
 		}
 		if !settings.Enabled && len(c.cfg.Cloudflare.Zones) == 0 {
+			poll.Skip(zone.ID, "unentitled")
 			continue
 		}
 		wanted, err := fieldsForZone(settings, []string{"count"}, groupOptionalFields())
@@ -218,6 +225,7 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 			Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: groupsDataset,
 			WantedFields: wanted, From: from, To: to, Limit: queryLimit,
 		}
+		poll.Process(zone.ID)
 		gap, err := queryZone(ctx, c.api, req, &rows, zone.Name)
 		if err != nil {
 			return from, fmt.Errorf("zone DNS Groups: %w", err)
@@ -246,7 +254,7 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 			samples = append(samples, dnsMetric{value: count, attrs: attrs})
 		}
 	}
-	if enabledZones == 0 {
+	if enabledZones == 0 && len(zones) > 0 {
 		return from, errors.New("DNS Groups dataset is disabled in every discovered zone")
 	}
 	if err := emitDNSGaps(ctx, out, c.Name(), to, gaps); err != nil {
@@ -413,7 +421,7 @@ func (b base) zones(ctx context.Context) ([]cfapi.Zone, error) {
 	}
 	wanted := b.cfg.Cloudflare.Zones
 	if len(wanted) == 0 {
-		return all, nil
+		return collector.SelectPollZones(ctx, all, all, b.cfg.Zones.Exclude, ""), nil
 	}
 	selected := make([]cfapi.Zone, 0, len(wanted))
 	matched := make([]bool, len(wanted))
@@ -434,7 +442,7 @@ func (b base) zones(ctx context.Context) ([]cfapi.Zone, error) {
 			return nil, errors.New("configured DNS zone absent from discovery")
 		}
 	}
-	return selected, nil
+	return collector.SelectPollZones(ctx, all, selected, b.cfg.Zones.Exclude, ""), nil
 }
 
 func (b base) settings(ctx context.Context, zone cfapi.Zone, dataset string) (cfapi.DatasetSettings, error) {

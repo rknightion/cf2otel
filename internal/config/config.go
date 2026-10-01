@@ -33,6 +33,10 @@ func (s Secret) MarshalJSON() ([]byte, error) { return json.Marshal(s.String()) 
 func (s Secret) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
 func (s Secret) Value() string                { return string(s) }
 
+type ZonesConfig struct {
+	Exclude []string `yaml:"exclude" json:"exclude"`
+}
+
 type Config struct {
 	Firewall   FirewallConfig             `yaml:"firewall" json:"firewall"`
 	Cloudflare CloudflareConfig           `yaml:"cloudflare" json:"cloudflare"`
@@ -46,6 +50,7 @@ type Config struct {
 	State      StateConfig                `yaml:"state" json:"state"`
 	Health     HealthConfig               `yaml:"health" json:"health"`
 	Log        LogConfig                  `yaml:"log" json:"log"`
+	Zones      ZonesConfig                `yaml:"zones" json:"zones"`
 }
 type CloudflareConfig struct {
 	APIToken         Secret        `yaml:"api_token" json:"api_token"`
@@ -199,7 +204,7 @@ func Load(path string) (*Config, error) {
 			return "", nil
 		}
 		name := strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(key, EnvPrefix)), "__", ".")
-		if name == "http.breakdowns" {
+		if name == "http.breakdowns" || name == "zones.exclude" {
 			if value == "" {
 				return name, []string{}
 			}

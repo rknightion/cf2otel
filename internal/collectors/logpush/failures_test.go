@@ -170,6 +170,15 @@ func TestLogpushFailuresRegisteredHTTP(t *testing.T) {
 				if err != nil || !mark.Equal(from.Add(10*time.Minute)) {
 					t.Fatalf("mark=%s error=%v", mark, err)
 				}
+				// Assert upload data separately from the new per-poll gauges.
+				data := make([]telemetry.BufferedMetric, 0, len(out.Metrics))
+				for _, m := range out.Metrics {
+					switch m.Name {
+					case semconv.MetricZonesDiscovered, semconv.MetricZonesFiltered, semconv.MetricZonesProcessed, semconv.MetricZonesSkipped:
+						continue
+					}
+					data = append(data, m)
+				}
 				want := 4
 				if scenario == "empty" {
 					want = 0
@@ -177,11 +186,11 @@ func TestLogpushFailuresRegisteredHTTP(t *testing.T) {
 				if scenario == "cap" {
 					want = 1
 				}
-				if len(out.Metrics) != want {
-					t.Fatalf("metrics=%+v want %d", out.Metrics, want)
+				if len(data) != want {
+					t.Fatalf("metrics=%+v want %d", data, want)
 				}
 				scopes := map[string]bool{}
-				for _, m := range out.Metrics {
+				for _, m := range data {
 					if m.Name != semconv.MetricLogpushFailedUploads || m.Kind != "counter" {
 						t.Fatalf("wrong metric %+v", m)
 					}

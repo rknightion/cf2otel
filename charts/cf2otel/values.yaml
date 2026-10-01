@@ -53,6 +53,8 @@ state:
 # Non-secret configuration only. Account and Grafana instance IDs are supplied
 # by the installer; no live identifiers are embedded in this public chart.
 config:
+  zones:
+    exclude: []
   cloudflare:
     account_id: ""
     zones: []
