@@ -97,6 +97,27 @@ func (b base) kpiRows(ctx context.Context, req cfapi.GraphQLRequest, s cfapi.Dat
 	}
 	return rows, nil
 }
+
+// kpiWindowRows retains Query's additive duration subdivision while requiring
+// each selected dataset to be a real array before returning the complete window.
+func (b base) kpiWindowRows(ctx context.Context, req cfapi.GraphQLRequest, s cfapi.DatasetSettings, now time.Time) ([]map[string]any, error) {
+	var rows []map[string]any
+	for start := req.From; start.Before(req.To); {
+		part := req
+		part.From = start
+		if s.MaxDuration > 0 && start.Add(time.Duration(s.MaxDuration)*time.Second).Before(part.To) {
+			part.To = start.Add(time.Duration(s.MaxDuration) * time.Second)
+		}
+		values, err := b.kpiRows(ctx, part, s, now)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, values...)
+		start = part.To
+	}
+	return rows, nil
+}
+
 func addKPISum(rows []map[string]any, key string) (float64, error) {
 	total := float64(0)
 	for _, row := range rows {

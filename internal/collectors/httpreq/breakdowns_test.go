@@ -16,6 +16,113 @@ import (
 	"github.com/rknightion/cf2otel/internal/semconv"
 )
 
+func TestRegisteredVisitsDatasetValidityHTTP(t *testing.T) {
+	for _, tc := range []struct {
+		name, raw                               string
+		missing, upstreamError, wantErr, legacy bool
+	}{
+		{name: "null", raw: `null`, wantErr: true},
+		{name: "missing-dataset", missing: true, wantErr: true},
+		{name: "graphql-error", upstreamError: true, wantErr: true},
+		{name: "empty", raw: `[]`},
+		{name: "legacy-null-no-visits", raw: `null`, legacy: true},
+		{name: "true-zero", raw: `[{"count":7,"dimensions":{"clientRequestHTTPHost":"www.example.com","edgeResponseStatus":200,"cacheStatus":"hit"},"sum":{"visits":0}}]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.Cloudflare.AccountID = "account-fixture"
+			cfg.HTTP.MetricsScope = "all"
+			cfg.HTTP.Breakdowns = []string{}
+			from := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet {
+					_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "result": []cfapi.Zone{zoneForAccount("zone-fixture", "example.com", "account-fixture")}})
+					return
+				}
+				var body struct {
+					Query string `json:"query"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&body)
+				node := map[string]any{}
+				if strings.Contains(body.Query, "settings{") {
+					fields := []string{"count", "dimensions_clientRequestHTTPHost", "dimensions_edgeResponseStatus", "dimensions_cacheStatus"}
+					if !tc.legacy {
+						fields = append(fields, "sum_visits")
+					}
+					node["settings"] = map[string]any{"httpRequestsAdaptiveGroups": cfapi.DatasetSettings{Enabled: true, AvailableFields: fields, MaxNumberOfFields: 5, MaxDuration: 300}}
+				} else {
+					if tc.upstreamError {
+						_ = json.NewEncoder(w).Encode(map[string]any{"errors": []any{map[string]any{"message": "fixture failure"}}})
+						return
+					}
+					if !tc.missing {
+						key := "httpRequestsAdaptiveGroups"
+						if alias := regexp.MustCompile(`(\w+):httpRequestsAdaptiveGroups\(`).FindStringSubmatch(body.Query); len(alias) > 1 {
+							key = alias[1]
+						}
+						node[key] = json.RawMessage(tc.raw)
+					}
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"viewer": map[string]any{"zones": []any{node}}}})
+			}))
+			defer srv.Close()
+			cfg.Cloudflare.APIBase = srv.URL
+			cfg.Cloudflare.APIToken = "fixture"
+			reg := collector.NewRegistry()
+			Register(collector.Deps{Config: &cfg, API: cfapi.New(cfg.Cloudflare), Registry: reg})
+			store, err := collector.NewFileStore(t.TempDir() + "/checkpoints.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Set("httpreq.metrics", from); err != nil {
+				t.Fatal(err)
+			}
+			e := &fakeEmitter{}
+			scheduler := collector.NewScheduler(nil, e, store)
+			scheduler.Now = func() time.Time { return from.Add(7 * time.Minute) }
+			found := false
+			for _, entry := range reg.Entries() {
+				if entry.Collector.Name() != "httpreq.metrics" {
+					continue
+				}
+				found = true
+				err := scheduler.RunOnce(context.Background(), entry)
+				if tc.wantErr && err == nil {
+					t.Fatalf("invalid dataset succeeded: counters=%+v", e.counts)
+				}
+				if !tc.wantErr && err != nil {
+					t.Fatal(err)
+				}
+			}
+			if !found {
+				t.Fatal("metrics not registered")
+			}
+			mark, _ := store.Get("httpreq.metrics")
+			if tc.wantErr {
+				if !mark.Equal(from) || len(e.counts) != 0 || len(e.gauges) != 0 || len(e.logs) != 0 {
+					t.Fatalf("invalid dataset exported/advanced: mark=%s emitter=%+v", mark, e)
+				}
+			} else {
+				if !mark.Equal(from.Add(5 * time.Minute)) {
+					t.Fatalf("valid data did not advance: %s", mark)
+				}
+				found := false
+				for _, p := range e.counts {
+					if p.name == semconv.MetricHTTPVisits {
+						found = true
+						if p.value != 0 {
+							t.Fatalf("valid zero=%+v", p)
+						}
+					}
+				}
+				if found == tc.legacy {
+					t.Fatal("visits emission does not match entitlement")
+				}
+			}
+		})
+	}
+}
+
 // TestRegisteredKPIsHTTPBoundary exercises the real entitlement and GraphQL path.
 func TestRegisteredKPIsHTTPBoundary(t *testing.T) {
 	for _, name := range []string{"httpreq.threats", "httpreq.transfer", "httpreq.metrics"} {

@@ -2,6 +2,7 @@ package httpreq
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -190,7 +191,7 @@ func TestRegisteredVisitsAdditiveOptionalAndZero(t *testing.T) {
 			for i, v := range visits {
 				rows = append(rows, map[string]any{"count": 7, "dimensions": map[string]any{"clientRequestHTTPHost": "www.example.com", "edgeResponseStatus": 200 + i*300, "cacheStatus": "hit"}, "sum": map[string]any{"edgeResponseBytes": 4096, "visits": v}, "avg": map[string]any{"originResponseDurationMs": 1000}})
 			}
-			api := &fakeAPI{groupSettings: &settings, rows: map[string][]map[string]any{"httpRequestsAdaptiveGroups": rows}}
+			api := &visitsAPI{fakeAPI: fakeAPI{groupSettings: &settings, rows: map[string][]map[string]any{"httpRequestsAdaptiveGroups": rows}}}
 			reg := collector.NewRegistry()
 			Register(collector.Deps{Config: &cfg, API: api, Registry: reg})
 			for _, entry := range reg.Entries() {
@@ -233,6 +234,21 @@ func TestRegisteredVisitsAdditiveOptionalAndZero(t *testing.T) {
 			}
 		})
 	}
+}
+
+type visitsAPI struct{ fakeAPI }
+
+func (f *visitsAPI) QueryBatch(_ context.Context, selections []cfapi.GraphQLBatchSelection) (map[string]json.RawMessage, error) {
+	result := map[string]json.RawMessage{}
+	for _, selection := range selections {
+		f.queries = append(f.queries, selection.Request)
+		raw, err := json.Marshal(f.rows[selection.Request.Dataset])
+		if err != nil {
+			return nil, err
+		}
+		result[selection.Alias] = raw
+	}
+	return result, nil
 }
 
 func TestRegisteredAnalyticsFieldBudget(t *testing.T) {

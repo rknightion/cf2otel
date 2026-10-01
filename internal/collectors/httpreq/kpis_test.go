@@ -47,6 +47,7 @@ func TestRegisteredTransferPeriodsAndFailures(t *testing.T) {
 			}
 			now, _ := time.Parse(time.RFC3339, tc.at)
 			posts := 0
+			coveredTo := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var body struct {
 					Query string `json:"query"`
@@ -68,6 +69,10 @@ func TestRegisteredTransferPeriodsAndFailures(t *testing.T) {
 						from, _ := time.Parse(time.RFC3339, bounds[0][1])
 						to, _ := time.Parse(time.RFC3339, bounds[1][1])
 						start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+						if !from.Equal(coveredTo) || !to.After(from) {
+							t.Errorf("transfer coverage gap/overlap: from=%s previous end=%s to=%s", from, coveredTo, to)
+						}
+						coveredTo = to
 						if from.Before(start) || to.After(now.Add(-5*time.Minute).Truncate(5*time.Minute)) || tc.duration > 0 && to.Sub(from) > time.Duration(tc.duration)*time.Second {
 							t.Errorf("invalid complete-period bounds: %s", q)
 						}
@@ -102,6 +107,9 @@ func TestRegisteredTransferPeriodsAndFailures(t *testing.T) {
 					t.Fatalf("failed source emitted partial/zero snapshot: %+v", e.gauges)
 				}
 				if !tc.wantErr {
+					if tc.wantPosts > 0 && !coveredTo.Equal(now.Add(-5*time.Minute).Truncate(5*time.Minute)) {
+						t.Fatalf("transfer coverage did not reach complete-period end: %s", coveredTo)
+					}
 					if len(e.gauges) != 2 {
 						t.Fatalf("missing snapshot: %+v", e.gauges)
 					}
