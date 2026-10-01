@@ -22,6 +22,8 @@ VIZ_VERSION = "12.1.0"
 S = 'service_name="cf2otel"'
 # Entity filters. A variable's "All" value is ".*", which also matches series without the label.
 HTTP = S + ',cloudflare_http_zone=~"$zone",cloudflare_http_host=~"$host"'
+HTTP_ZONE = S + ',cloudflare_http_zone=~"$zone"'
+CERT = S + ',cloudflare_certificate_zone=~"$zone"'
 FW = S + ',cloudflare_firewall_zone=~"$zone"'
 DNS = S + ',cloudflare_dns_zone=~"$zone"'
 GW = S + ',cloudflare_ai_gateway_gateway_name=~"$gateway"'
@@ -444,7 +446,7 @@ def overview(d: Dashboard) -> dict:
 
 def http_tab(d: Dashboard) -> dict:
     total = f'sum(increase(cloudflare_http_requests_total{{{HTTP}}}[$__range]))'
-    d.stat(2001, "Requests", "Edge requests over the selected range, sample-corrected from httpRequestsAdaptiveGroups.",
+    d.stat(2001, "Requests", "Eyeball requests by default (http.request_source can select all traffic), sample-corrected from httpRequestsAdaptiveGroups.",
         [prom(total, instant=True)], decimals=0)
     d.stat(2002, "Served from cache", f"Share of all requests with cache status {CACHED}. Lower than the cacheable hit ratio because dynamic and uncacheable traffic counts here.",
         [prom(f'sum(increase(cloudflare_http_requests_total{{{HTTP},cloudflare_http_cache_status=~"{CACHED}"}}[$__range])) / {total}', instant=True)],
@@ -505,9 +507,35 @@ def http_tab(d: Dashboard) -> dict:
     d.logs(203, "Protected-host HTTP events", "Sampled per-request events. User identity, when present, is explicitly inferred.",
         f'{LOG} | event_name="cloudflare.http.request" | cloudflare_http_zone=~"$zone" | cloudflare_http_host=~"$host"')
 
+    d.ts(2050, "Response bandwidth", "Sample-corrected response bytes on the request dimensions; eyeball traffic by default.",
+        [prom(f'sum(rate(cloudflare_http_response_bytes_total{{{HTTP}}}[$__rate_interval]))', "response bytes")], unit="Bps")
+    breakdowns = [
+        (2051, "Edge status", "cloudflare_http_requests_by_status_total", "cloudflare_http_status_code"),
+        (2052, "Origin status", "cloudflare_http_requests_by_status_total", "cloudflare_http_origin_status_code"),
+        (2053, "HTTP protocol", "cloudflare_http_requests_by_protocol_total", "cloudflare_http_protocol"),
+        (2054, "TLS protocol", "cloudflare_http_requests_by_protocol_total", "cloudflare_http_tls_protocol"),
+        (2055, "Method", "cloudflare_http_requests_by_method_total", "cloudflare_http_method"),
+        (2056, "Content type", "cloudflare_http_requests_by_content_type_total", "cloudflare_http_content_type"),
+    ]
+    for pid, title, metric, label in breakdowns:
+        d.ts(pid, title, "Zone-level Groups request rate, not filtered by host. Empty when this breakdown is disabled or unavailable.",
+            [prom(f'sum by ({label}) (rate({metric}{{{HTTP_ZONE},{label}!=""}}[$__rate_interval]))', '{{' + label + '}}')], unit="reqps", stack=True)
+    d.geomap(2057, "HTTP requests by country", "Sample-corrected Groups requests by ISO country, zone-level; not filtered by host.",
+        [table_q(f'sum by (cloudflare_http_client_country) (increase(cloudflare_http_requests_by_country_total{{{HTTP_ZONE},cloudflare_http_client_country!=""}}[$__range]))')],
+        country_field="cloudflare_http_client_country", value_field="Value")
+    d.ts(2058, "Response bandwidth by country", "Zone-level response byte rates by client country; not filtered by host.",
+        [prom(f'sum by (cloudflare_http_client_country) (rate(cloudflare_http_response_bytes_by_country_total{{{HTTP_ZONE}}}[$__rate_interval]))', "{{cloudflare_http_client_country}}")], unit="Bps")
+    for pid, title, metric, note in ((2059, "Edge TTFB statistics", "cloudflare_http_edge_ttfb_seconds", "Pro-only: no series on Free zones is expected."),
+                                   (2060, "Origin response percentiles", "cloudflare_http_origin_response_time_seconds", "Available on Free and Pro zones.")):
+        d.ts(pid, title, "Per-window statistics by zone and host, in seconds; not fleet-wide percentiles. " + note,
+            [prom(f'{metric}{{{HTTP}}}', "{{cloudflare_http_zone}} / {{cloudflare_http_host}} {{cloudflare_statistic}}")], unit="s", legend="table")
+
     return tab(TAB_HTTP, [
         row("Summary", [(2001, 4, 4), (2002, 4, 4), (2003, 4, 4), (2004, 4, 4), (2005, 4, 4), (2006, 4, 4)]),
         row("Traffic and cache", [(201, 12, 8), (2011, 12, 8), (2012, 8, 9), (2013, 16, 9)]),
+        row("Bytes and country", [(2050, 12, 8), (2058, 12, 8), (2057, 24, 10)]),
+        row("Zone breakdowns (not host-filtered)", [(pid, 12, 8) for pid, *_ in breakdowns]),
+        row("Latency tails", [(2059, 12, 8), (2060, 12, 8)]),
         row("Hosts", [(2014, 24, 10)]),
         row("Origin", [(204, 16, 8), (2021, 8, 8)]),
         row("HTTP request logs", [(203, 24, 12)], collapse=True),
@@ -613,7 +641,7 @@ def dns_tab(d: Dashboard) -> dict:
     d.stat(2203, "Refused or failed", "Queries answered REFUSED or SERVFAIL, as a share of all queries.",
         [prom(f'(sum(increase(cloudflare_dns_queries_total{{{DNS},cloudflare_dns_response_code=~"REFUSED|SERVFAIL"}}[$__range])) or vector(0)) / {dns_total}', instant=True)],
         unit="percentunit", decimals=2, thresholds=steps((GREEN, None), (ORANGE, 0.01), (RED, 0.05)))
-    d.stat(2204, "Unattributed (overflow)", "Share of queries recorded on the OpenTelemetry overflow series because the zone x colo x query type combinations "
+    d.stat(2204, "Unattributed (overflow)", "Share of queries recorded on the OpenTelemetry overflow series because the bounded DNS dimension combinations "
         "exceeded the SDK cardinality limit. Totals stay correct; per-dimension breakdowns below undercount by this share.",
         [prom(f'(sum(increase(cloudflare_dns_queries_total{{{S},otel_metric_overflow="true"}}[$__range])) or vector(0)) / '
               f'sum(increase(cloudflare_dns_queries_total{{{S}}}[$__range]))', instant=True)],
@@ -624,8 +652,8 @@ def dns_tab(d: Dashboard) -> dict:
         [prom(f'sum(increase(cloudflare_gateway_dns_queries_total{{{S},cloudflare_gateway_dns_decision=~"(?i).*block.*"}}[$__range])) or vector(0)', instant=True)],
         decimals=0)
 
-    d.ts(911, "DNS analytics queries by zone", "DNS query rate from dnsAnalyticsAdaptiveGroups for the 10 busiest zones, aggregated over colo and query type. "
-        "Queries past the SDK cardinality limit carry no zone and show as unattributed (overflow).",
+    d.ts(911, "DNS analytics queries by zone", "DNS query rate from dnsAnalyticsAdaptiveGroups for the 10 busiest zones, aggregated over bounded DNS dimensions (no metric colo). "
+        "Collector series-cap fallback uses zone <aggregated>; SDK overflow has no zone and is shown as unattributed (overflow).",
         [prom(f'topk(10, label_replace(sum by (cloudflare_dns_zone) (rate(cloudflare_dns_queries_total{{{DNS}}}[$__rate_interval])), '
               f'"cloudflare_dns_zone", "unattributed (overflow)", "cloudflare_dns_zone", ""))', "{{cloudflare_dns_zone}}")],
         unit="reqps", stack=True, legend="table")
@@ -636,9 +664,11 @@ def dns_tab(d: Dashboard) -> dict:
         [prom(f'sum by (cloudflare_dns_response_code) (rate(cloudflare_dns_queries_total{{{DNS},cloudflare_dns_response_code!=""}}[$__rate_interval]))',
               "{{cloudflare_dns_response_code}}")],
         unit="reqps", stack=True, overrides=color_overrides({"NOERROR": GREEN, "NXDOMAIN": ORANGE, "REFUSED": RED, "SERVFAIL": PURPLE}))
-    d.bargauge(2213, "Top answering data centres", "Queries by Cloudflare edge colo over the selected range, 15 busiest, aggregated over zones and types.",
-        [prom(f'sort_desc(topk(15, sum by (cloudflare_dns_colo) (increase(cloudflare_dns_queries_total{{{DNS},cloudflare_dns_colo!=""}}[$__range]))))',
-              "{{cloudflare_dns_colo}}", instant=True)], decimals=0)
+    d.bargauge(2213, "Top answering data centres", "DNS query log events by Cloudflare edge colo, 15 busiest. Raw events, not the Groups metric rate; sampling and caps apply.",
+        [loki(f'topk(15, sum by (cloudflare_dns_colo) (count_over_time({LOG} | event_name="cloudflare.dns.query" '
+              '| cloudflare_dns_zone=~"$zone" | cloudflare_dns_colo!="" [$__range])))',
+              "{{cloudflare_dns_colo}}", instant=True)], decimals=0, transformations=loki_rows("Queries") + [{"id": "rowsToFields", "options": {"mappings": [
+                  {"fieldName": "cloudflare_dns_colo", "handlerKey": "field.name"}, {"fieldName": "Queries", "handlerKey": "field.value"}]}}])
     d.donut(2214, "Transport protocol", "UDP versus TCP (and DoH/DoT where reported) over the selected range.",
         [prom(f'sum by (cloudflare_dns_protocol) (increase(cloudflare_dns_queries_total{{{DNS},cloudflare_dns_protocol!=""}}[$__range]))',
               "{{cloudflare_dns_protocol}}", instant=True)], decimals=0)
@@ -678,9 +708,9 @@ def access_tab(d: Dashboard) -> dict:
     d.stat(2305, "Users", "Access users in the latest inventory snapshot.",
         [prom(f'max(cloudflare_access_users_ratio{{{S}}})', instant=True)])
     d.gauge(2306, "Identity match ratio", "Share of sampled HTTP events that cf2otel matched to exactly one Access login by IP, host and time. "
-        "Cumulative since the running process started. Low values are normal for public sites; this is inference, not authentication.",
-        [prom(f'sum(cf2otel_identity_matched_ratio{{{S}}}) / (sum(cf2otel_identity_matched_ratio{{{S}}}) + sum(cf2otel_identity_unmatched_ratio{{{S}}}) '
-              f'+ sum(cf2otel_identity_ambiguous_ratio{{{S}}}))', instant=True)],
+        "Rate-based over the current rate interval. Low values are normal for public sites; this is inference, not authentication.",
+        [prom(f'sum(rate(cf2otel_identity_outcomes_total{{{S},cf2otel_identity_outcome="matched"}}[$__rate_interval])) / '
+              f'sum(rate(cf2otel_identity_outcomes_total{{{S}}}[$__rate_interval]))', instant=True)],
         unit="percentunit", decimals=1, thresholds=NEUTRAL)
 
     d.ts(103, "Access logins by app and outcome", "Access GraphQL identity login metrics by app and allowed state; REST log counters are excluded to avoid double counting.",
@@ -715,10 +745,8 @@ def access_tab(d: Dashboard) -> dict:
         order=["cloudflare_access_scim_resource_type", "cloudflare_access_scim_method", "cloudflare_access_scim_status", "Updates"], sort_by="Updates")
 
     d.donut(2331, "HTTP identity inference outcomes", "How cf2otel's identity inference classified sampled HTTP events: matched to one Access login, "
-        "unmatched, or ambiguous (several candidates). Cumulative since process start.",
-        [prom(f'sum(cf2otel_identity_matched_ratio{{{S}}})', "matched", instant=True, ref="A"),
-         prom(f'sum(cf2otel_identity_unmatched_ratio{{{S}}})', "unmatched", instant=True, ref="B"),
-         prom(f'sum(cf2otel_identity_ambiguous_ratio{{{S}}})', "ambiguous", instant=True, ref="C")],
+        "unmatched, or ambiguous (several candidates). Counts over the selected range, reset-safe.",
+        [prom(f'sum by (cf2otel_identity_outcome) (increase(cf2otel_identity_outcomes_total{{{S}}}[$__range]))', "{{cf2otel_identity_outcome}}", instant=True)],
         overrides=color_overrides({"matched": GREEN, "unmatched": "text", "ambiguous": ORANGE}), decimals=0)
     d.stat(202, "Inferred identity events", "Log events whose Access user match was inferred from IP, host and time; this is not authenticated request identity.",
         [loki(f'sum(count_over_time({LOG} | event_name="cloudflare.http.request" | cloudflare_access_identity_inferred="true" [$__range]))', instant=True)],
@@ -908,7 +936,7 @@ def web_tab(d: Dashboard) -> dict:
             [prom(f'max by (cloudflare_rum_site_tag, cloudflare_rum_device_type) ({metric}{{{RUM}}})',
                   "{{cloudflare_rum_site_tag}} {{cloudflare_rum_device_type}}")],
             unit=unit, thresholds=steps((GREEN, None), (ORANGE, good), (RED, poor)), threshold_style="dashed", interval=None)
-    d.ts(924, "RUM FID p75", "Rolling p75 first input delay, converted from GraphQL milliseconds to seconds. Google replaced FID with INP in 2024 "
+    d.ts(924, "RUM FID p75", "Rolling p75 first input delay, converted from GraphQL microseconds to seconds. Google replaced FID with INP in 2024 "
         "and Cloudflare rarely reports it now, so an empty panel is expected.",
         [prom(f'max by (cloudflare_rum_site_tag, cloudflare_rum_device_type) (cloudflare_rum_fid_p75_seconds{{{RUM}}})',
               "{{cloudflare_rum_site_tag}} {{cloudflare_rum_device_type}}")],
@@ -1009,9 +1037,43 @@ def platform_tab(d: Dashboard) -> dict:
         [prom(f'sum(rate(cloudflare_email_routing_events_total{{{S}}}[$__rate_interval]))', "routing", ref="A"),
          prom(f'sum(rate(cloudflare_email_sending_events_total{{{S}}}[$__rate_interval]))', "sending", ref="B")], unit="reqps")
 
+    d.ts(2630, "Workers invocations by script and status", "Sample-corrected workersInvocationsAdaptive counts; separate from the overview request dataset.",
+        [prom(f'sum by (cloudflare_workers_script_name, cloudflare_workers_status) (rate(cloudflare_workers_invocations_total{{{WRK}}}[$__rate_interval]))',
+              "{{cloudflare_workers_script_name}} {{cloudflare_workers_status}}")], unit="reqps")
+    for pid, title, metric in ((2631, "Workers errors", "cloudflare_workers_errors_total"), (2632, "Workers subrequests", "cloudflare_workers_subrequests_total")):
+        d.ts(pid, title, "Sample-corrected invocation Groups count by script.",
+            [prom(f'sum by (cloudflare_workers_script_name) (rate({metric}{{{WRK}}}[$__rate_interval]))', "{{cloudflare_workers_script_name}}")], unit="ops")
+    for pid, title, metric in ((2633, "Workers CPU statistics", "cloudflare_workers_cpu_time_seconds"),
+                              (2634, "Workers wall-time statistics", "cloudflare_workers_wall_time_seconds"),
+                              (2635, "Workers request-duration statistics", "cloudflare_workers_request_duration_seconds")):
+        d.ts(pid, title, "Per-script window p50/p75/p99/p999 in seconds, not aggregate percentiles. Workers GB*s duration fields are not exported.",
+            [prom(f'{metric}{{{WRK}}}', "{{cloudflare_workers_script_name}} {{cloudflare_statistic}}")], unit="s", legend="table")
+    d.table(2640, "Certificate expiry observations (not current inventory)",
+        "Disabled by default. Each row is an observed pack attribute-series, with seconds-to-expiry at its last poll. "
+        "The cumulative SDK retains old status and expiry series and reexports them with fresh timestamps: rows cannot establish current status or expiry. "
+        "Values are not a live countdown; no certificate alert is shipped until snapshot retirement/freshness is fixed.",
+        [table_q(f'cloudflare_certificate_expiry_seconds{{{CERT}}}')],
+        columns={"cloudflare_certificate_zone": "Zone", "cloudflare_certificate_pack_id": "Pack", "cloudflare_certificate_type": "Type",
+                 "cloudflare_certificate_authority": "Authority", "cloudflare_certificate_status": "Observed status", "Value": "Observed seconds to expiry"},
+        order=["cloudflare_certificate_zone", "cloudflare_certificate_pack_id", "cloudflare_certificate_type", "cloudflare_certificate_authority", "cloudflare_certificate_status", "Value"],
+        overrides=[by_name("Observed seconds to expiry", unit="s", decimals=0)])
+    d.table(2641, "Current tunnel status", "Disabled by default. Only value-1 status series are current; retired status series have value zero and are excluded.",
+        [table_q(f'cloudflare_tunnel_status{{{S}}} == 1')],
+        columns={"cloudflare_tunnel_name": "Tunnel", "cloudflare_tunnel_id": "ID", "cloudflare_tunnel_status": "Status"},
+        hide=["Value"], order=["cloudflare_tunnel_name", "cloudflare_tunnel_id", "cloudflare_tunnel_status"])
+    d.ts(2642, "Tunnel active connections by colo", "Active connections; retired colo series contribute zero.",
+        [prom(f'sum by (cloudflare_tunnel_name, cloudflare_tunnel_id, cloudflare_tunnel_colo) (cloudflare_tunnel_connections{{{S}}})', "{{cloudflare_tunnel_name}} {{cloudflare_tunnel_colo}}")], interval="1m")
+    d.ts(2643, "Tunnel connectors by version", "Connector counts; retired version series contribute zero.",
+        [prom(f'sum by (cloudflare_tunnel_name, cloudflare_tunnel_id, cloudflare_tunnel_connector_version) (cloudflare_tunnel_connectors{{{S}}})', "{{cloudflare_tunnel_name}} {{cloudflare_tunnel_connector_version}}")], interval="1m")
+    d.logs(2644, "Tunnel status transitions", "Transitions since process start (first poll emits none); observed timestamp is part of the retry-stable event key.",
+        f'{LOG} | event_name="cloudflare.tunnel.status_change"')
+
     return tab(TAB_PLATFORM, [
         row("At a glance", [(pid, 3, 4) for pid, *_ in glance]),
         row("Workers", [(501, 16, 9), (2611, 8, 9)]),
+        row("Workers invocation health", [(2630, 12, 8), (2631, 12, 8), (2632, 12, 8), (2633, 12, 8), (2634, 12, 8), (2635, 12, 8)]),
+        row("Certificates (observations only)", [(2640, 24, 10)]),
+        row("Tunnels", [(2641, 24, 8), (2642, 12, 8), (2643, 12, 8), (2644, 24, 8)]),
         row("D1 and KV", [(601, 9, 7), (603, 9, 7), (604, 6, 7), (605, 12, 7), (606, 6, 7), (607, 6, 7)]),
         row("R2", [(705, 12, 8), (701, 12, 8), (706, 8, 8), (707, 8, 8), (703, 8, 8), (708, 24, 5)]),
         row("Durable Objects", [(801, 10, 7), (804, 10, 7), (803, 4, 7)]),
@@ -1080,13 +1142,17 @@ def collector_tab(d: Dashboard) -> dict:
         [prom(f'sum by (cf2otel_collector) (increase(cf2otel_window_catchup_windows_total{{{S}}}[$__interval])) > 0', "{{cf2otel_collector}}")],
         unit="short", bars=True, stack=True, decimals=0, interval="15m", no_value="No catch-up in range")
     d.bargauge(2713, "Slowest collectors (poll p95)", "95th percentile poll duration over the selected range for the 10 slowest collectors. "
-        "The histogram tops out at 60 s buckets, so values near 30 s or 60 s are bucket-bound estimates.",
+        "The histogram has finite buckets through 120 s; these are bucket-bound estimates, not exact timings.",
         [prom(f'sort_desc(topk(10, histogram_quantile(0.95, sum by (cf2otel_collector, le) (rate(cf2otel_scrape_duration_seconds_bucket{{{S}}}[$__range])))))',
               "{{cf2otel_collector}}", instant=True)], unit="s", decimals=1, thresholds=steps((GREEN, None), (YELLOW, 10), (RED, 30)), mode="lcd")
 
     d.ts(408, "API requests by status class", "Cloudflare API request rate by status class. 0xx means the request got no HTTP response.",
         [prom(f'sum by (cf2otel_status_class) (rate(cf2otel_api_requests_total{{{S}}}[$__rate_interval]))', "{{cf2otel_status_class}}")],
         unit="reqps", stack=True, overrides=color_overrides(STATUS_COLORS))
+    d.ts(2723, "API logical envelope errors", "Unsuccessful Cloudflare envelopes returned with HTTP 200, separate from actual HTTP attempt status. Permission code 9109 is classified as 4xx.",
+        [prom(f'sum by (cf2otel_status_class) (rate(cf2otel_api_envelope_errors_total{{{S}}}[$__rate_interval]))', "{{cf2otel_status_class}}")], unit="ops")
+    d.ts(2724, "Metric cardinality overflows", "Datapoints exceeding the SDK cardinality limit, by instrument. The default limit is 10000; config zero removes the limit.",
+        [prom(f'sum by (cf2otel_instrument) (rate(cf2otel_metric_cardinality_overflows_total{{{S}}}[$__rate_interval]))', "{{cf2otel_instrument}}")], unit="ops")
     d.heatmap(2721, "API latency distribution", "Cloudflare API attempt duration from the cf2otel.api.duration histogram.",
         [prom(f'sum by (le) (increase(cf2otel_api_duration_seconds_bucket{{{S}}}[$__rate_interval]))', "{{le}}", fmt="heatmap")])
     d.ts(2722, "API latency percentiles", "Median, p95 and p99 Cloudflare API attempt duration.",
@@ -1104,7 +1170,7 @@ def collector_tab(d: Dashboard) -> dict:
     return tab(TAB_COLLECTOR, [
         row("Status", [(2701, 4, 4), (2702, 4, 4), (403, 4, 4), (407, 4, 4), (2703, 4, 4), (2704, 4, 4), (401, 24, 12), (2711, 24, 18)]),
         row("Polling and windows", [(402, 12, 8), (404, 12, 16), (405, 6, 8), (406, 6, 8), (2712, 12, 8), (2713, 12, 8)]),
-        row("Cloudflare API and export", [(408, 8, 8), (2721, 8, 8), (2722, 8, 8), (2731, 24, 7)]),
+        row("Cloudflare API and export", [(408, 8, 8), (2721, 8, 8), (2722, 8, 8), (2731, 24, 7), (2723, 12, 8), (2724, 12, 8)]),
         row("Retention-gap logs", [(2741, 24, 8)], collapse=True),
     ])
 
