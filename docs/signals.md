@@ -111,7 +111,7 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `gen_ai.client.inference.operation.input_tokens` | `{token}` | Input tokens by operation. |
 | `gen_ai.client.inference.operation.output_tokens` | `{token}` | Output tokens by operation. |
 | `cf2otel.scrape.success` | `1` | Collector scrape success state. |
-| `cf2otel.scrape.duration` | `s` | Collector scrape duration. |
+| `cf2otel.scrape.duration` | `s` | Collector scrape duration. Explicit histogram boundaries in seconds: 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 7.5, 10, 15, 20, 30, 45, 60, 90, 120. |
 | `cf2otel.scrape.errors` | `1` | Collector scrape errors. |
 | `cf2otel.scrape.last_success_timestamp` | `s` | Time of last successful collector scrape. |
 | `cf2otel.export.success` | `1` | Successful OTLP exports. |
@@ -119,7 +119,7 @@ Loki stores the OTLP log attributes as structured metadata. Filter from `{servic
 | `cf2otel.build.info` | `1` | Build identity. |
 | `cf2otel.checkpoint.age` | `s` | Age of the oldest collector checkpoint. |
 | `cf2otel.api.requests` | `{request}` | Cloudflare API requests. |
-| `cf2otel.api.duration` | `s` | Cloudflare API request duration. |
+| `cf2otel.api.duration` | `s` | Cloudflare API request duration. Explicit histogram boundaries in seconds: 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 7.5, 10, 15, 20, 30, 45, 60, 90, 120. |
 | `cf2otel.api.retries` | `1` | Cloudflare API retries. |
 | `cf2otel.window.gap` | `s` | Skipped retention-gap seconds by collector. |
 | `cf2otel.window.commit_failures` | `1` | Failed window commits by retry or dropped outcome. |
