@@ -29,6 +29,7 @@ The table maps every configured collector name to its expected read group. For G
 | `rum.web_vitals` | `Account Analytics Read` (Account) | Unverified |
 | `gateway.dns` | `Account Analytics Read` (Account) | Unverified |
 | `workers.overview` | `Account Analytics Read` (Account) | Unverified |
+| `workers.invocations` | `Account Analytics Read` (Account) | Unverified |
 | `turnstile.events` | `Account Analytics Read` (Account) | Unverified |
 | `logpush.health` | `Account Analytics Read` (Account) | Unverified |
 | `d1.analytics` | `Account Analytics Read` (Account) | Unverified |
