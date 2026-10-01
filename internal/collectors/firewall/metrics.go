@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
@@ -18,12 +19,15 @@ import (
 )
 
 type metrics struct {
-	cfg *config.Config
-	api cfapi.Client
+	cfg     *config.Config
+	api     cfapi.Client
+	rulesMu sync.Mutex
+	rules   map[string]ruleCache
+	now     func() time.Time
 }
 
 func NewMetrics(cfg *config.Config, api cfapi.Client) *metrics {
-	return &metrics{cfg: cfg, api: api}
+	return &metrics{cfg: cfg, api: api, rules: make(map[string]ruleCache), now: time.Now}
 }
 
 func (*metrics) Name() string                   { return "firewall.metrics" }
@@ -71,11 +75,17 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 			wanted = append(wanted, "dimensions.source")
 		}
 
-		var rows []map[string]any
-		err = c.api.Query(ctx, cfapi.GraphQLRequest{
-			Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: dataset,
-			WantedFields: wanted, From: from, To: to, Limit: queryLimit,
-		}, &rows)
+		var dimensionsFields []metricDimension
+		if c.cfg.Firewall.RuleDimensions && dataset != byTimeGroupsDataset {
+			for _, dimension := range ruleMetricDimensions {
+				if hasAvailableField(settings.AvailableFields, "dimensions."+dimension.field) && (settings.MaxNumberOfFields <= 0 || len(wanted) < settings.MaxNumberOfFields) {
+					wanted = append(wanted, "dimensions."+dimension.field)
+					dimensionsFields = append(dimensionsFields, dimension)
+				}
+			}
+		}
+
+		rows, err := c.queryWindow(ctx, zone.ID, dataset, wanted, from, to)
 		if err != nil {
 			var gap *cfapi.RetentionGapError
 			if errors.As(err, &gap) {
@@ -84,10 +94,13 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 			}
 			return from, fmt.Errorf("zone firewall Groups dataset %s: %w", dataset, err)
 		}
-		if len(rows) >= queryLimit {
-			return from, fmt.Errorf("zone firewall Groups dataset %s reached the query limit", dataset)
-		}
 
+		var descriptions map[string]string
+		for _, dimension := range dimensionsFields {
+			if dimension.key == semconv.AttrFirewallRuleID && len(rows) > 0 {
+				descriptions = c.ruleDescriptions(ctx, zone.ID)
+			}
+		}
 		for _, row := range rows {
 			count, ok := numericValue(row["count"])
 			if !ok {
@@ -108,6 +121,15 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 					attrs = append(attrs, telemetry.Attr{Key: semconv.AttrFirewallSource, Value: valueString(value)})
 				}
 			}
+			for _, dimension := range dimensionsFields {
+				if value := dimensions[dimension.field]; value != nil && valueString(value) != "" {
+					text := valueString(value)
+					attrs = append(attrs, telemetry.Attr{Key: dimension.key, Value: text})
+					if dimension.key == semconv.AttrFirewallRuleID && descriptions[text] != "" {
+						attrs = append(attrs, telemetry.Attr{Key: semconv.AttrFirewallRuleDescription, Value: descriptions[text]})
+					}
+				}
+			}
 			samples = append(samples, firewallMetric{value: count, attrs: attrs})
 		}
 
@@ -126,12 +148,30 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 		return from, errors.Join(retentionGaps...)
 	}
 
-	for _, sample := range samples {
+	cap := c.cfg.Firewall.MaxMetricSeriesPerWindow
+	if cap <= 0 {
+		cap = config.Default().Firewall.MaxMetricSeriesPerWindow
+	}
+	for _, sample := range boundFirewallMetrics(samples, cap) {
 		if err := out.Counter(ctx, semconv.MetricFirewallEvents, sample.value, sample.attrs...); err != nil {
 			return from, err
 		}
 	}
 	return to, nil
+}
+
+// Discard saturated parent rows and collect only complete leaf windows. The
+// caller aggregates and caps their counts once, across all selected zones.
+func (c *metrics) queryWindow(ctx context.Context, zoneID, dataset string, wanted []string, from, to time.Time) ([]map[string]any, error) {
+	return collector.Bisect(from, to, time.Second, time.Minute, func(from, to time.Time) ([]map[string]any, bool, error) {
+		var rows []map[string]any
+		err := c.api.Query(ctx, cfapi.GraphQLRequest{
+			Scope: cfapi.ZoneScope, ScopeID: zoneID, Dataset: dataset,
+			WantedFields: wanted, From: from, To: to, Limit: queryLimit,
+		}, &rows)
+		saturated := isSaturationError(err, dataset) || (err == nil && len(rows) >= queryLimit)
+		return rows, saturated, err
+	})
 }
 
 func (c *metrics) datasetForZone(ctx context.Context, zone cfapi.Zone) (string, cfapi.DatasetSettings, error) {

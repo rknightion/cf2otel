@@ -14,6 +14,7 @@ Settings load in this order: built-in defaults, YAML, then `CF2OTEL_` environmen
 | `otlp` | `endpoint`, `protocol` (`http` or `grpc`), Grafana Cloud instance ID and environment-only token or headers. |
 | `state` | Persistent checkpoint directory; default `/var/lib/cf2otel`. |
 | `health`, `log` | Loopback health listener and application logging. |
+| `firewall` | `rule_dimensions` defaults to false; `max_metric_series_per_window` is a positive total cap, default 500. |
 
 Collector keys are `access.logins`, `access.login_metrics`, `access.scim`, `inventory.access`, `httpreq.events`, `httpreq.metrics`, `aigateway.logs`, `aigateway.metrics`, `aigateway.coverage`, `audit.logs`, `firewall.events`, `firewall.metrics`, `dns.events`, `dns.metrics`, `rum.pageloads`, `rum.web_vitals`, `gateway.dns`, `workers.overview`, `workers.invocations`, `turnstile.events`, `logpush.health`, `d1.analytics`, `d1.queries`, `d1.storage`, `kv.operations`, `kv.storage`, `r2.bandwidth`, `r2.catalog_data`, `r2.catalog_maintenance`, `r2.operations`, `r2.storage`, `r2.sql`, `durableobjects.invocations`, `durableobjects.periodic`, `durableobjects.sql_storage`, `durableobjects.subrequests`, `queues.backlog`, `queues.consumer`, `queues.delayed_backlog`, `queues.message_operations`, `email.routing`, `email.sending`, `selfobs`, `certs.packs`, and `tunnels.status`. Enabled collectors default to five-minute intervals. The email collectors sum Groups counts across account-owned zones over complete five-minute buckets; they emit no zone metric attributes. DMARC is excluded. `aigateway.metrics` is disabled and unscheduled because its GraphQL Groups ingestion lag is not bounded; `aigateway.logs` emits the AI Gateway metrics from REST rows. The default initial lookback is 30 minutes and maximum window is one hour. `aigateway.coverage` is present but disabled by default. The scheduler advances a checkpoint after a successful window or after it drops a window following three payload rejections.
 
@@ -22,6 +23,12 @@ The Access REST log has only about a day's observed reach. Keep its polling inte
 `httpRequestsAdaptive` event rows are sampled. Use the companion `httpreq.metrics` collector for corrected aggregate counts; do not count event rows to calculate a request rate.
 
 See [Security and PII](security.md) before enabling AI Gateway body capture or wider HTTP scope.
+
+## Firewall metric dimensions
+
+Set `firewall.rule_dimensions: true` (or `CF2OTEL_FIREWALL__RULE_DIMENSIONS=true`) to replace the default metric family's dimension set with advertised rule ID, host and client country dimensions. Optional dimensions are selected in rule ID, host, then country order within the dataset's advertised field budget. Saturated source windows are bisected down to one minute before aggregation; an incomplete leaf fails the window without emitting partial counts. It does not emit a second copy of each event. Rule descriptions are read from custom and managed phase zone rulesets and cached per zone for one hour; denied or failed lookups leave descriptions absent without failing metrics. Free ByTimeGroups remains count-only because its schema rejects dimensions despite advertising them.
+
+`firewall.max_metric_series_per_window` (`CF2OTEL_FIREWALL__MAX_METRIC_SERIES_PER_WINDOW`) bounds all emitted firewall points across zones, including a reserved remainder slot when the window exceeds the cap. Identical series aggregate first. Legacy low-cardinality points take priority, then enrichment points in deterministic attribute order. Discarded counts go to one all-other series (zone, action, source, rule ID, description, host and country all `other`). At cap 1 it holds the entire count. Counts are conserved, never duplicated between base and enrichment. This collector-side per-window cap is independent of HTTP/platform caps and the SDK cardinality limit; cumulative SDK series can still grow across windows.
 
 ## Additional analytics settings
 

@@ -103,6 +103,8 @@ var restPaths = map[string]string{
 	"audit-logs":              "/accounts/{account}/logs/audit",
 	"cfd-tunnel-list":         "/accounts/{account}/cfd_tunnel",
 	"certificate-packs":       "/zones/{zone}/ssl/certificate_packs",
+	"firewall-rulesets":       "/zones/{zone}/rulesets",
+	"firewall-ruleset-detail": "/zones/{zone}/rulesets/{id}",
 }
 
 func loadContract(path string) (contract, error) {
@@ -148,6 +150,9 @@ func validateContract(c contract) error {
 				return errors.New("gateway log list must precede detail and body paths")
 			}
 		}
+		if r.Name == "firewall-ruleset-detail" && (!restSeen["firewall-rulesets"] || !r.Single) {
+			return errors.New("firewall ruleset list must precede single detail path")
+		}
 		path, ok := restPaths[r.Name]
 		fieldsValid := validFields(r.RequiredFields)
 		if r.RawJSON {
@@ -165,7 +170,7 @@ func validateContract(c contract) error {
 		if ((r.Scope == "gateway") || (r.Scope == "gateway-log")) != strings.Contains(r.Path, "{gateway}") {
 			return errors.New("invalid gateway scope")
 		}
-		if (r.Scope == "gateway-log") != strings.Contains(r.Path, "{id}") || (r.RawJSON && r.Scope != "gateway-log") || (r.Single && r.RawJSON) {
+		if (r.Scope == "gateway-log" || r.Name == "firewall-ruleset-detail") != strings.Contains(r.Path, "{id}") || (r.RawJSON && r.Scope != "gateway-log") || (r.Single && r.RawJSON) {
 			return errors.New("invalid REST response shape")
 		}
 		restSeen[r.Name] = true
@@ -293,6 +298,7 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 			}
 		}
 	}
+	firewallRulesetIDs := map[string]string{}
 	gatewayLogIDs := map[string]string{}
 	now := time.Now().UTC()
 	for _, r := range c.REST {
@@ -301,7 +307,10 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 		if r.Scope == "zone" {
 			targets = targets[:0]
 			for _, zone := range zones {
-				targets = append(targets, target{zone: zone.ID})
+				if r.Name == "firewall-ruleset-detail" && firewallRulesetIDs[zone.ID] == "" {
+					continue
+				}
+				targets = append(targets, target{zone: zone.ID, id: firewallRulesetIDs[zone.ID]})
 			}
 		} else if r.Scope != "global" {
 			targets = targets[:0]
@@ -383,6 +392,16 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 				diffs = append(diffs, label+": read failed")
 				continue
 			}
+			if r.Name == "firewall-rulesets" {
+				for _, row := range rows {
+					phase, _ := row["phase"].(string)
+					id, _ := row["id"].(string)
+					if id != "" && (phase == "http_request_firewall_custom" || phase == "http_request_firewall_managed") {
+						firewallRulesetIDs[t.zone] = id
+						break
+					}
+				}
+			}
 			if r.CheckAllRows && totalCount > len(rows) {
 				diffs = append(diffs, fmt.Sprintf("%s: checked %d of %d rows", label, len(rows), totalCount))
 			}
@@ -455,6 +474,9 @@ func hasAvailableField(available []string, required string) bool {
 }
 
 func restProbeQuery(name string, now time.Time) url.Values {
+	if name == "firewall-rulesets" || name == "firewall-ruleset-detail" {
+		return nil
+	}
 	if strings.HasPrefix(name, "ai-gateway-log-") {
 		return nil
 	}

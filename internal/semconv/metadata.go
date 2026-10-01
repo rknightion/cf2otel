@@ -65,7 +65,7 @@ var metricSpecs = map[string]MetricSpec{
 	MetricHTTPRequests:                   {Unit: "{request}", Description: "Request count from sample-corrected httpRequestsAdaptiveGroups."},
 	MetricHTTPOriginDuration:             {Unit: "s", Description: "Average origin response duration per Groups window, in seconds."},
 	MetricAuditEvents:                    {Unit: "1", Description: "Exact audit event count by resource product, action type and action result."},
-	MetricFirewallEvents:                 {Unit: "1", Description: "Security event count from a Groups dataset by zone. Pro Groups provides action and source dimensions; Free ByTimeGroups rejects them despite settings.availableFields advertising them."},
+	MetricFirewallEvents:                 {Unit: "{event}", Description: "Security event count from a Groups dataset by zone and available dimensions; opt-in rule, host and country enrichment is bounded by the collector's total per-window series cap."},
 	MetricDNSQueries:                     {Unit: "1", Description: "DNS query count from dnsAnalyticsAdaptiveGroups by zone and available bounded dimensions."},
 	MetricGatewayDNSQueries:              {Unit: "1", Description: "Gateway DNS query sum from account-level cf1GatewayDnsRawGroups, by bounded query type, resolver decision and country."},
 	MetricRUMPageViews:                   {Unit: "1", Description: "Page views from rumPageloadEventsAdaptiveGroups by country and device."},

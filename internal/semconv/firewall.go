@@ -25,4 +25,5 @@ const (
 	AttrFirewallRayID                = "cloudflare.firewall.ray_id"
 	AttrFirewallColo                 = "cloudflare.firewall.colo"
 	AttrFirewallUserAgent            = "cloudflare.firewall.user_agent"
+	AttrFirewallRuleDescription      = "cloudflare.firewall.rule_description"
 )

@@ -34,6 +34,7 @@ func (s Secret) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
 func (s Secret) Value() string                { return string(s) }
 
 type Config struct {
+	Firewall   FirewallConfig             `yaml:"firewall" json:"firewall"`
 	Cloudflare CloudflareConfig           `yaml:"cloudflare" json:"cloudflare"`
 	Collectors map[string]CollectorConfig `yaml:"collectors" json:"collectors"`
 	Access     AccessConfig               `yaml:"access" json:"access"`
@@ -73,6 +74,11 @@ type HTTPConfig struct {
 	MaxMetricHostsPerZone    int      `yaml:"max_metric_hosts_per_zone" json:"max_metric_hosts_per_zone"`
 	MaxMetricSeriesPerWindow int      `yaml:"max_metric_series_per_window" json:"max_metric_series_per_window"`
 }
+type FirewallConfig struct {
+	RuleDimensions           bool `yaml:"rule_dimensions" json:"rule_dimensions"`
+	MaxMetricSeriesPerWindow int  `yaml:"max_metric_series_per_window" json:"max_metric_series_per_window"`
+}
+
 type PlatformConfig struct {
 	MaxMetricSeriesPerWindow int `yaml:"max_metric_series_per_window" json:"max_metric_series_per_window"`
 }
@@ -137,6 +143,7 @@ var disabledCollectorNames = []string{"aigateway.coverage", "logpush.failures", 
 
 func Default() Config {
 	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{RequestSource: "eyeball", Breakdowns: []string{"status", "origin_status", "country", "protocol", "tls_protocol", "method", "content_type"}, Scope: "access_protected", MaxMetricHostsPerZone: 1000, MaxMetricSeriesPerWindow: 10000}, Platform: PlatformConfig{MaxMetricSeriesPerWindow: 500}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{MetricCardinalityLimit: 10000, Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
+	c.Firewall = FirewallConfig{MaxMetricSeriesPerWindow: 500}
 	for _, name := range collectorNames {
 		c.Collectors[name] = CollectorConfig{Enabled: true, Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
 	}
@@ -286,6 +293,7 @@ func (c Config) Validate() error {
 	add(c.HTTP.MetricsScope != "hosts" || len(c.HTTP.Hosts) > 0, "http.hosts is required for metrics hosts scope")
 	add(c.HTTP.MaxMetricHostsPerZone > 0, "http.max_metric_hosts_per_zone must be positive")
 	add(c.HTTP.MaxMetricSeriesPerWindow > 0, "http.max_metric_series_per_window must be positive")
+	add(c.Firewall.MaxMetricSeriesPerWindow > 0, "firewall.max_metric_series_per_window must be positive")
 	add(c.Platform.MaxMetricSeriesPerWindow > 0, "platform.max_metric_series_per_window must be positive")
 	add(c.Identity.MatchWindow > 0, "identity.match_window must be positive")
 	add(c.Identity.MaxCandidates > 0, "identity.max_candidates must be positive")

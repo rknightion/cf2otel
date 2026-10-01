@@ -65,6 +65,9 @@ config:
     zones: []
     max_metric_hosts_per_zone: 1000
     max_metric_series_per_window: 10000
+  firewall:
+    rule_dimensions: false
+    max_metric_series_per_window: 500
   platform:
     max_metric_series_per_window: 500
   # Escape the dot in a collector key when overriding it with Helm --set, e.g.

@@ -492,6 +492,21 @@
   ],
   "rest": [
     {
+      "name": "firewall-rulesets",
+      "scope": "zone",
+      "path": "/zones/{zone}/rulesets",
+      "required_fields": ["id", "phase"],
+      "allow_empty": true
+    },
+    {
+      "name": "firewall-ruleset-detail",
+      "scope": "zone",
+      "path": "/zones/{zone}/rulesets/{id}",
+      "required_fields": ["id", "rules"],
+      "single": true,
+      "allow_empty": true
+    },
+    {
       "name": "cfd-tunnel-list",
       "scope": "account",
       "path": "/accounts/{account}/cfd_tunnel",

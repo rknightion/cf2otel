@@ -17,6 +17,9 @@ http:
   zones: []
   max_metric_hosts_per_zone: 1000
   max_metric_series_per_window: 10000
+firewall:
+  rule_dimensions: false # Opt in to rule ID/description, host and country metrics when advertised.
+  max_metric_series_per_window: 500 # Positive total cap, including the all-other remainder.
 platform:
   max_metric_series_per_window: 500
 identity:

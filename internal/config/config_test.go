@@ -11,9 +11,10 @@ import (
 
 func TestLoadPrecedenceAndRedaction(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(path, []byte("cloudflare:\n  account_id: yaml-account\nhttp:\n  scope: all\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("cloudflare:\n  account_id: yaml-account\nhttp:\n  scope: all\nfirewall:\n  rule_dimensions: true\n  max_metric_series_per_window: 9\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("CF2OTEL_FIREWALL__MAX_METRIC_SERIES_PER_WINDOW", "3")
 	t.Setenv("CF2OTEL_CLOUDFLARE__ACCOUNT_ID", "env-account")
 	t.Setenv("CF2OTEL_CLOUDFLARE__API_TOKEN", "private-token")
 	t.Setenv("CF2OTEL_OTLP__GRAFANA_CLOUD__TOKEN", "otel-token")
@@ -23,6 +24,13 @@ func TestLoadPrecedenceAndRedaction(t *testing.T) {
 	}
 	if c.Cloudflare.AccountID != "env-account" || c.HTTP.Scope != "all" || c.Cloudflare.APIToken.Value() != "private-token" {
 		t.Fatalf("wrong precedence: account=%q scope=%q token-present=%t", c.Cloudflare.AccountID, c.HTTP.Scope, c.Cloudflare.APIToken != "")
+	}
+	if !c.Firewall.RuleDimensions || c.Firewall.MaxMetricSeriesPerWindow != 3 {
+		t.Fatalf("firewall config precedence = %+v", c.Firewall)
+	}
+	c.Firewall.MaxMetricSeriesPerWindow = 0
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "firewall.max_metric_series_per_window must be positive") {
+		t.Fatalf("zero firewall cap was not rejected: %v", err)
 	}
 	dump := c.String()
 	if strings.Contains(dump, "private-token") || strings.Contains(dump, "otel-token") || !strings.Contains(dump, "[REDACTED]") {

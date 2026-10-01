@@ -27,7 +27,7 @@ The table maps every configured collector name to its expected read group. For G
 | `aigateway.metrics` | `Account Analytics Read` (Account); collector is disabled while GraphQL Groups ingestion lag is unbounded | Unverified |
 | `audit.logs` | `Account Settings Read` (Account) | Unverified |
 | `firewall.events` | `Analytics Read` (Zone) | Unverified |
-| `firewall.metrics` | `Analytics Read` (Zone) | Unverified |
+| `firewall.metrics` | `Analytics Read` (Zone); add `Zone WAF Read` for opt-in rule descriptions | Runtime enrichment not live-enabled by this change; ruleset read shapes verified in root preparation |
 | `dns.events` | `Analytics Read` (Zone) | Unverified |
 | `dns.metrics` | `Analytics Read` (Zone) | Unverified |
 | `rum.pageloads` | `Account Analytics Read` (Account) | Unverified |
@@ -67,7 +67,7 @@ The expected groups for other collectors are candidates based on their API surfa
 
 Access login logs can contain email addresses, user IDs, IP addresses and ray IDs. HTTP event logs can contain client IPs, paths, queries and user agents. AI Gateway logs and traces can include model usage and request metadata. These values belong on log or span records only; metrics use bounded dimensions such as app, model, provider, status class or action. Configure retention and access controls at the OTLP destination for the data you choose to collect.
 
-Audit logs can contain actor email and IP, token identifiers, raw request URI and user agent. Firewall event logs can contain client IP, path, query, user agent and ray ID. Their metrics use bounded action, source and product dimensions only.
+Audit logs can contain actor email and IP, token identifiers, raw request URI and user agent. Firewall event logs can contain client IP, path, query, user agent and ray ID. Their metrics default to bounded action, source and product dimensions. Firewall metrics may opt in to rule ID/description, host and client country, bounded by a collector-side total per-window series cap. Rule descriptions and hosts can expose operator-defined names; review their content and destination access before enabling `firewall.rule_dimensions`. Lookup failure never blocks metric counts.
 
 HTTP events have no native Access user identity. cf2otel can match a recent login by client IP, host and time; any resulting identity is marked `cloudflare.access.identity.inferred=true`. An ambiguous match stays unattributed. Do not treat an inferred identity as authentication proof.
 
