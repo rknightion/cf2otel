@@ -53,10 +53,13 @@ func NewCoverage(cfg *config.Config, api cfapi.Client) *coverage {
 func (*coverage) Name() string                   { return "aigateway.coverage" }
 func (*coverage) DefaultInterval() time.Duration { return 5 * time.Minute }
 
-// Lag holds back at least coverageLag and ends on a window boundary, so a
-// scheduler tick sees either a closed window or an empty range it skips.
-func (c *coverage) Lag() time.Duration {
-	held := c.now().UTC().Add(-coverageLag)
+// Lag holds back at least coverageLag and ends on a window boundary.
+func (c *coverage) Lag() time.Duration { return c.LagAt(c.now()) }
+
+// LagAt aligns the end using the scheduler's clock instant. Independently
+// reading the clock in Lag would shift that end just before the boundary.
+func (*coverage) LagAt(now time.Time) time.Duration {
+	held := now.UTC().Add(-coverageLag)
 	return coverageLag + held.Sub(held.Truncate(coverageWindow))
 }
 
