@@ -3,6 +3,7 @@ package telemetry
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"time"
 
@@ -16,6 +17,12 @@ type SnapshotEmitter interface {
 	GaugeSnapshot(context.Context, string, time.Duration, []GaugePoint) error
 }
 
+// SnapshotBatchEmitter publishes related gauge snapshots in one transaction.
+// Any error leaves every previously published point and expiry unchanged.
+type SnapshotBatchEmitter interface {
+	GaugeSnapshots(context.Context, time.Duration, map[string][]GaugePoint) error
+}
+
 // GaugePoint is one observation in a complete gauge snapshot.
 type GaugePoint struct {
 	Value float64
@@ -23,14 +30,14 @@ type GaugePoint struct {
 }
 
 type gaugeSnapshot struct {
-	mu      sync.Mutex
+	mu      *sync.RWMutex
 	points  []GaugePoint
 	expires time.Time
 }
 
 func (s *gaugeSnapshot) observe(_ context.Context, observer metric.Float64Observer) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if !time.Now().Before(s.expires) {
 		return nil
 	}
@@ -40,23 +47,45 @@ func (s *gaugeSnapshot) observe(_ context.Context, observer metric.Float64Observ
 	return nil
 }
 
-// GaugeSnapshot uses an observable gauge so the SDK does not retain attribute
-// sets from older snapshots. The caller's slices are copied before publication.
+// GaugeSnapshot retains standalone semantics through the batch publication path.
 func (e *otelEmitter) GaugeSnapshot(ctx context.Context, name string, ttl time.Duration, points []GaugePoint) error {
+	return e.GaugeSnapshots(ctx, ttl, map[string][]GaugePoint{name: points})
+}
+
+// GaugeSnapshots validates, copies and registers all instruments before updating
+// retained state. Instrument registration may survive a failed transaction, but
+// its empty callback cannot expose unpublished points or refresh any expiry.
+func (e *otelEmitter) GaugeSnapshots(ctx context.Context, ttl time.Duration, snapshots map[string][]GaugePoint) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if ttl <= 0 {
 		return errors.New("gauge snapshot TTL must be positive")
 	}
+	copied := make(map[string][]GaugePoint, len(snapshots))
+	names := make([]string, 0, len(snapshots))
+	for name, points := range snapshots {
+		if name == "" {
+			return errors.New("gauge snapshot name must not be empty")
+		}
+		names = append(names, name)
+		copyPoints := make([]GaugePoint, len(points))
+		for i, p := range points {
+			copyPoints[i] = GaugePoint{Value: p.Value, Attrs: append([]Attr(nil), p.Attrs...)}
+		}
+		copied[name] = copyPoints
+	}
+	sort.Strings(names)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.snapshots == nil {
 		e.snapshots = make(map[string]*gaugeSnapshot)
 	}
-	s := e.snapshots[name]
-	if s == nil {
-		s = &gaugeSnapshot{}
+	for _, name := range names {
+		if e.snapshots[name] != nil {
+			continue
+		}
+		s := &gaugeSnapshot{mu: &e.snapshotMu}
 		opts := []metric.Float64ObservableGaugeOption{metric.WithFloat64Callback(s.observe)}
 		if spec, ok := semconv.Metric(name); ok {
 			opts = append(opts, metric.WithUnit(spec.Unit), metric.WithDescription(spec.Description))
@@ -66,13 +95,16 @@ func (e *otelEmitter) GaugeSnapshot(ctx context.Context, name string, ttl time.D
 		}
 		e.snapshots[name] = s
 	}
-	copyPoints := make([]GaugePoint, len(points))
-	for i, p := range points {
-		copyPoints[i] = GaugePoint{Value: p.Value, Attrs: append([]Attr(nil), p.Attrs...)}
+	e.snapshotMu.Lock()
+	defer e.snapshotMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	s.mu.Lock()
-	s.points = copyPoints
-	s.expires = time.Now().Add(ttl)
-	s.mu.Unlock()
+	expires := time.Now().Add(ttl)
+	for _, name := range names {
+		s := e.snapshots[name]
+		s.points = copied[name]
+		s.expires = expires
+	}
 	return nil
 }

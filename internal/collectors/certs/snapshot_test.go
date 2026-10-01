@@ -36,6 +36,15 @@ func (e *snapshotRecorder) GaugeSnapshot(_ context.Context, name string, ttl tim
 	return nil
 }
 
+func (e *snapshotRecorder) GaugeSnapshots(ctx context.Context, ttl time.Duration, snapshots map[string][]telemetry.GaugePoint) error {
+	for name, points := range snapshots {
+		if err := e.GaugeSnapshot(ctx, name, ttl, points); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // TestRegisterSnapshotOTLP exercises discovery, REST reads, registration, the SDK
 // callback and the real OTLP HTTP exporter as one public-boundary path.
 func TestRegisterSnapshotOTLP(t *testing.T) {
@@ -196,5 +205,60 @@ func TestRegisterCompletePackSnapshot(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The amended contract rejects snapshot-only emitters before either publication.
+type reviewCancelAfterExpiry struct {
+	telemetry.Emitter
+	snapshot telemetry.SnapshotEmitter
+	cancel   context.CancelFunc
+}
+
+func (e *reviewCancelAfterExpiry) GaugeSnapshot(ctx context.Context, n string, ttl time.Duration, p []telemetry.GaugePoint) error {
+	err := e.snapshot.GaugeSnapshot(ctx, n, ttl, p)
+	if err == nil && n == semconv.MetricCertificateExpiry {
+		e.cancel()
+	}
+	return err
+}
+func TestReviewFailedPublicationRetainsBoth(t *testing.T) {
+	mode := "active"
+	c := snapshot(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/zones" {
+			fmt.Fprint(w, `{"result":[{"id":"first","name":"first"}]}`)
+			return
+		}
+		fmt.Fprintf(w, `{"result":[{"id":"first","status":%q,"certificates":[{"expires_on":"2040-01-01T00:00:00Z"}]}]}`, mode)
+	}, nil)
+	reader := sdkmetric.NewManualReader()
+	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	defer provider.Shutdown(context.Background())
+	e := telemetry.NewEmitter(provider.Meter("review"), lognoop.NewLoggerProvider().Logger("review"), tracenoop.NewTracerProvider().Tracer("review"))
+	if err := c.Collect(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	mode = "pending"
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wrapped := &reviewCancelAfterExpiry{Emitter: e, snapshot: e.(telemetry.SnapshotEmitter), cancel: cancel}
+	if err := c.Collect(ctx, wrapped); err == nil {
+		t.Fatalf("snapshot-only emitter must reject publication")
+	}
+	var data metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &data); err != nil {
+		t.Fatal(err)
+	}
+	statuses := map[string]string{}
+	for _, sm := range data.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			for _, dp := range m.Data.(metricdata.Gauge[float64]).DataPoints {
+				v, _ := dp.Attributes.Value(semconv.AttrCertificateStatus)
+				statuses[m.Name] = v.AsString()
+			}
+		}
+	}
+	if statuses[semconv.MetricCertificateExpiry] != "active" || statuses[semconv.MetricCertificatePack] != "active" {
+		t.Fatalf("failed run replaced retained snapshot: %v; want both active", statuses)
 	}
 }

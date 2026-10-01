@@ -156,19 +156,22 @@ func (c *packs) Collect(ctx context.Context, e telemetry.Emitter) error {
 	if interval <= 0 {
 		interval = c.DefaultInterval()
 	}
+	if emitter, ok := e.(telemetry.SnapshotBatchEmitter); ok {
+		return emitter.GaugeSnapshots(ctx, 3*interval, map[string][]telemetry.GaugePoint{
+			semconv.MetricCertificateExpiry: expiryPoints,
+			semconv.MetricCertificatePack:   packPoints,
+		})
+	}
+	if _, ok := e.(telemetry.SnapshotEmitter); ok {
+		return errors.New("certificate snapshots require atomic batch publication")
+	}
 	for _, snapshot := range []struct {
 		name   string
 		points []telemetry.GaugePoint
 	}{{semconv.MetricCertificateExpiry, expiryPoints}, {semconv.MetricCertificatePack, packPoints}} {
-		if emitter, ok := e.(telemetry.SnapshotEmitter); ok {
-			if err := emitter.GaugeSnapshot(ctx, snapshot.name, 3*interval, snapshot.points); err != nil {
+		for _, point := range snapshot.points {
+			if err := e.Gauge(ctx, snapshot.name, point.Value, point.Attrs...); err != nil {
 				return err
-			}
-		} else {
-			for _, point := range snapshot.points {
-				if err := e.Gauge(ctx, snapshot.name, point.Value, point.Attrs...); err != nil {
-					return err
-				}
 			}
 		}
 	}
