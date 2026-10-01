@@ -63,9 +63,9 @@ func TestRegisteredIdentityOutcomeCounterDeltas(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
-	index.Observe(identity.Login{ClientIP: "192.0.2.1", Host: "example.com", UserEmail: "one@example.com", RayID: "invented-one", At: now})
-	index.Observe(identity.Login{ClientIP: "192.0.2.2", Host: "example.com", UserEmail: "one@example.com", RayID: "invented-two", At: now})
-	index.Observe(identity.Login{ClientIP: "192.0.2.2", Host: "example.com", UserEmail: "two@example.com", RayID: "invented-three", At: now})
+	index.Observe(identity.Login{ClientIP: "192.0.2.1", Host: "example.com", UserEmail: "invented-user-one", RayID: "invented-one", At: now})
+	index.Observe(identity.Login{ClientIP: "192.0.2.2", Host: "example.com", UserEmail: "invented-user-one", RayID: "invented-two", At: now})
+	index.Observe(identity.Login{ClientIP: "192.0.2.2", Host: "example.com", UserEmail: "invented-user-two", RayID: "invented-three", At: now})
 	lookups := func(matched, unmatched, ambiguous int) {
 		for range matched {
 			index.Lookup("192.0.2.1", "example.com", now)
