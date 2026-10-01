@@ -40,6 +40,17 @@ func (f *fakeAPI) Get(_ context.Context, path string, _ url.Values, out any) err
 	*(out.(*[]accessApp)) = f.apps
 	return nil
 }
+
+// Legacy fixtures model windows without breakdown rows. Dedicated fixtures
+// below exercise selected dimensions and the real aliased HTTP boundary.
+func (f *fakeAPI) QueryBatch(_ context.Context, selections []cfapi.GraphQLBatchSelection) (map[string]json.RawMessage, error) {
+	result := map[string]json.RawMessage{}
+	for _, s := range selections {
+		result[s.Alias] = json.RawMessage(`[]`)
+	}
+	return result, nil
+}
+
 func (f *fakeAPI) Query(_ context.Context, q cfapi.GraphQLRequest, out any) error {
 	f.queries = append(f.queries, q)
 	if err := f.queryErrors[q.ScopeID]; err != nil {
