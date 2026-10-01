@@ -27,6 +27,23 @@ type GraphQLRequest struct {
 	From, To   time.Time
 	Limit      int
 }
+
+// GraphQLBatchSelection names an independent selection in a same-scope batch.
+// Aliases must be unique GraphQL identifiers. Request uses the ordinary query
+// field and filter syntax; selections are never joined or summed together.
+type GraphQLBatchSelection struct {
+	Alias   string
+	Request GraphQLRequest
+}
+
+// GraphQLBatchQuerier is optional: Client and Query retain their existing
+// contract. QueryBatch returns JSON row arrays keyed by alias, or no results on
+// failure. Compatible selections share a POST unless the combined field budget
+// requires multiple batches. Windows exceeding entitlement limits fail closed.
+type GraphQLBatchQuerier interface {
+	QueryBatch(context.Context, []GraphQLBatchSelection) (map[string]json.RawMessage, error)
+}
+
 type DatasetSettings struct {
 	Enabled           bool     `json:"enabled"`
 	AvailableFields   []string `json:"availableFields"`

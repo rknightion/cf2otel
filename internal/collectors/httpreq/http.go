@@ -474,9 +474,20 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	// metric points. Host labels in all scope remain bounded by both limits.
 	totals := make(map[httpMetricLabels]httpMetricTotals)
 	var latencyPoints []httpLatencyPoint
+	var breakdownPoints []breakdownPoint
 	hostsByZone := make(map[string]map[string]struct{}, len(zones))
 	var retentionGaps []error
 	for _, zone := range zones {
+		points, err := c.collectBreakdowns(ctx, zone, from, to)
+		if err != nil {
+			var gap *cfapi.RetentionGapError
+			if errors.As(err, &gap) {
+				retentionGaps = append(retentionGaps, fmt.Errorf("zone HTTP breakdowns: %w", err))
+				continue
+			}
+			return from, err
+		}
+		breakdownPoints = append(breakdownPoints, points...)
 		fields, err := httpGroupQueryFields(ctx, c.api, zone.ID)
 		if err != nil {
 			return from, err
@@ -596,7 +607,7 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	if len(retentionGaps) > 0 {
 		return from, errors.Join(retentionGaps...)
 	}
-	series := len(latencyPoints)
+	series := len(latencyPoints) + len(breakdownPoints)
 	for _, aggregate := range totals {
 		series++ // request counter
 		if aggregate.hasBytes {
@@ -646,6 +657,11 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 			if err := e.Gauge(ctx, semconv.MetricHTTPOriginDuration, seconds, attrs...); err != nil {
 				return from, err
 			}
+		}
+	}
+	for _, point := range breakdownPoints {
+		if err := e.Counter(ctx, point.name, point.value, point.attrs...); err != nil {
+			return from, err
 		}
 	}
 	for _, point := range latencyPoints {
