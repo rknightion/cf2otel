@@ -216,7 +216,7 @@ type httpGroupSettingsProvider interface {
 
 func httpGroupFieldName(field string) string {
 	field = strings.ToLower(field)
-	for _, prefix := range []string{"dimensions", "avg"} {
+	for _, prefix := range []string{"dimensions", "avg", "sum", "quantiles"} {
 		if strings.HasPrefix(field, prefix+"_") {
 			return prefix + "." + strings.TrimPrefix(field, prefix+"_")
 		}
@@ -249,9 +249,14 @@ func httpGroupQueryFields(ctx context.Context, api cfapi.Client, zoneID string) 
 		return nil, fmt.Errorf("HTTP groups field limit %d is below the required field count %d", settings.MaxNumberOfFields, len(requiredHTTPGroupFields))
 	}
 	fields := append([]string(nil), requiredHTTPGroupFields...)
-	const avgField = "avg.originResponseDurationMs"
-	if available[httpGroupFieldName(avgField)] && (settings.MaxNumberOfFields <= 0 || settings.MaxNumberOfFields > len(fields)) {
-		fields = append(fields, avgField)
+	optional := []string{"avg.originResponseDurationMs", "sum.edgeResponseBytes"}
+	for _, latency := range httpLatencyFields {
+		optional = append(optional, latency.field)
+	}
+	for _, field := range optional {
+		if available[httpGroupFieldName(field)] && (settings.MaxNumberOfFields <= 0 || settings.MaxNumberOfFields > len(fields)) {
+			fields = append(fields, field)
+		}
 	}
 	return fields, nil
 }
@@ -265,6 +270,8 @@ type httpMetricLabels struct {
 
 type httpMetricTotals struct {
 	requests             float64
+	bytes                float64
+	hasBytes             bool
 	originDurationMS     float64
 	originDurationWeight float64
 }
@@ -466,6 +473,7 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	// zone leaves the caller's checkpoint unchanged without producing partial
 	// metric points. Host labels in all scope remain bounded by both limits.
 	totals := make(map[httpMetricLabels]httpMetricTotals)
+	var latencyPoints []httpLatencyPoint
 	hostsByZone := make(map[string]map[string]struct{}, len(zones))
 	var retentionGaps []error
 	for _, zone := range zones {
@@ -473,15 +481,26 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 		if err != nil {
 			return from, err
 		}
-		includeOriginDuration := false
+		includeOriginDuration, includeBytes := false, false
+		var requestFields []string
+		latencyFields := []string{"dimensions.clientRequestHTTPHost"}
 		for _, field := range fields {
-			if field == "avg.originResponseDurationMs" {
-				includeOriginDuration = true
-				break
+			isLatency := false
+			for _, latency := range httpLatencyFields {
+				if field == latency.field {
+					isLatency = true
+					latencyFields = append(latencyFields, field)
+					break
+				}
 			}
+			if !isLatency {
+				requestFields = append(requestFields, field)
+			}
+			includeOriginDuration = includeOriginDuration || field == "avg.originResponseDurationMs"
+			includeBytes = includeBytes || field == "sum.edgeResponseBytes"
 		}
 		var rows []map[string]any
-		req := cfapi.GraphQLRequest{Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: "httpRequestsAdaptiveGroups", WantedFields: fields, From: from, To: to, Limit: 10000}
+		req := cfapi.GraphQLRequest{Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: "httpRequestsAdaptiveGroups", WantedFields: requestFields, From: from, To: to, Limit: 10000, Filter: c.requestSourceFilter()}
 		if err := c.api.Query(ctx, req, &rows); err != nil {
 			var gap *cfapi.RetentionGapError
 			if errors.As(err, &gap) {
@@ -533,6 +552,15 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 			}
 			aggregate := totals[labels]
 			aggregate.requests += count
+			if includeBytes {
+				sum, _ := row["sum"].(map[string]any)
+				bytes, valid := metricNumber(sum["edgeResponseBytes"])
+				if !valid || bytes < 0 || math.IsInf(aggregate.bytes+bytes, 0) {
+					return from, errors.New("HTTP group has invalid response bytes")
+				}
+				aggregate.bytes += bytes
+				aggregate.hasBytes = true
+			}
 			if math.IsInf(aggregate.requests, 0) || math.IsNaN(aggregate.requests) {
 				return from, errors.New("HTTP metric request total is invalid")
 			}
@@ -552,13 +580,28 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 			}
 			totals[labels] = aggregate
 		}
+		if len(latencyFields) > 1 {
+			points, err := c.collectLatencies(ctx, zone, from, to, latencyFields, allowed, hostsByZone)
+			if err != nil {
+				var gap *cfapi.RetentionGapError
+				if errors.As(err, &gap) {
+					retentionGaps = append(retentionGaps, err)
+					continue
+				}
+				return from, err
+			}
+			latencyPoints = append(latencyPoints, points...)
+		}
 	}
 	if len(retentionGaps) > 0 {
 		return from, errors.Join(retentionGaps...)
 	}
-	series := 0
+	series := len(latencyPoints)
 	for _, aggregate := range totals {
 		series++ // request counter
+		if aggregate.hasBytes {
+			series++
+		}
 		if aggregate.originDurationWeight > 0 {
 			series++ // origin duration gauge has a distinct metric name
 		}
@@ -593,11 +636,21 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 		if err := e.Counter(ctx, semconv.MetricHTTPRequests, aggregate.requests, attrs...); err != nil {
 			return from, err
 		}
+		if aggregate.hasBytes {
+			if err := e.Counter(ctx, semconv.MetricHTTPResponseBytes, aggregate.bytes, attrs...); err != nil {
+				return from, err
+			}
+		}
 		if aggregate.originDurationWeight > 0 {
 			seconds := aggregate.originDurationMS / aggregate.originDurationWeight / 1000
 			if err := e.Gauge(ctx, semconv.MetricHTTPOriginDuration, seconds, attrs...); err != nil {
 				return from, err
 			}
+		}
+	}
+	for _, point := range latencyPoints {
+		if err := e.Gauge(ctx, point.name, point.seconds, point.attrs...); err != nil {
+			return from, err
 		}
 	}
 	return to, nil
