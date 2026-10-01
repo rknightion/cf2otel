@@ -79,6 +79,7 @@ type metricValue struct {
 	name  string
 	value float64
 	kind  metricKind
+	attrs []telemetry.Attr
 }
 
 func newGroupsCollector(cfg *config.Config, api cfapi.Client, spec datasetSpec) *groupsCollector {
@@ -143,16 +144,28 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 	if err != nil {
 		return from, err
 	}
+	depth, err := c.collectDepth(ctx, request, settings)
+	if err != nil {
+		return from, err
+	}
+	// Preserve the legacy cap selection before admitting optional depth series.
 	values, err = c.applySeriesCap(ctx, values)
 	if err != nil {
 		return from, err
 	}
+	remaining := c.cfg.Platform.MaxMetricSeriesPerWindow - len(values)
+	sort.Slice(depth, func(i, j int) bool { return metricValueKey(depth[i]) < metricValueKey(depth[j]) })
+	if len(depth) > remaining {
+		slog.WarnContext(ctx, "platform metric series cap dropped account-level metrics", "collector", c.spec.collector, "dropped_series", len(depth)-remaining)
+		depth = depth[:remaining]
+	}
+	values = append(values, depth...)
 	for _, metric := range values {
 		var err error
 		if metric.kind == gaugeMetric {
-			err = out.Gauge(ctx, metric.name, metric.value)
+			err = out.Gauge(ctx, metric.name, metric.value, metric.attrs...)
 		} else {
-			err = out.Counter(ctx, metric.name, metric.value)
+			err = out.Counter(ctx, metric.name, metric.value, metric.attrs...)
 		}
 		if err != nil {
 			return from, err
@@ -193,11 +206,20 @@ func hasAvailableField(available []string, wanted string) bool {
 }
 
 func (c *groupsCollector) queryRows(ctx context.Context, request cfapi.GraphQLRequest) ([]map[string]any, error) {
+	return c.queryRowsMode(ctx, request, false)
+}
+
+func (c *groupsCollector) queryRowsMode(ctx context.Context, request cfapi.GraphQLRequest, strict bool) ([]map[string]any, error) {
 	rows, err := collector.Bisect(request.From, request.To, d1BucketDuration, d1MinimumQueryWindow, func(from, to time.Time) ([]map[string]any, bool, error) {
 		leaf := request
 		leaf.From, leaf.To = from, to
 		var rows []map[string]any
-		err := c.api.Query(ctx, leaf, &rows)
+		var err error
+		if strict {
+			rows, err = c.queryDepthLeaf(ctx, leaf)
+		} else {
+			err = c.api.Query(ctx, leaf, &rows)
+		}
 		saturated := isSaturationError(err, leaf.Dataset)
 		if err == nil && len(rows) >= leaf.Limit {
 			saturated = true
@@ -357,9 +379,7 @@ func numericField(row map[string]any, field string) (float64, bool) {
 	return number, number >= 0 && !math.IsNaN(number) && !math.IsInf(number, 0)
 }
 
-// There are no D1 resource metric attributes in the frozen contract, so
-// 500 synthetic resources still collapse to at most two account series.
-// The default 500-series drop path is therefore unreachable for these datasets.
+// Account/statistic series never carry database identifiers.
 func (c *groupsCollector) applySeriesCap(ctx context.Context, values []metricValue) ([]metricValue, error) {
 	sort.Slice(values, func(i, j int) bool { return values[i].name < values[j].name })
 	limit := c.cfg.Platform.MaxMetricSeriesPerWindow

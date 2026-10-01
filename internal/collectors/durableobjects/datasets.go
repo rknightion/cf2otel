@@ -92,6 +92,7 @@ type metricPoint struct {
 	name  string
 	kind  metricKind
 	value float64
+	attrs []telemetry.Attr
 }
 
 func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (time.Time, error) {
@@ -174,16 +175,29 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 	if err != nil {
 		return from, fmt.Errorf("aggregate %s: %w", c.spec.dataset, err)
 	}
-	if !found {
-		return completeTo, nil
+	depth, err := c.collectDepth(ctx, request, settings, completeFrom, completeTo)
+	if err != nil {
+		return from, err
 	}
-	points := capMetricSeries(c.spec.name, []metricPoint{{name: c.spec.metric, kind: c.spec.kind, value: value}}, seriesLimit, slog.Default())
+	var points []metricPoint
+	if found {
+		points = append(points, metricPoint{name: c.spec.metric, kind: c.spec.kind, value: value})
+	}
+	// Preserve the legacy cap selection before admitting optional depth series.
+	points = capMetricSeries(c.spec.name, points, seriesLimit, slog.Default())
+	remaining := seriesLimit - len(points)
+	sort.Slice(depth, func(i, j int) bool { return metricPointKey(depth[i]) < metricPointKey(depth[j]) })
+	if len(depth) > remaining {
+		slog.Warn("platform metric series dropped", "collector", c.spec.name, "dropped", len(depth)-remaining)
+		depth = depth[:remaining]
+	}
+	points = append(points, depth...)
 	for _, point := range points {
 		var emitErr error
 		if point.kind == gaugeMetric {
-			emitErr = out.Gauge(ctx, point.name, point.value)
+			emitErr = out.Gauge(ctx, point.name, point.value, point.attrs...)
 		} else {
-			emitErr = out.Counter(ctx, point.name, point.value)
+			emitErr = out.Counter(ctx, point.name, point.value, point.attrs...)
 		}
 		if emitErr != nil {
 			return from, emitErr
@@ -193,11 +207,20 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 }
 
 func (c *datasetCollector) queryRows(ctx context.Context, request cfapi.GraphQLRequest, from, to time.Time) ([]map[string]any, error) {
+	return c.queryRowsMode(ctx, request, from, to, false)
+}
+
+func (c *datasetCollector) queryRowsMode(ctx context.Context, request cfapi.GraphQLRequest, from, to time.Time, strict bool) ([]map[string]any, error) {
 	rows, err := collector.Bisect(from, to, durableObjectsBucket, durableObjectsBucket, func(from, to time.Time) ([]map[string]any, bool, error) {
 		leaf := request
 		leaf.From, leaf.To = from, to
 		var rows []map[string]any
-		err := c.api.Query(ctx, leaf, &rows)
+		var err error
+		if strict {
+			rows, err = c.queryDepthLeaf(ctx, leaf)
+		} else {
+			err = c.api.Query(ctx, leaf, &rows)
+		}
 		if err == nil && len(rows) < leaf.Limit {
 			return rows, false, nil
 		}

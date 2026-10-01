@@ -99,6 +99,7 @@ type metricValue struct {
 	name  string
 	value float64
 	kind  metricKind
+	attrs []telemetry.Attr
 }
 
 // Register installs each enabled account-level Queue Groups window collector.
@@ -167,16 +168,32 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 	if err != nil {
 		return from, err
 	}
+	depth, err := c.collectDepth(ctx, request, settings)
+	if err != nil {
+		return from, err
+	}
 	if err := ctx.Err(); err != nil {
 		return from, err
 	}
-	points := capSeries(c.Name(), values, c.cfg.Platform.MaxMetricSeriesPerWindow)
+	// Preserve the legacy cap selection before admitting optional depth series.
+	limit := c.cfg.Platform.MaxMetricSeriesPerWindow
+	if limit <= 0 {
+		limit = queueDefaultSeriesLimit
+	}
+	points := capSeries(c.Name(), values, limit)
+	remaining := limit - len(points)
+	sort.Slice(depth, func(i, j int) bool { return metricValueKey(depth[i]) < metricValueKey(depth[j]) })
+	if len(depth) > remaining {
+		slog.Warn("platform metric series dropped", "collector", c.Name(), "dropped", len(depth)-remaining)
+		depth = depth[:remaining]
+	}
+	points = append(points, depth...)
 	for _, point := range points {
 		var emitErr error
 		if point.kind == gaugeMetric {
-			emitErr = out.Gauge(ctx, point.name, point.value)
+			emitErr = out.Gauge(ctx, point.name, point.value, point.attrs...)
 		} else {
-			emitErr = out.Counter(ctx, point.name, point.value)
+			emitErr = out.Counter(ctx, point.name, point.value, point.attrs...)
 		}
 		if emitErr != nil {
 			return from, emitErr
@@ -235,11 +252,20 @@ func availableField(available []string, wanted string) bool {
 }
 
 func (c *groupsCollector) queryRows(ctx context.Context, request cfapi.GraphQLRequest) ([]map[string]any, error) {
+	return c.queryRowsMode(ctx, request, false)
+}
+
+func (c *groupsCollector) queryRowsMode(ctx context.Context, request cfapi.GraphQLRequest, strict bool) ([]map[string]any, error) {
 	rows, err := collector.Bisect(request.From, request.To, queueBucketDuration, queueMinimumQueryWindow, func(from, to time.Time) ([]map[string]any, bool, error) {
 		leaf := request
 		leaf.From, leaf.To = from, to
 		var rows []map[string]any
-		err := c.api.Query(ctx, leaf, &rows)
+		var err error
+		if strict {
+			rows, err = c.queryDepthLeaf(ctx, leaf)
+		} else {
+			err = c.api.Query(ctx, leaf, &rows)
+		}
 		saturated := isSaturationError(err, leaf.Dataset)
 		if err == nil && len(rows) >= leaf.Limit {
 			saturated = true
