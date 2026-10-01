@@ -34,16 +34,34 @@ type rejectionState struct {
 	count    int
 }
 
+// CommitDeadlineError distinguishes exhaustion of the aggregate commit budget
+// from a single exporter timeout while that budget still has time remaining.
+// Unwrap retains the required-signal export errors for errors.Is/errors.As.
+type CommitDeadlineError struct {
+	Collector           string
+	Window, RetryWindow time.Duration
+	Err                 error
+}
+
+func (e *CommitDeadlineError) Error() string {
+	if e.Window <= time.Second {
+		return fmt.Sprintf("collector %s: one-second source window cannot fit the aggregate commit budget; checkpoint retained, inspect export latency or timestamp-group volume: %v", e.Collector, e.Err)
+	}
+	return fmt.Sprintf("collector %s: aggregate commit budget exhausted for %s; checkpoint retained, next source window at most %s: %v", e.Collector, e.Window, e.RetryWindow, e.Err)
+}
+func (e *CommitDeadlineError) Unwrap() error { return e.Err }
+
 type Scheduler struct {
-	Registry     *Registry
-	Emitter      telemetry.Emitter
-	Checkpoints  CheckpointStore
-	Now          func() time.Time
-	Logger       *slog.Logger
-	OnPoll       func(context.Context, string, time.Duration, error, time.Time)
-	OnCheckpoint func(string, time.Time)
-	Flusher      CommitFlusher
-	failed400    map[string]rejectionState
+	Registry        *Registry
+	Emitter         telemetry.Emitter
+	Checkpoints     CheckpointStore
+	Now             func() time.Time
+	Logger          *slog.Logger
+	OnPoll          func(context.Context, string, time.Duration, error, time.Time)
+	OnCheckpoint    func(string, time.Time)
+	Flusher         CommitFlusher
+	failed400       map[string]rejectionState
+	adaptiveWindows map[string]time.Duration // protected by commitMu, independent of rejection/cursor state
 }
 
 func NewScheduler(r *Registry, e telemetry.Emitter, store CheckpointStore) *Scheduler {
@@ -136,6 +154,9 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 			return nil
 		}
 		from = to.Add(-e.InitialLookback)
+		if adaptiveWindow(c) {
+			from = from.Truncate(time.Second)
+		}
 		// Persist the initial lower cursor before the first fetch. Otherwise a
 		// failed first window moves forward with the clock across retries/restarts.
 		if err := s.Checkpoints.Set(c.Name(), from); err != nil {
@@ -148,12 +169,16 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 		}
 		// Leave the leading window for the normal cadence. Unbounded entries
 		// already cover their whole backlog in one commit.
-		if committed > 0 && (e.MaxWindow <= 0 || to.Sub(from) <= e.MaxWindow) {
+		limit := s.sourceWindowLimit(c, e)
+		if adaptiveWindow(c) && limit > 0 && limit < time.Second {
+			return fmt.Errorf("collector %s: adaptive source-window bound must be at least one second", c.Name())
+		}
+		if committed > 0 && (limit <= 0 || to.Sub(from) <= limit) {
 			break
 		}
 		windowTo := to
-		if e.MaxWindow > 0 && windowTo.Sub(from) > e.MaxWindow {
-			windowTo = from.Add(e.MaxWindow)
+		if limit > 0 && windowTo.Sub(from) > limit {
+			windowTo = from.Add(limit)
 		}
 		mark, err := s.commitWindow(ctx, c, e, from, windowTo)
 		if err != nil {
@@ -170,7 +195,7 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 		}
 		// The process-wide export lock belongs to a single window. Give
 		// other collectors a chance to commit before taking it again.
-		if committed+1 < maxWindowsPerTick && e.MaxWindow > 0 && to.Sub(from) > e.MaxWindow {
+		if committed+1 < maxWindowsPerTick && limit > 0 && to.Sub(from) > limit {
 			runtime.Gosched()
 		}
 	}
@@ -184,6 +209,43 @@ func EffectiveCommitWindow(e Entry) time.Duration {
 		return e.MaxWindow
 	}
 	return 0
+}
+
+func adaptiveWindow(c WindowCollector) bool {
+	adaptive, ok := c.(AdaptiveWindowCollector)
+	return ok && adaptive.AdaptiveCommitWindow()
+}
+
+func (s *Scheduler) sourceWindowLimit(c WindowCollector, e Entry) time.Duration {
+	limit := EffectiveCommitWindow(e)
+	if !adaptiveWindow(c) {
+		return limit
+	}
+	commitMu.Lock()
+	reduced := s.adaptiveWindows[c.Name()]
+	commitMu.Unlock()
+	if reduced > 0 && (limit <= 0 || reduced < limit) {
+		limit = reduced
+	}
+	if limit > 0 && limit < time.Second {
+		return limit // runWindow rejects it rather than silently removing the bound.
+	}
+	return limit.Truncate(time.Second)
+}
+
+// Called only under commitMu, after a typed required-signal deadline and the
+// independent aggregate context have both expired. Do not learn a smaller
+// source interval from authentication errors, 400s, or individual POST stalls.
+func (s *Scheduler) reduceSourceWindow(c WindowCollector, from, to time.Time, err error) error {
+	window := to.Sub(from)
+	retry := max(time.Second, (window / 2).Truncate(time.Second))
+	if s.adaptiveWindows == nil {
+		s.adaptiveWindows = map[string]time.Duration{}
+	}
+	if current := s.adaptiveWindows[c.Name()]; current == 0 || retry < current {
+		s.adaptiveWindows[c.Name()] = retry
+	}
+	return &CommitDeadlineError{Collector: c.Name(), Window: window, RetryWindow: retry, Err: err}
 }
 
 func (s *Scheduler) commitWindow(ctx context.Context, c WindowCollector, e Entry, from, to time.Time) (time.Time, error) {
@@ -215,11 +277,17 @@ func (s *Scheduler) commitWindow(ctx context.Context, c WindowCollector, e Entry
 	if mark.After(to) || !mark.After(from) {
 		return from, fmt.Errorf("collector %s returned invalid high-water mark", c.Name())
 	}
+	if adaptiveWindow(c) && (!mark.Equal(to) || from.Nanosecond() != 0 || to.Nanosecond() != 0) {
+		return from, fmt.Errorf("collector %s: adaptive commit requires a complete whole-second source window", c.Name())
+	}
 	commitMu.Lock()
 	defer commitMu.Unlock()
 	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commitTimeout)
 	defer cancel()
 	if err := s.commit(commitCtx, buffer); err != nil {
+		if adaptiveWindow(c) && errors.Is(err, context.DeadlineExceeded) && errors.Is(commitCtx.Err(), context.DeadlineExceeded) {
+			err = s.reduceSourceWindow(c, from, to, err)
+		}
 		outcome := "retry"
 		if s.failed400 == nil {
 			s.failed400 = map[string]rejectionState{}
