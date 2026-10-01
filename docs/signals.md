@@ -229,6 +229,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cf2otel.export.success` |
 | Metric | `cf2otel.identity.outcomes` |
 | Attribute | `cf2otel.identity.outcome` |
+| Attribute | `cf2otel.error.class` |
 | Metric | `cf2otel.scrape.duration` |
 | Metric | `cf2otel.scrape.errors` |
 | Metric | `cf2otel.scrape.last_success_timestamp` |
@@ -507,3 +508,30 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | `cloudflare.tunnel.previous_status` | Tunnel previous_status. (CFO-0048.01) |
 | `cloudflare.tunnel.colo` | Tunnel colo. (CFO-0048.01) |
 | `cloudflare.tunnel.connector.version` | Tunnel connector.version. (CFO-0048.01) |
+
+
+## Collector scrape error classes
+
+`cf2otel.scrape.errors` remains a monotonic counter with unit `1`: each failed
+collector attempt adds one, grouped by `cf2otel.collector` and the bounded
+`cf2otel.error.class` attribute. Successful attempts do not add an error. No raw
+error message, upstream field name, response body or HTTP code becomes an attribute.
+
+| Attribute | Values |
+| --- | --- |
+| `cf2otel.error.class` | `rate_limited`, `auth`, `unentitled`, `timeout`, `schema`, `other` |
+
+Classification follows typed errors through wrappers. Explicit typed entitlement
+errors take precedence over HTTP status: unavailable GraphQL fields or disabled
+datasets are `unentitled`. HTTP 429 is `rate_limited`; HTTP 401/403 is `auth`
+unless a typed entitlement error is present. Context deadline exhaustion and
+network timeout errors are `timeout`. GraphQL field-limit errors and JSON syntax
+or type errors are `schema`. Retention gaps, saturated windows, cancellation,
+other HTTP failures and unknown errors are `other`; message text is never used
+to infer a class. Classification observes failures without changing retries,
+permission handling, checkpoint decisions or collector scheduling.
+
+These labels apply only to collector scrape errors, not export errors or scrape
+duration/success metrics. Existing aggregate queries can continue to sum scrape
+errors across classes. This is the code/documentation portion of CFO-0051.03
+(classify collector errors); the dashboard panel is delivered separately.

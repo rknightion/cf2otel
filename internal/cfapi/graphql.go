@@ -15,6 +15,23 @@ import (
 var _ Client = (*HTTPClient)(nil)
 var graphQLErrField = regexp.MustCompile(`(?i)(?:access to the field|not entitled to field)\s*['\"]([^'\"]+)['\"]`)
 
+// UnentitledError identifies an unavailable field or disabled dataset without
+// exposing the upstream error message. Existing caller-visible text is retained.
+type UnentitledError struct {
+	Field, Dataset string
+	Disabled       bool
+}
+
+func (e *UnentitledError) Error() string {
+	if e.Field != "" {
+		return fmt.Sprintf("not entitled to field '%s'", e.Field)
+	}
+	if e.Disabled {
+		return fmt.Sprintf("dataset %s disabled", e.Dataset)
+	}
+	return fmt.Sprintf("dataset %s has no entitled wanted fields", e.Dataset)
+}
+
 type FieldLimitError struct {
 	Dataset       string
 	Wanted, Limit int
@@ -121,7 +138,7 @@ func firstNode(r graphResponse, s Scope) (map[string]json.RawMessage, error) {
 func gqlErrors(r graphResponse) error {
 	if len(r.Errors) > 0 {
 		if match := graphQLErrField.FindStringSubmatch(r.Errors[0].Message); len(match) == 2 && identifier.MatchString(match[1]) {
-			return fmt.Errorf("not entitled to field '%s'", match[1])
+			return &UnentitledError{Field: match[1]}
 		}
 		return errors.New("graphql query failed")
 	}
@@ -312,11 +329,11 @@ func (c *HTTPClient) Query(ctx context.Context, r GraphQLRequest, out any) error
 }
 func (c *HTTPClient) queryWithSettings(ctx context.Context, r GraphQLRequest, out any, s DatasetSettings, renegotiated bool) error {
 	if !s.Enabled {
-		return fmt.Errorf("dataset %s disabled", r.Dataset)
+		return &UnentitledError{Dataset: r.Dataset, Disabled: true}
 	}
 	fields := intersect(r.WantedFields, s.AvailableFields)
 	if len(fields) == 0 {
-		return fmt.Errorf("dataset %s has no entitled wanted fields", r.Dataset)
+		return &UnentitledError{Dataset: r.Dataset}
 	}
 	chunks, err := fieldChunks(fields, r.JoinFields, s.MaxNumberOfFields)
 	if err != nil {

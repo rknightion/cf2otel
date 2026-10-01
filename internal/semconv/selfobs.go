@@ -1,6 +1,7 @@
 package semconv
 
 const (
+	AttrErrorClass             = "cf2otel.error.class"
 	AttrIdentityOutcome        = "cf2otel.identity.outcome"
 	MetricCardinalityOverflows = "cf2otel.metric.cardinality_overflows"
 	MetricIdentityOutcomes     = "cf2otel.identity.outcomes"

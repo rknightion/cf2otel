@@ -76,7 +76,7 @@ func (s *Stats) Poll(ctx context.Context, name string, duration time.Duration, p
 		errs = append(errs, err)
 	}
 	if pollErr != nil {
-		if err := s.emitter.Counter(ctx, semconv.MetricScrapeErrors, 1, attr); err != nil {
+		if err := s.emitter.Counter(ctx, semconv.MetricScrapeErrors, 1, attr, telemetry.Attr{Key: semconv.AttrErrorClass, Value: errorClass(pollErr)}); err != nil {
 			errs = append(errs, err)
 		}
 	}

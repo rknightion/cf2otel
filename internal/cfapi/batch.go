@@ -46,7 +46,7 @@ func (c *HTTPClient) QueryBatch(ctx context.Context, selections []GraphQLBatchSe
 			return nil, err
 		}
 		if !settings.Enabled {
-			return nil, fmt.Errorf("dataset %s disabled", r.Dataset)
+			return nil, &UnentitledError{Dataset: r.Dataset, Disabled: true}
 		}
 		fields := intersect(r.WantedFields, settings.AvailableFields)
 		if len(r.WantedFields) == 0 || len(fields) != len(r.WantedFields) {
