@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-09-27 10:01'
+updated_date: '2026-10-01 07:12'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -234,3 +234,21 @@ variants had rows; the DMARC dataset had none. The Groups-backed routing and sen
 - The Access apps first-page census found 17 rows: 15 domain-based apps with `domain`, and two `self_hosted` apps without `domain` whose destinations are respectively `worker` and `all_preview_workers`. The Access apps drift probe currently requests `per_page=1`, so checking every returned row still inspects only one live app. A candidate conditional contract was withheld after independent review found this gap; the live contract remains unchanged pending an amendment that permits a larger first-page request.
 - The SCIM update-log first page had 12 rows; six lack `resource_user_email` (all five GROUP rows and one USER row). Its drift entry still checks only the first row and needs a separately decided shape rule before all-row checking.
 - Email Routing has exact closed-window source-to-Mimir evidence from loop 8. Email Sending remained absent input after both REST sends and Worker `send_email` builder and legacy sends: no `emailSendingAdaptiveGroups` rows through the three-hour recheck and no Mimir counter increase. The owner amended CFO-0024 AC4 to record that absence and closed the task; this is not positive Sending equality proof.
+
+
+## 14. Loop 14 verified parity surfaces (2026-09-30 to 2026-10-01)
+
+Preparation introspection and read-only entitlement probes were followed by an integrated live contract probe and the successful Cloudflare API drift workflow run 36825611418 at commit 90672c15ca42482da521a3a95a255301facf3811. These are API-shape/entitlement observations, not proof of deployed exporter values.
+
+`settings.availableFields` uses `part_field` spellings such as `sum_edgeResponseBytes` and `dimensions_clientSSLProtocol`, not dotted selections. Query construction translates the advertised paths to nested GraphQL selections. Account and zone limits are dataset-specific; the values below supersede older generic field-count observations for these datasets.
+
+| Surface | Keys, types and units | Entitlement and query constraints |
+| --- | --- | --- |
+| Zone `httpRequestsAdaptiveGroups` | `sum.edgeResponseBytes` numeric bytes; `quantiles.originResponseDurationMsP50`, `P95`, `P99` numeric milliseconds; `avg.edgeTimeToFirstByteMs` and `quantiles.edgeTimeToFirstByteMsP50`, `P95`, `P99` numeric milliseconds. Dimensions include `edgeResponseStatus`, `originResponseStatus`, `clientCountryName`, `clientRequestHTTPProtocol`, `clientSSLProtocol`, `clientRequestHTTPMethod`, and `edgeResponseContentTypeName`. | Bytes, origin-duration quantiles, country, protocol, TLS, method and content type are available on Free and Pro. Edge TTFB and ASN dimensions are Pro-only. Select per-zone advertised fields; observed `maxNumberOfFields` 40. Groups request-source policy may filter `requestSource: "eyeball"`; it is not a raw-event filter. |
+| Account `workersInvocationsAdaptive` | Aggregate `sum.requests`, `sum.errors`, `sum.subrequests`; `quantiles.cpuTimeP50/P75/P99/P999`, `wallTimeP50/P75/P99/P999`, and `requestDurationP50/P75/P99/P999` in microseconds; string dimensions `scriptName`, `status`; `datetimeFiveMinutes` bucket. | Aggregate metrics are distinct from raw invocation logs. Observed field cap 35, `maxDuration` 2764800 seconds, `notOlderThan` 7776000 seconds. Do not export the separate GB*s duration fields as time. |
+| Account REST `GET /accounts/{account}/cfd_tunnel?is_deleted=false` | List rows contain `id`, `name`, `status` strings and embedded `connections` array. Connection rows expose colo, connector/client identifier, client version and pending-reconnect state; no per-tunnel connection request is needed. | Paginated read requires Cloudflare Tunnel Read. Without this permission the API can return HTTP 200 and an empty list; empty output alone is not entitlement proof. Both loop tokens were verified after the permission addition at preparation. |
+| Zone REST `GET /zones/{zone}/ssl/certificate_packs?status=all` | List rows contain string `id`, `type`, `status`, `certificate_authority` and `certificates` array; certificate `expires_on` is a timestamp. Earliest valid certificate expiry determines pack expiry. | SSL and Certificates Read; request `per_page` at least 5. Most visible zones allowed reads; one returned permission code 9109. A valid empty array is distinct from a null list. A permission error may appear in an unsuccessful envelope under HTTP 200, so transport 2xx does not establish successful API access. |
+
+RUM Web Vitals introspection explicitly describes every timing quantile as microseconds, with negative values indicating N/A. CLS is dimensionless. The exporter must convert timing quantiles to seconds, not milliseconds, and must not infer a successful empty-window sample from absent or N/A quantiles.
+
+AI Gateway raw request/response body endpoints can return non-JSON text. Such content is not suitable for JSON-only redaction and is omitted from exports; request metadata remains usable. This observation does not expand token permissions or permit exporting unredacted bodies.
