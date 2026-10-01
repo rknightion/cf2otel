@@ -421,6 +421,7 @@ func TestWorkersOverviewUsesLiveMaxDurationAndPageSize(t *testing.T) {
 
 func TestWorkersRegisterUsesConfiguredWindowWhenEnabled(t *testing.T) {
 	cfg := workersTestConfig()
+	cfg.Collectors["workers.invocations"] = config.CollectorConfig{Enabled: false}
 	cfg.Collectors["workers.overview"] = config.CollectorConfig{Enabled: true, Interval: time.Minute, InitialLookback: 15 * time.Minute, MaxWindow: 30 * time.Minute}
 	registry := collector.NewRegistry()
 	Register(collector.Deps{Config: cfg, API: &workersTestAPI{}, Registry: registry})
