@@ -18,13 +18,20 @@ import (
 
 func TestRegisteredVisitsDatasetValidityHTTP(t *testing.T) {
 	for _, tc := range []struct {
-		name, raw                               string
+		name, raw, visits                       string
 		missing, upstreamError, wantErr, legacy bool
+		wantVisits                              float64
 	}{
 		{name: "null", raw: `null`, wantErr: true},
 		{name: "missing-dataset", missing: true, wantErr: true},
 		{name: "graphql-error", upstreamError: true, wantErr: true},
 		{name: "empty", raw: `[]`},
+		{name: "fractional-visits", visits: "0.5", wantErr: true},
+		{name: "near-integer-fraction", visits: "1.0000000000000000001", wantErr: true},
+		{name: "uint64-overflow", visits: "18446744073709551616", wantErr: true},
+		{name: "exponent-overflow", visits: "1e20", wantErr: true},
+		{name: "negative-visits", visits: "-1", wantErr: true},
+		{name: "uint64-maximum", visits: "18446744073709551615", wantVisits: float64(^uint64(0))},
 		{name: "legacy-null-no-visits", raw: `null`, legacy: true},
 		{name: "true-zero", raw: `[{"count":7,"dimensions":{"clientRequestHTTPHost":"www.example.com","edgeResponseStatus":200,"cacheStatus":"hit"},"sum":{"visits":0}}]`},
 	} {
@@ -60,7 +67,11 @@ func TestRegisteredVisitsDatasetValidityHTTP(t *testing.T) {
 						if alias := regexp.MustCompile(`(\w+):httpRequestsAdaptiveGroups\(`).FindStringSubmatch(body.Query); len(alias) > 1 {
 							key = alias[1]
 						}
-						node[key] = json.RawMessage(tc.raw)
+						raw := tc.raw
+						if tc.visits != "" {
+							raw = `[{"count":7,"dimensions":{"clientRequestHTTPHost":"www.example.com","edgeResponseStatus":200,"cacheStatus":"hit"},"sum":{"visits":` + tc.visits + `}}]`
+						}
+						node[key] = json.RawMessage(raw)
 					}
 				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"viewer": map[string]any{"zones": []any{node}}}})
@@ -110,8 +121,8 @@ func TestRegisteredVisitsDatasetValidityHTTP(t *testing.T) {
 				for _, p := range e.counts {
 					if p.name == semconv.MetricHTTPVisits {
 						found = true
-						if p.value != 0 {
-							t.Fatalf("valid zero=%+v", p)
+						if p.value != tc.wantVisits {
+							t.Fatalf("valid visits=%+v want %g", p, tc.wantVisits)
 						}
 					}
 				}

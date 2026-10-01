@@ -81,6 +81,29 @@ func (b base) kpiRows(ctx context.Context, req cfapi.GraphQLRequest, s cfapi.Dat
 		return nil, err
 	}
 	value := raw["kpi"]
+	for _, field := range req.WantedFields {
+		if field != "sum.visits" {
+			continue
+		}
+		// Validate the UINT64 source lexeme before the legacy float64 row
+		// decoder can round a near-integer fraction or an out-of-range value.
+		// Other fields and the threats/transfer decoders remain unchanged.
+		var source []struct {
+			Sum struct {
+				Visits json.RawMessage `json:"visits"`
+			} `json:"sum"`
+		}
+		if err := json.Unmarshal(value, &source); err != nil {
+			return nil, errors.New("HTTP visits dataset is not an array")
+		}
+		for _, row := range source {
+			var visits *uint64
+			if err := json.Unmarshal(row.Sum.Visits, &visits); err != nil || visits == nil {
+				return nil, errors.New("HTTP group visits must be an unsigned 64-bit integer")
+			}
+		}
+		break
+	}
 	var rows []map[string]any
 	if err = json.Unmarshal(value, &rows); err != nil {
 		return nil, errors.New("HTTP KPI dataset is not an array")
