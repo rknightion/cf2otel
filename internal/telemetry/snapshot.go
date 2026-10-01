@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/rknightion/cf2otel/internal/semconv"
@@ -30,19 +29,24 @@ type GaugePoint struct {
 }
 
 type gaugeSnapshot struct {
-	mu      *sync.RWMutex
-	points  []GaugePoint
-	expires time.Time
+	instrument metric.Float64ObservableGauge
+	points     []GaugePoint
+	expires    time.Time
 }
 
-func (s *gaugeSnapshot) observe(_ context.Context, observer metric.Float64Observer) error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if !time.Now().Before(s.expires) {
-		return nil
-	}
-	for _, p := range s.points {
-		observer.Observe(p.Value, metric.WithAttributes(attrs(p.Attrs)...))
+// observeSnapshots holds one publication read lock and captures one collection
+// instant for every retained instrument, including instruments added later.
+func (e *otelEmitter) observeSnapshots(_ context.Context, observer metric.Observer) error {
+	e.snapshotMu.RLock()
+	defer e.snapshotMu.RUnlock()
+	now := time.Now()
+	for _, s := range e.snapshots {
+		if !now.Before(s.expires) {
+			continue
+		}
+		for _, p := range s.points {
+			observer.ObserveFloat64(s.instrument, p.Value, metric.WithAttributes(attrs(p.Attrs)...))
+		}
 	}
 	return nil
 }
@@ -81,24 +85,52 @@ func (e *otelEmitter) GaugeSnapshots(ctx context.Context, ttl time.Duration, sna
 	if e.snapshots == nil {
 		e.snapshots = make(map[string]*gaugeSnapshot)
 	}
+	// The map is also read by collection callbacks. Do not hold its lock
+	// during SDK registration/unregistration, which can wait for collection.
+	e.snapshotMu.RLock()
+	instruments := make([]metric.Observable, 0, len(e.snapshots)+len(names))
+	for _, s := range e.snapshots {
+		instruments = append(instruments, s.instrument)
+	}
+	e.snapshotMu.RUnlock()
+	added := make(map[string]*gaugeSnapshot)
 	for _, name := range names {
 		if e.snapshots[name] != nil {
 			continue
 		}
-		s := &gaugeSnapshot{mu: &e.snapshotMu}
-		opts := []metric.Float64ObservableGaugeOption{metric.WithFloat64Callback(s.observe)}
+		opts := []metric.Float64ObservableGaugeOption{}
 		if spec, ok := semconv.Metric(name); ok {
 			opts = append(opts, metric.WithUnit(spec.Unit), metric.WithDescription(spec.Description))
 		}
-		if _, err := e.meter.Float64ObservableGauge(name, opts...); err != nil {
+		instrument, err := e.meter.Float64ObservableGauge(name, opts...)
+		if err != nil {
 			return err
 		}
-		e.snapshots[name] = s
+		added[name] = &gaugeSnapshot{instrument: instrument}
+		instruments = append(instruments, instrument)
+	}
+	if len(added) > 0 {
+		// Both registrations can briefly observe the SAME old state, but no
+		// publication occurs until the old callback is drained and removed.
+		// Thus an obsolete callback cannot regenerate a prior generation.
+		registration, err := e.meter.RegisterCallback(e.observeSnapshots, instruments...)
+		if err != nil {
+			return err
+		}
+		if e.snapshotRegistration != nil {
+			if err := e.snapshotRegistration.Unregister(); err != nil {
+				return errors.Join(err, registration.Unregister())
+			}
+		}
+		e.snapshotRegistration = registration
 	}
 	e.snapshotMu.Lock()
 	defer e.snapshotMu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	for name, s := range added {
+		e.snapshots[name] = s
 	}
 	expires := time.Now().Add(ttl)
 	for _, name := range names {

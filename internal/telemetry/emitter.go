@@ -51,15 +51,16 @@ type Emitter interface {
 	Span(context.Context, SpanSpec) error
 }
 type otelEmitter struct {
-	meter      metric.Meter
-	logger     otellog.Logger
-	tracer     trace.Tracer
-	mu         sync.Mutex
-	gauges     map[string]metric.Float64Gauge
-	snapshotMu sync.RWMutex
-	snapshots  map[string]*gaugeSnapshot
-	counters   map[string]metric.Float64Counter
-	histograms map[string]metric.Float64Histogram
+	meter                metric.Meter
+	logger               otellog.Logger
+	tracer               trace.Tracer
+	mu                   sync.Mutex
+	gauges               map[string]metric.Float64Gauge
+	snapshotMu           sync.RWMutex
+	snapshots            map[string]*gaugeSnapshot
+	snapshotRegistration metric.Registration
+	counters             map[string]metric.Float64Counter
+	histograms           map[string]metric.Float64Histogram
 }
 
 func NewEmitter(m metric.Meter, l otellog.Logger, t trace.Tracer) Emitter {
