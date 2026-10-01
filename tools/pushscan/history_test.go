@@ -38,15 +38,21 @@ func TestCLIHistoryBoundaries(t *testing.T) {
 		command(t, dir, "git", "merge", "--no-ff", "-qm", "merge", "side")
 		scan(t, dir, base, "HEAD", "commit="+added)
 	})
-	t.Run("net-only-backwards-range", func(t *testing.T) {
-		dir, _ := fixture(t)
-		commitFile(t, dir, "add", strings.Repeat("d4", 16)+"\n")
-		head := strings.TrimSpace(string(command(t, dir, "git", "rev-parse", "HEAD")))
-		commitFile(t, dir, "remove", "safe\n")
-		base := strings.TrimSpace(string(command(t, dir, "git", "rev-parse", "HEAD")))
-		// Head adds no reachable commits; only the net diff can catch this reintroduction.
-		scan(t, dir, base, head, "commit=net-diff")
-	})
+	for _, tc := range []struct{ name, text string }{
+		{"hex", strings.Repeat("d4", 16)},
+		{"colon-prefix", "endpoint:" + "2606" + ":" + "4700" + strings.Repeat(":", 2) + "1111"},
+		{"hex-suffix", "2606" + ":" + "4700" + strings.Repeat(":", 2) + "1111" + ".dead"},
+	} {
+		t.Run("net-only-backwards-range/"+tc.name, func(t *testing.T) {
+			dir, _ := fixture(t)
+			commitFile(t, dir, "add", tc.text+"\n")
+			head := strings.TrimSpace(string(command(t, dir, "git", "rev-parse", "HEAD")))
+			commitFile(t, dir, "remove", "safe\n")
+			base := strings.TrimSpace(string(command(t, dir, "git", "rev-parse", "HEAD")))
+			// Head adds no reachable commits; only the net diff can catch this reintroduction.
+			scan(t, dir, base, head, "commit=net-diff")
+		})
+	}
 	t.Run("merge-resolution", func(t *testing.T) {
 		dir, base := fixture(t)
 		branch := strings.TrimSpace(string(command(t, dir, "git", "symbolic-ref", "--short", "HEAD")))

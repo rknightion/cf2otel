@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -131,8 +132,27 @@ func (s *scanner) configure(allowFile, literalFile string) error {
 		}
 	}
 	if literalFile != "" {
-		// The operator explicitly supplies this local file; there is no remote caller or sandbox root.
-		data, err := os.ReadFile(literalFile) // #nosec G703 -- intentional external literal-list input
+		root, err := s.git("rev-parse", "--show-toplevel")
+		if err != nil {
+			return err
+		}
+		repository, err := filepath.EvalSymlinks(strings.TrimSpace(string(root)))
+		if err != nil {
+			return err
+		}
+		absolute, err := filepath.Abs(literalFile)
+		if err != nil {
+			return err
+		}
+		resolved, err := filepath.EvalSymlinks(absolute)
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(repository, resolved)
+		if err != nil || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))) {
+			return errors.New("literal configuration must be external")
+		}
+		data, err := os.ReadFile(resolved) // #nosec G703 -- canonical external literal-list input
 		if err != nil {
 			return err
 		}
@@ -226,12 +246,8 @@ func (s *scanner) classes(line string) []string {
 			break
 		}
 	}
-	for _, candidate := range ipv6.FindAllString(line, -1) {
-		candidate = strings.Trim(candidate, ".")
-		if addr, err := netip.ParseAddr(candidate); err == nil && addr.Is6() && !isDocumentation(addr) {
-			classes = append(classes, "ipv6")
-			break
-		}
+	if containsPublicIPv6(line) {
+		classes = append(classes, "ipv6")
 	}
 	for _, literal := range s.literals {
 		if strings.Contains(line, literal) {
@@ -240,4 +256,30 @@ func (s *scanner) classes(line string) []string {
 		}
 	}
 	return classes
+}
+
+// Parse bounded slices rather than trusting punctuation-delimited regex matches.
+// Longer valid addresses cover their inner slices so documentation addresses do
+// not become false positives when their leading groups are removed.
+func containsPublicIPv6(line string) bool {
+	for _, run := range ipv6.FindAllString(line, -1) {
+		coveredEnd := 0
+		for start := 0; start < len(run); start++ {
+			endLimit := min(len(run), start+45) // maximum textual IPv6 length, including dotted IPv4
+			for end := endLimit; end > start; end-- {
+				addr, err := netip.ParseAddr(run[start:end])
+				if err != nil || !addr.Is6() {
+					continue
+				}
+				if end > coveredEnd {
+					if !isDocumentation(addr) {
+						return true
+					}
+					coveredEnd = end
+				}
+				break
+			}
+		}
+	}
+	return false
 }

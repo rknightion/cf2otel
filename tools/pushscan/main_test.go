@@ -60,6 +60,8 @@ func TestCLI(t *testing.T) {
 		{"email", "identity" + "@" + "example" + ".com", "email"},
 		{"ipv4", strings.Join([]string{"8", "8", "4", "4"}, "."), "ipv4"},
 		{"ipv6", "2606" + ":" + "4700" + strings.Repeat(":", 2) + "1111", "ipv6"},
+		{"ipv6-colon-prefix", "endpoint:" + "2606" + ":" + "4700" + strings.Repeat(":", 2) + "1111", "ipv6"},
+		{"ipv6-hex-suffix", "2606" + ":" + "4700" + strings.Repeat(":", 2) + "1111" + ".dead", "ipv6"},
 		{"token", "cf" + "ut_" + strings.Repeat("x", 20), "cloudflare-token"},
 		{"literal", "private-" + "fixture-value", "literal"},
 	}
