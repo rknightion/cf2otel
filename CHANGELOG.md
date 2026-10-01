@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.9.0](https://github.com/rknightion/cf2otel/compare/v0.8.2...v0.9.0) (2026-09-30)
+
+
+### Features
+
+* **dashboard:** rebuild the Grafana dashboard with an overview and per-domain tabs ([bd6eb99](https://github.com/rknightion/cf2otel/commit/bd6eb9939ec292830616d6484c1d7dba16d1553d))
+* **seam:** declare frozen analytics signals and configuration ([4a37f5f](https://github.com/rknightion/cf2otel/commit/4a37f5ffb06256c55324c6a67aff303c1ad08a46))
+
+
+### Bug Fixes
+
+* **access:** normalize allowed decisions and country codes ([1b5bc66](https://github.com/rknightion/cf2otel/commit/1b5bc66e581077577e8da46454526c5f5a3e8407))
+* **aigateway:** keep metadata export for non-JSON bodies ([14ef1db](https://github.com/rknightion/cf2otel/commit/14ef1dbbaccbc56a7f7a74b6297b3cd67a78af74))
+* **deps:** update module go.opentelemetry.io/proto/otlp to v1.11.1 ([#30](https://github.com/rknightion/cf2otel/issues/30)) ([d5e48bd](https://github.com/rknightion/cf2otel/commit/d5e48bdc3d17950b973479db0abebab8b461369a))
+* **rum:** reduce Web Vitals timing scale by 1000x to seconds ([f68e1dd](https://github.com/rknightion/cf2otel/commit/f68e1dd8851103eb9933ffc74a2178934f99f04e))
+
 ## [0.8.2](https://github.com/rknightion/cf2otel/compare/v0.8.1...v0.8.2) (2026-09-29)
 
 
