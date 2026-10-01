@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.1](https://github.com/rknightion/cf2otel/compare/v0.10.0...v0.10.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **aigateway:** adapt source windows after delivery deadlines ([a768eb9](https://github.com/rknightion/cf2otel/commit/a768eb9efee9de1d90ff1ebbbfc47526e891875f))
+* **aigateway:** subdivide source windows on aggregate commit deadlines ([836cbe7](https://github.com/rknightion/cf2otel/commit/836cbe7ade27ac49ada5c7ce9bab6d807d84c1ab))
+
 ## [0.10.0](https://github.com/rknightion/cf2otel/compare/v0.9.0...v0.10.0) (2026-10-01)
 
 
