@@ -102,12 +102,14 @@ None recorded.
 - `GET /accounts/{a}/cfd_tunnel` without `Cloudflare Tunnel Read` returns `200` with an empty list, not a
   403; `Zero Trust Read` does not cover it. Treat an empty tunnel list as unproven until the token's
   permissions are confirmed (loop 14 preparation; both loop tokens now carry it).
-- A series that exists, or a checkpoint that advanced across two reads, is not live proof. Loop 14
-  passed `httpreq.metrics` on the series its single first cycle created and `aigateway.logs` on a
-  two-read advance; both collectors were failing within hours. A collector passes live only on
-  sustained evidence: a success on every scheduled cycle and no scrape error for 60 continuous
-  minutes, read from `cf2otel_scrape_success_total` and `cf2otel_scrape_errors_total` by collector
-  (loop 15 preparation).
+- A series that exists, or a checkpoint that advanced across two reads, is not live proof. A collector
+  passes live only on 60 continuous minutes in which its attempts equal its successes: the increase of
+  `cf2otel_scrape_duration_seconds_count` equals the increase of `cf2otel_scrape_success_total`, with at
+  least one attempt, one exporter instance and no counter reset. `codex/live-hour.py` is the witness; use
+  it unchanged (Rob, 2026-10-02).
+- A counter that never incremented has no series. An absent `cf2otel_scrape_errors_total` series for a
+  collector is not a coverage gap and never blocks an hour proof: a failed attempt shows as attempts ahead
+  of successes. Loop 15 parked every live criterion on this for a whole run (loop 16 preparation).
 - Before closeout, read `time() - cf2otel_scrape_last_success_timestamp_seconds` for every collector.
   A value near the current Unix time means the collector has never succeeded on the running version
   (loop 15 preparation).
@@ -127,6 +129,20 @@ None recorded.
 - On an external write's rejection, capture the full response body before deciding whether to roll
   back, and re-GET to confirm a state actually changed before rolling back a write that was itself
   rejected with nothing changed (evidence brief D8).
+- The root does not write or repair proof, deploy or scan helpers during a run. It runs the scripts the
+  preparation names, unchanged apart from the version, digest and path values they take as arguments. A
+  defect in one goes to a lane once, or parks that step. Loop 15 spent its proof window and three repair
+  cycles on helpers it wrote itself (loop 16 preparation).
+- The private scan scripts print allowed hits (loopback `127.0.0.0/8`, the RFC 5737 and RFC 3849
+  documentation ranges). Only a hit they do not mark allowed blocks a push (Rob, 2026-10-02).
+- On 0.13.0 the first cycle after a start failed once on 27 account-scoped collectors, error class
+  `other`, and every later cycle succeeded. Start an hour proof after the first complete cycle, and never
+  revert a healthy deploy for that one failure (loop 16 preparation).
+- `auto-rc` cuts a `v*-rc.*` tag and pre-release for any green `main` SHA, including one pushed before
+  the run. The closeout grants cover every `v*-rc.*` tag whose target is on `main`'s first-parent history
+  (Rob, 2026-10-02).
+- The state record is written in plain sentences with spaces between words. Removing spaces to fit a size
+  cap makes it unreadable after compaction; archive detail instead (loop 16 preparation).
 
 ## Cross-harness eligibility
 
