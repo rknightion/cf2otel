@@ -43,10 +43,6 @@ type firewallMetric struct {
 
 func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (mark time.Time, collectErr error) {
 	ctx, poll := collector.StartZonePoll(ctx)
-	defer poll.Finish(ctx, out, c.Name(), &collectErr)
-	if !from.Before(to) {
-		return from, fmt.Errorf("invalid firewall metrics window")
-	}
 	// Serialize source admissions and stage them until the entire window has
 	// succeeded, so failed windows cannot consume the sticky source budget.
 	c.sourcesMu.Lock()
@@ -54,6 +50,17 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 	sources := make(map[string]struct{}, len(c.sources))
 	for name := range c.sources {
 		sources[name] = struct{}{}
+	}
+	defer func() {
+		// Finish can fail while emitting discovery gauges. Finalize exactly once
+		// under the source lock before publishing any staged admissions.
+		poll.Finish(ctx, out, c.Name(), &collectErr)
+		if collectErr == nil {
+			c.sources = sources
+		}
+	}()
+	if !from.Before(to) {
+		return from, fmt.Errorf("invalid firewall metrics window")
 	}
 
 	selected, err := zones(ctx, c.cfg, c.api)
@@ -194,7 +201,6 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 			return from, err
 		}
 	}
-	c.sources = sources
 	return to, nil
 }
 

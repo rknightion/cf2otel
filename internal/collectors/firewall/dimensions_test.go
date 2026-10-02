@@ -3,6 +3,7 @@ package firewall
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -53,13 +54,15 @@ func TestRegisteredHTTPFirewallBotDimensions(t *testing.T) {
 		name                           string
 		advertised, byTime, incomplete bool
 		budget, cap                    int
+		gaugeFailure                   bool
 	}{
-		{"advertised", true, false, false, 5, 500},
-		{"unadvertised", false, false, false, 5, 500},
-		{"budget", true, false, false, 3, 500},
-		{"bounded", true, false, false, 5, 3},
-		{"by_time", true, true, false, 3, 500},
-		{"incomplete", true, false, true, 5, 500},
+		{"advertised", true, false, false, 5, 500, false},
+		{"unadvertised", false, false, false, 5, 500, false},
+		{"budget", true, false, false, 3, 500, false},
+		{"bounded", true, false, false, 5, 3, false},
+		{"by_time", true, true, false, 3, 500, false},
+		{"incomplete", true, false, true, 5, 500, false},
+		{"discovery_gauge_failure", true, false, false, 5, 500, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var recovered atomic.Bool
@@ -144,6 +147,14 @@ func TestRegisteredHTTPFirewallBotDimensions(t *testing.T) {
 			c := registry.Entries()[0].Collector.(collector.WindowCollector)
 			from := time.Now().UTC().Truncate(time.Second).Add(-10 * time.Minute)
 			to := from.Add(time.Minute)
+			if tc.gaugeFailure {
+				out := &discoveryFailEmitter{failure: errors.New("fixture discovery gauge failure")}
+				_, err := c.CollectWindow(context.Background(), from, to, out)
+				if !errors.Is(err, out.failure) || len(firewallEventPoints(&out.Buffer)) == 0 || out.discoveryCalls != 1 {
+					t.Fatalf("expected counters then one discovery failure: err=%v counters=%d discovery=%d", err, len(firewallEventPoints(&out.Buffer)), out.discoveryCalls)
+				}
+				recovered.Store(true)
+			}
 			// A second window proves that the source-name admissions remain sticky.
 			for window := 0; window < 2; window++ {
 				out := &telemetry.Buffer{}
@@ -157,6 +168,17 @@ func TestRegisteredHTTPFirewallBotDimensions(t *testing.T) {
 				}
 				if err != nil || !mark.Equal(to) {
 					t.Fatalf("window: mark=%v err=%v", mark, err)
+				}
+				if tc.gaugeFailure {
+					var discovery int
+					for _, point := range out.Metrics {
+						if point.Name == semconv.MetricZonesDiscovered {
+							discovery++
+						}
+					}
+					if discovery != 1 {
+						t.Fatalf("successful retry emitted discovery %d times; want once", discovery)
+					}
 				}
 				var total, overflow, first, base float64
 				points := firewallEventPoints(out)
@@ -192,6 +214,20 @@ func TestRegisteredHTTPFirewallBotDimensions(t *testing.T) {
 			}
 		})
 	}
+}
+
+type discoveryFailEmitter struct {
+	telemetry.Buffer
+	failure        error
+	discoveryCalls int
+}
+
+func (e *discoveryFailEmitter) Gauge(ctx context.Context, name string, value float64, attrs ...telemetry.Attr) error {
+	if name == semconv.MetricZonesDiscovered {
+		e.discoveryCalls++
+		return e.failure
+	}
+	return e.Buffer.Gauge(ctx, name, value, attrs...)
 }
 
 // Zone-discovery gauges are self-observation, not firewall event series, and
