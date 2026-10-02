@@ -4,7 +4,7 @@ title: Dashboard annotations for account changes from audit events
 status: In Progress
 assignee: []
 created_date: '2026-09-30 21:17'
-updated_date: '2026-10-02 02:40'
+updated_date: '2026-10-02 03:30'
 labels:
   - dashboard
 dependencies: []
@@ -41,4 +41,6 @@ Loop15 E53: add one visible toggleable account-change annotation layer from Loki
 
 <!-- SECTION:NOTES:BEGIN -->
 Loop15 RR1 source candidate independently PASS on exact final commit with complete detached just check, generation/preservation and opaque-fixture proofs. Implementation I1 unchanged; one review-repair consumed, two remain. Accepted locally but not landed or synced yet; annotation import/readback and rendering remain unverified. Root will publish the reviewed full patch as a squash with valid attribution trailers, preserving intermediate source history locally.
+
+Shipped reviewed annotation source and tracker batch has eight applicable exact-SHA workflows green, including grafana-sync, and all six CI jobs passed. Root live dashboard readback exactly matches annotation definition, layout and panel identities with a recorded capture timestamp. Browser rendering, toggle interaction and live annotation result remain unobserved; interactive AC stays unchecked under the task-finalization guide. No sustained runtime claim.
 <!-- SECTION:NOTES:END -->
