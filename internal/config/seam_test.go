@@ -71,6 +71,20 @@ func TestSeamLoadAndValidation(t *testing.T) {
 			if err != nil {
 				t.Fatalf("load frozen config: %v", err)
 			}
+			switch tc.name {
+			case "zero unlimited":
+				if c.OTLP.MetricCardinalityLimit != 0 {
+					t.Fatalf("YAML metric_cardinality_limit = %d, want 0 (unlimited)", c.OTLP.MetricCardinalityLimit)
+				}
+			case "all source":
+				if c.HTTP.RequestSource != "all" {
+					t.Fatalf("YAML request_source = %q, want all", c.HTTP.RequestSource)
+				}
+			case "empty breakdowns":
+				if len(c.HTTP.Breakdowns) != 0 {
+					t.Fatalf("YAML breakdowns = %v, want empty", c.HTTP.Breakdowns)
+				}
+			}
 			c.Cloudflare.APIToken = "invented-token"
 			c.Cloudflare.AccountID = "invented-account"
 			c.OTLP.Endpoint = "http://example.com/otlp"
