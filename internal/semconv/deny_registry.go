@@ -189,6 +189,8 @@ var denyAttributes = map[string]struct{}{
 	AttrAuditURI:                         {},
 	AttrAuditUserAgent:                   {},
 	AttrFirewallZone:                     {},
+	AttrFirewallBotScoreBucket:           {},
+	AttrFirewallBotScoreSource:           {},
 	AttrFirewallAction:                   {},
 	AttrFirewallSource:                   {},
 	AttrFirewallKind:                     {},

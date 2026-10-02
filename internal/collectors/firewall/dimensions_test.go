@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,6 +18,181 @@ import (
 	"github.com/rknightion/cf2otel/internal/semconv"
 	"github.com/rknightion/cf2otel/internal/telemetry"
 )
+
+func TestFirewallBotScoreNumericIntervals(t *testing.T) {
+	for _, tc := range []struct {
+		score any
+		want  string
+	}{
+		{float64(0), "0-9"}, {float64(9), "0-9"}, {json.Number("10"), "10-19"}, {float64(255), "250-255"},
+		{nil, ""}, {float64(-1), ""}, {float64(256), ""}, {float64(9.5), ""}, {math.NaN(), ""}, {math.Inf(1), ""}, {"10", ""},
+	} {
+		got, ok := firewallBotScoreBucket(tc.score)
+		if got != tc.want || ok != (tc.want != "") {
+			t.Errorf("score=%v got=%q valid=%v want=%q", tc.score, got, ok, tc.want)
+		}
+	}
+}
+
+func TestFirewallBotScoreSourceValidation(t *testing.T) {
+	sources := make(map[string]struct{})
+	for _, name := range []string{"", "fixture\ncontrol", string([]byte{0xff}), strings.Repeat("x", 129)} {
+		if got, ok := firewallBotScoreSource(name, sources); ok || got != "" {
+			t.Errorf("invalid source accepted: %q", got)
+		}
+	}
+	name := strings.Repeat("é", 128)
+	if got, ok := firewallBotScoreSource(name, sources); !ok || got != name {
+		t.Fatal("valid 128-character UTF-8 source rejected")
+	}
+}
+
+// Exercise optional bot dimensions through registration and the real HTTP client.
+func TestRegisteredHTTPFirewallBotDimensions(t *testing.T) {
+	for _, tc := range []struct {
+		name                           string
+		advertised, byTime, incomplete bool
+		budget, cap                    int
+	}{
+		{"advertised", true, false, false, 5, 500},
+		{"unadvertised", false, false, false, 5, 500},
+		{"budget", true, false, false, 3, 500},
+		{"bounded", true, false, false, 5, 3},
+		{"by_time", true, true, false, 3, 500},
+		{"incomplete", true, false, true, 5, 500},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var recovered atomic.Bool
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.URL.Path == "/zones" {
+					fmt.Fprint(w, `{"success":true,"result":[{"id":"fixture-a","name":"fixture-a"},{"id":"fixture-b","name":"fixture-b"}],"result_info":{"page":1,"total_pages":1}}`)
+					return
+				}
+				var req struct {
+					Query string `json:"query"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					t.Error(err)
+					return
+				}
+				zoneA := strings.Contains(req.Query, `"fixture-a"`)
+				dataset := groupsDataset
+				if tc.byTime && !strings.Contains(req.Query, "settings{") {
+					dataset = byTimeGroupsDataset
+				}
+				if strings.Contains(req.Query, "settings{") {
+					if tc.byTime && strings.Contains(req.Query, byTimeGroupsDataset) {
+						dataset = byTimeGroupsDataset
+					}
+					fields := []string{"count", "dimensions_action", "dimensions_source"}
+					if tc.advertised && zoneA {
+						fields = append(fields, "dimensions_botScore", "dimensions_botScoreSrcName")
+					}
+					s := cfapi.DatasetSettings{Enabled: !tc.byTime || dataset == byTimeGroupsDataset, AvailableFields: fields, MaxNumberOfFields: tc.budget, MaxDuration: 3600, NotOlderThan: 86400, MaxPageSize: 10000}
+					_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"viewer": map[string]any{"zones": []any{map[string]any{"settings": map[string]any{dataset: s}}}}}})
+					return
+				}
+				bot := strings.Contains(req.Query, "botScore")
+				if bot && (!zoneA || !tc.advertised) {
+					t.Error("queried bot fields for an unadvertised zone")
+					fmt.Fprint(w, `{"errors":[{"message":"unentitled"}]}`)
+					return
+				}
+				if tc.byTime && (strings.Contains(req.Query, "action") || strings.Contains(req.Query, "source")) {
+					t.Error("ByTime queried forbidden base dimensions")
+				}
+				if tc.incomplete && !zoneA && !recovered.Load() {
+					fmt.Fprint(w, `{"errors":[{"message":"fixture failure"}]}`)
+					return
+				}
+				rows := []map[string]any{{"count": 7, "dimensions": map[string]any{"action": "allow", "source": "fixture"}}}
+				if zoneA {
+					rows = nil
+					for i := 0; i < 34; i++ {
+						d := map[string]any{"action": "block", "source": "fixture"}
+						if bot {
+							d["botScore"] = 10
+							prefix := "fixture-detection"
+							if recovered.Load() {
+								prefix = "fixture-recovered"
+							}
+							d["botScoreSrcName"] = fmt.Sprintf("%s-%02d", prefix, i)
+						}
+						rows = append(rows, map[string]any{"count": 1, "dimensions": d})
+					}
+					// Revisit the first admitted source after overflow: admission is sticky.
+					d := map[string]any{"action": "block", "source": "fixture"}
+					if bot {
+						d["botScore"] = 10
+						d["botScoreSrcName"] = "fixture-detection-00"
+						if recovered.Load() {
+							d["botScoreSrcName"] = "fixture-recovered-00"
+						}
+					}
+					rows = append(rows, map[string]any{"count": 1, "dimensions": d})
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"viewer": map[string]any{"zones": []any{map[string]any{dataset: rows}}}}})
+			}))
+			defer server.Close()
+			cfg := config.Default()
+			cfg.Cloudflare.APIBase = server.URL
+			cfg.Collectors["firewall.events"] = config.CollectorConfig{}
+			cfg.Firewall.MaxMetricSeriesPerWindow = tc.cap
+			registry := collector.NewRegistry()
+			Register(collector.Deps{Config: &cfg, API: cfapi.New(cfg.Cloudflare), Registry: registry})
+			c := registry.Entries()[0].Collector.(collector.WindowCollector)
+			from := time.Now().UTC().Truncate(time.Second).Add(-10 * time.Minute)
+			to := from.Add(time.Minute)
+			// A second window proves that the source-name admissions remain sticky.
+			for window := 0; window < 2; window++ {
+				out := &telemetry.Buffer{}
+				mark, err := c.CollectWindow(context.Background(), from, to, out)
+				if tc.incomplete && !recovered.Load() {
+					if err == nil || !mark.Equal(from) || len(firewallEventPoints(out)) != 0 {
+						t.Fatalf("incomplete window committed: mark=%v err=%v", mark, err)
+					}
+					recovered.Store(true)
+					continue
+				}
+				if err != nil || !mark.Equal(to) {
+					t.Fatalf("window: mark=%v err=%v", mark, err)
+				}
+				var total, overflow, first, base float64
+				points := firewallEventPoints(out)
+				for _, p := range points {
+					total += p.Value
+					a := attrMap(p.Attrs)
+					if a[semconv.AttrFirewallZone] == "fixture-b" {
+						base += p.Value
+						if a["cloudflare.firewall.bot_score_bucket"] != "" || a["cloudflare.firewall.bot_score_source"] != "" {
+							t.Fatal("unadvertised zone enriched")
+						}
+					}
+					if a["cloudflare.firewall.bot_score_source"] == "other" {
+						overflow += p.Value
+					}
+					firstSource := "fixture-detection-00"
+					if recovered.Load() {
+						firstSource = "fixture-recovered-00"
+					}
+					if a["cloudflare.firewall.bot_score_source"] == firstSource {
+						first += p.Value
+					}
+					if tc.advertised && (tc.budget > 3 || tc.byTime) && a[semconv.AttrFirewallZone] == "fixture-a" && a["cloudflare.firewall.bot_score_bucket"] != "10-19" {
+						t.Fatalf("advertised bot bucket missing: %v", a)
+					}
+				}
+				if total != 42 || base != 7 || len(points) > tc.cap {
+					t.Fatalf("count/cap: total=%g base=%g points=%d", total, base, len(points))
+				}
+				if tc.advertised && (tc.budget > 3 || tc.byTime) && tc.cap == 500 && (overflow != 2 || first != 2) {
+					t.Fatalf("sticky admission: overflow=%g first=%g", overflow, first)
+				}
+			}
+		})
+	}
+}
 
 // Zone-discovery gauges are self-observation, not firewall event series, and
 // therefore do not consume the firewall domain's per-window series budget.

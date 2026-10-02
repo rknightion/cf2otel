@@ -19,11 +19,13 @@ import (
 )
 
 type metrics struct {
-	cfg     *config.Config
-	api     cfapi.Client
-	rulesMu sync.Mutex
-	rules   map[string]ruleCache
-	now     func() time.Time
+	cfg       *config.Config
+	api       cfapi.Client
+	rulesMu   sync.Mutex
+	rules     map[string]ruleCache
+	now       func() time.Time
+	sourcesMu sync.Mutex
+	sources   map[string]struct{}
 }
 
 func NewMetrics(cfg *config.Config, api cfapi.Client) *metrics {
@@ -45,6 +47,15 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 	if !from.Before(to) {
 		return from, fmt.Errorf("invalid firewall metrics window")
 	}
+	// Serialize source admissions and stage them until the entire window has
+	// succeeded, so failed windows cannot consume the sticky source budget.
+	c.sourcesMu.Lock()
+	defer c.sourcesMu.Unlock()
+	sources := make(map[string]struct{}, len(c.sources))
+	for name := range c.sources {
+		sources[name] = struct{}{}
+	}
+
 	selected, err := zones(ctx, c.cfg, c.api)
 	if err != nil {
 		return from, err
@@ -83,6 +94,19 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 				if hasAvailableField(settings.AvailableFields, "dimensions."+dimension.field) && (settings.MaxNumberOfFields <= 0 || len(wanted) < settings.MaxNumberOfFields) {
 					wanted = append(wanted, "dimensions."+dimension.field)
 					dimensionsFields = append(dimensionsFields, dimension)
+				}
+			}
+		}
+
+		// Optional bot fields follow all existing dimensions in the field budget.
+		hasBotScore, hasBotSource := false, false
+		for _, field := range []string{"botScore", "botScoreSrcName"} {
+			if hasAvailableField(settings.AvailableFields, "dimensions."+field) && (settings.MaxNumberOfFields <= 0 || len(wanted) < settings.MaxNumberOfFields) {
+				wanted = append(wanted, "dimensions."+field)
+				if field == "botScore" {
+					hasBotScore = true
+				} else {
+					hasBotSource = true
 				}
 			}
 		}
@@ -133,6 +157,16 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 					}
 				}
 			}
+			if hasBotScore {
+				if bucket, ok := firewallBotScoreBucket(dimensions["botScore"]); ok {
+					attrs = append(attrs, telemetry.Attr{Key: semconv.AttrFirewallBotScoreBucket, Value: bucket})
+				}
+			}
+			if hasBotSource {
+				if source, ok := firewallBotScoreSource(dimensions["botScoreSrcName"], sources); ok {
+					attrs = append(attrs, telemetry.Attr{Key: semconv.AttrFirewallBotScoreSource, Value: source})
+				}
+			}
 			samples = append(samples, firewallMetric{value: count, attrs: attrs})
 		}
 
@@ -160,6 +194,7 @@ func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out tel
 			return from, err
 		}
 	}
+	c.sources = sources
 	return to, nil
 }
 

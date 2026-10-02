@@ -4,6 +4,8 @@ const (
 	EventFirewallEvent   = "cloudflare.firewall.event"
 	MetricFirewallEvents = "cloudflare.firewall.events"
 
+	AttrFirewallBotScoreBucket       = "cloudflare.firewall.bot_score_bucket"
+	AttrFirewallBotScoreSource       = "cloudflare.firewall.bot_score_source"
 	AttrFirewallZone                 = "cloudflare.firewall.zone"
 	AttrFirewallAction               = "cloudflare.firewall.action"
 	AttrFirewallSource               = "cloudflare.firewall.source"

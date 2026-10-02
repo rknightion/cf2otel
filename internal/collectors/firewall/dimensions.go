@@ -3,13 +3,58 @@ package firewall
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"math"
 	"net/url"
 	"sort"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/rknightion/cf2otel/internal/semconv"
 	"github.com/rknightion/cf2otel/internal/telemetry"
 )
+
+// Exporter-defined numeric intervals, not vendor classifications or sentinels.
+func firewallBotScoreBucket(value any) (string, bool) {
+	// Do not coerce string values or missing/null values into scores.
+	switch value.(type) {
+	case float64, float32, int, int64, json.Number:
+	default:
+		return "", false
+	}
+	score, ok := numericValue(value)
+	if !ok || math.IsNaN(score) || math.IsInf(score, 0) || score < 0 || score > 255 || math.Trunc(score) != score {
+		return "", false
+	}
+	lower := int(score) / 10 * 10
+	return fmt.Sprintf("%d-%d", lower, min(lower+9, 255)), true
+}
+
+// Source names pass through without semantic guesses. Admissions are global to
+// this collector and sticky across windows, with one reserved overflow value.
+func firewallBotScoreSource(value any, sources map[string]struct{}) (string, bool) {
+	name, ok := value.(string)
+	if !ok || name == "" || !utf8.ValidString(name) || utf8.RuneCountInString(name) > 128 {
+		return "", false
+	}
+	for _, r := range name {
+		if unicode.IsControl(r) {
+			return "", false
+		}
+	}
+	if name == "other" {
+		return name, true
+	}
+	if _, admitted := sources[name]; admitted {
+		return name, true
+	}
+	if len(sources) >= 32 {
+		return "other", true
+	}
+	sources[name] = struct{}{}
+	return name, true
+}
 
 type metricDimension struct{ field, key string }
 
@@ -86,7 +131,7 @@ func boundFirewallMetrics(samples []firewallMetric, cap int) []firewallMetric {
 		p := &point{firewallMetric: sample, key: key}
 		for _, attr := range sample.attrs {
 			switch attr.Key {
-			case semconv.AttrFirewallRuleID, semconv.AttrFirewallHost, semconv.AttrFirewallCountry, semconv.AttrFirewallRuleDescription:
+			case semconv.AttrFirewallRuleID, semconv.AttrFirewallHost, semconv.AttrFirewallCountry, semconv.AttrFirewallRuleDescription, semconv.AttrFirewallBotScoreBucket, semconv.AttrFirewallBotScoreSource:
 				p.enriched = true
 			}
 		}
@@ -116,7 +161,7 @@ func boundFirewallMetrics(samples []firewallMetric, cap int) []firewallMetric {
 			discarded += p.value
 		}
 		attrs := []telemetry.Attr{}
-		for _, key := range []string{semconv.AttrFirewallZone, semconv.AttrFirewallAction, semconv.AttrFirewallSource, semconv.AttrFirewallRuleID, semconv.AttrFirewallRuleDescription, semconv.AttrFirewallHost, semconv.AttrFirewallCountry} {
+		for _, key := range []string{semconv.AttrFirewallZone, semconv.AttrFirewallAction, semconv.AttrFirewallSource, semconv.AttrFirewallRuleID, semconv.AttrFirewallRuleDescription, semconv.AttrFirewallHost, semconv.AttrFirewallCountry, semconv.AttrFirewallBotScoreBucket, semconv.AttrFirewallBotScoreSource} {
 			attrs = append(attrs, telemetry.Attr{Key: key, Value: "other"})
 		}
 		result = append(result, firewallMetric{value: discarded, attrs: attrs})
