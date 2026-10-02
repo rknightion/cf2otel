@@ -85,6 +85,62 @@ class LandedMetricPanelsTest(unittest.TestCase):
                    for q in p["spec"]["data"]["spec"]["queries"]]
         return [q["spec"] for q in queries if q["group"] == "prometheus"]
 
+    def test_workers_ai_counters_keep_independent_instances_and_range(self):
+        targets = self.generated_targets()
+        # Names follow semconv metadata plus Prometheus otlptranslator's escaping,
+        # monotonic-counter suffix and unit rules (s -> seconds, {token} omitted).
+        metrics = ("cloudflare_workers_ai_inferences_total",
+                   "cloudflare_workers_ai_input_tokens_total",
+                   "cloudflare_workers_ai_output_tokens_total",
+                   "cloudflare_workers_ai_inference_time_seconds_total")
+        for metric in metrics:
+            matches = [t for t in targets if metric + "{" in t["expr"]]
+            self.assertTrue(matches, f"missing Workers AI counter query: {metric}")
+            rates = [t for t in matches if not t["instant"]]
+            self.assertTrue(rates, f"missing Workers AI rate: {metric}")
+            for target in matches:
+                operation = "increase" if target["instant"] else "rate"
+                window = "$__range" if target["instant"] else "$__rate_interval"
+                self.assertEqual(target["expr"],
+                                 f'sum by (instance) ({operation}({metric}'
+                                 f'{{service_name="cf2otel"}}[{window}]))',
+                                 "different exporter instances must not be summed or absent sources zero-filled")
+                self.assertIn("{{instance}}", target["legendFormat"])
+            if metric != metrics[-1]:
+                self.assertTrue(any(t["instant"] for t in matches),
+                                f"missing selected-range total: {metric}")
+
+    def test_workers_ai_generated_queries_handle_resets_replicas_and_absence(self):
+        targets = [t for t in self.generated_targets()
+                   if "cloudflare_workers_ai_" in t["expr"]]
+        self.assertTrue(targets, "Workers AI queries must exist before evaluating them")
+        tests = []
+        for target in targets:
+            metric = re.search(r"(cloudflare_workers_ai_\w+)\{", target["expr"])[1]
+            expression = target["expr"].replace("$__range", "5m").replace("$__rate_interval", "5m")
+            # Instance A resets, B does not; C is absent (source off/unavailable).
+            # Both rate and increase must adjust each counter before aggregation.
+            labels = lambda instance: f'{{instance="{instance}"}}'
+            values = (225, 300) if target["instant"] else (0.75, 1)
+            tests.append({"expr": expression, "eval_time": "5m", "exp_samples": [
+                {"labels": labels(instance), "value": value}
+                for instance, value in zip(("fixture-a", "fixture-b"), values)]})
+            tests.append({"expr": expression, "eval_time": "15m", "exp_samples": []})
+        metrics = sorted({re.search(r"(cloudflare_workers_ai_\w+)\{", t["expr"])[1] for t in targets})
+        series = [{"series": f'{metric}{{service_name="cf2otel",instance="{instance}"}}',
+                   "values": values}
+                  for metric in metrics
+                  for instance, values in (("fixture-a", "0 60 0 60 120 180"),
+                                           ("fixture-b", "0 60 120 180 240 300"))]
+        fixture = {"rule_files": [], "evaluation_interval": "1m", "tests": [{
+            "interval": "1m", "input_series": series, "promql_expr_test": tests}]}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workers-ai.json"
+            path.write_text(json.dumps(fixture))
+            result = subprocess.run(["promtool", "test", "rules", str(path)],
+                                    capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_zone_selection_gauges_reach_generated_dashboard(self):
         targets = self.generated_targets()
         for metric in ("cf2otel_zones_discovered", "cf2otel_zones_filtered",

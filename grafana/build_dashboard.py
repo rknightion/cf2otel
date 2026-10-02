@@ -1305,6 +1305,41 @@ def platform_tab(d: Dashboard) -> dict:
     d.logs(2644, "Tunnel status transitions", "Transitions since process start (first poll emits none); observed timestamp is part of the retry-stable event key.",
         f'{LOG} | event_name="cloudflare.tunnel.status_change"')
 
+    workers_ai_context = (
+        "Account aggregate from complete five-minute aiInferenceAdaptiveGroups buckets; "
+        "workersai.metrics is opt-in and disabled by default. Each exporter instance is shown independently; "
+        "replicas may poll overlapping data and must not be added together. "
+        "No data means unavailable (source off, unentitled field, or insufficient samples), not zero or proof of success. "
+        "Rates reflect counter delivery, including delayed catch-up, not per-request timing. "
+        "increase/rate handle observed resets but omit the first observed counter value, so first-seen "
+        "and restarted instances can under-count. Historical ranges are not filtered by current collector health; "
+        "these panels do not prove storage or live source coverage. "
+    )
+    # Prometheus OTLP translation: escaping + monotonic _total; unit s adds
+    # _seconds, unit 1 adds nothing for counters, and {token} adds no suffix.
+    ai_metrics = (
+        (2665, "Workers AI inferences", "cloudflare_workers_ai_inferences_total", "inferences", "short"),
+        (2666, "Workers AI input tokens", "cloudflare_workers_ai_input_tokens_total", "input tokens", "suffix: tokens"),
+        (2667, "Workers AI output tokens", "cloudflare_workers_ai_output_tokens_total", "output tokens", "suffix: tokens"),
+    )
+    for pid, title, metric, legend, unit in ai_metrics:
+        d.stat(pid, title, workers_ai_context + "Counter increase over the selected dashboard range; not a lifetime total.",
+            [prom(f'sum by (instance) (increase({metric}{{{S}}}[$__range]))',
+                  legend + " {{instance}}", instant=True)], unit=unit, text_mode="value_and_name", no_value="Unavailable")
+    d.ts(2668, "Workers AI inference rate", workers_ai_context + "Inferences per second over the rate interval.",
+        [prom(f'sum by (instance) (rate(cloudflare_workers_ai_inferences_total{{{S}}}[$__rate_interval]))',
+              "inferences {{instance}}")], unit="suffix: inferences/s")
+    d.ts(2669, "Workers AI token traffic", workers_ai_context + "Input and output tokens per second over the rate interval.",
+        [prom(f'sum by (instance) (rate(cloudflare_workers_ai_input_tokens_total{{{S}}}[$__rate_interval]))',
+              "input {{instance}}", ref="A"),
+         prom(f'sum by (instance) (rate(cloudflare_workers_ai_output_tokens_total{{{S}}}[$__rate_interval]))',
+              "output {{instance}}", ref="B")], unit="suffix: tokens/s")
+    d.ts(2670, "Workers AI total inference-time rate", workers_ai_context +
+        "Total inference seconds per wall-clock second (source milliseconds divided by 1000). "
+        "This is aggregate inference work, not latency, a percentile, per-request duration or cost; concurrent work can exceed 1.",
+        [prom(f'sum by (instance) (rate(cloudflare_workers_ai_inference_time_seconds_total{{{S}}}[$__rate_interval]))',
+              "inference time {{instance}}")], unit="suffix: inference-seconds/s")
+
     return tab(TAB_PLATFORM, [
         row("At a glance", [(pid, 3, 4) for pid, *_ in glance]),
         row("Workers", [(501, 16, 9), (2611, 8, 9)]),
@@ -1320,6 +1355,8 @@ def platform_tab(d: Dashboard) -> dict:
         row("Health checks (Pro-only opt-in)", [(2660, 24, 8), (2661, 12, 7), (2662, 12, 7), (2663, 12, 7), (2664, 12, 7)]),
         row("Queues", [(905, 12, 7), (901, 12, 7), (902, 12, 7), (903, 12, 7)]),
         row("Turnstile, Logpush and Email", [(502, 8, 7), (503, 8, 7), (2621, 8, 7)]),
+        row("Workers AI (opt-in account aggregates)", [(2665, 8, 4), (2666, 8, 4), (2667, 8, 4),
+                                                     (2668, 8, 8), (2669, 8, 8), (2670, 8, 8)]),
     ])
 
 

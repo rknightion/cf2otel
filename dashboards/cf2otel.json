@@ -16506,6 +16506,558 @@
           }
         }
       },
+      "panel-2665": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (instance) (increase(cloudflare_workers_ai_inferences_total{service_name=\"cf2otel\"}[$__range]))",
+                        "format": "time_series",
+                        "instant": true,
+                        "legendFormat": "inferences {{instance}}",
+                        "range": false,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Account aggregate from complete five-minute aiInferenceAdaptiveGroups buckets; workersai.metrics is opt-in and disabled by default. Each exporter instance is shown independently; replicas may poll overlapping data and must not be added together. No data means unavailable (source off, unentitled field, or insufficient samples), not zero or proof of success. Rates reflect counter delivery, including delayed catch-up, not per-request timing. increase/rate handle observed resets but omit the first observed counter value, so first-seen and restarted instances can under-count. Historical ranges are not filtered by current collector health; these panels do not prove storage or live source coverage. Counter increase over the selected dashboard range; not a lifetime total.",
+          "id": 2665,
+          "links": [],
+          "title": "Workers AI inferences",
+          "vizConfig": {
+            "group": "stat",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "mappings": [],
+                  "noValue": "Unavailable",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "blue",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "none",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "value_and_name",
+                "wideLayout": true
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2666": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (instance) (increase(cloudflare_workers_ai_input_tokens_total{service_name=\"cf2otel\"}[$__range]))",
+                        "format": "time_series",
+                        "instant": true,
+                        "legendFormat": "input tokens {{instance}}",
+                        "range": false,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Account aggregate from complete five-minute aiInferenceAdaptiveGroups buckets; workersai.metrics is opt-in and disabled by default. Each exporter instance is shown independently; replicas may poll overlapping data and must not be added together. No data means unavailable (source off, unentitled field, or insufficient samples), not zero or proof of success. Rates reflect counter delivery, including delayed catch-up, not per-request timing. increase/rate handle observed resets but omit the first observed counter value, so first-seen and restarted instances can under-count. Historical ranges are not filtered by current collector health; these panels do not prove storage or live source coverage. Counter increase over the selected dashboard range; not a lifetime total.",
+          "id": 2666,
+          "links": [],
+          "title": "Workers AI input tokens",
+          "vizConfig": {
+            "group": "stat",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "mappings": [],
+                  "noValue": "Unavailable",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "blue",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "suffix: tokens"
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "none",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "value_and_name",
+                "wideLayout": true
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2667": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (instance) (increase(cloudflare_workers_ai_output_tokens_total{service_name=\"cf2otel\"}[$__range]))",
+                        "format": "time_series",
+                        "instant": true,
+                        "legendFormat": "output tokens {{instance}}",
+                        "range": false,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Account aggregate from complete five-minute aiInferenceAdaptiveGroups buckets; workersai.metrics is opt-in and disabled by default. Each exporter instance is shown independently; replicas may poll overlapping data and must not be added together. No data means unavailable (source off, unentitled field, or insufficient samples), not zero or proof of success. Rates reflect counter delivery, including delayed catch-up, not per-request timing. increase/rate handle observed resets but omit the first observed counter value, so first-seen and restarted instances can under-count. Historical ranges are not filtered by current collector health; these panels do not prove storage or live source coverage. Counter increase over the selected dashboard range; not a lifetime total.",
+          "id": 2667,
+          "links": [],
+          "title": "Workers AI output tokens",
+          "vizConfig": {
+            "group": "stat",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "mappings": [],
+                  "noValue": "Unavailable",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "blue",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "suffix: tokens"
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "none",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "value_and_name",
+                "wideLayout": true
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2668": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (instance) (rate(cloudflare_workers_ai_inferences_total{service_name=\"cf2otel\"}[$__rate_interval]))",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "inferences {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Account aggregate from complete five-minute aiInferenceAdaptiveGroups buckets; workersai.metrics is opt-in and disabled by default. Each exporter instance is shown independently; replicas may poll overlapping data and must not be added together. No data means unavailable (source off, unentitled field, or insufficient samples), not zero or proof of success. Rates reflect counter delivery, including delayed catch-up, not per-request timing. increase/rate handle observed resets but omit the first observed counter value, so first-seen and restarted instances can under-count. Historical ranges are not filtered by current collector health; these panels do not prove storage or live source coverage. Inferences per second over the rate interval.",
+          "id": 2668,
+          "links": [],
+          "title": "Workers AI inference rate",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "unit": "suffix: inferences/s"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2669": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (instance) (rate(cloudflare_workers_ai_input_tokens_total{service_name=\"cf2otel\"}[$__rate_interval]))",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "input {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (instance) (rate(cloudflare_workers_ai_output_tokens_total{service_name=\"cf2otel\"}[$__rate_interval]))",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "output {{instance}}",
+                        "range": true,
+                        "refId": "B"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "B"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Account aggregate from complete five-minute aiInferenceAdaptiveGroups buckets; workersai.metrics is opt-in and disabled by default. Each exporter instance is shown independently; replicas may poll overlapping data and must not be added together. No data means unavailable (source off, unentitled field, or insufficient samples), not zero or proof of success. Rates reflect counter delivery, including delayed catch-up, not per-request timing. increase/rate handle observed resets but omit the first observed counter value, so first-seen and restarted instances can under-count. Historical ranges are not filtered by current collector health; these panels do not prove storage or live source coverage. Input and output tokens per second over the rate interval.",
+          "id": 2669,
+          "links": [],
+          "title": "Workers AI token traffic",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "unit": "suffix: tokens/s"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2670": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (instance) (rate(cloudflare_workers_ai_inference_time_seconds_total{service_name=\"cf2otel\"}[$__rate_interval]))",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "inference time {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Account aggregate from complete five-minute aiInferenceAdaptiveGroups buckets; workersai.metrics is opt-in and disabled by default. Each exporter instance is shown independently; replicas may poll overlapping data and must not be added together. No data means unavailable (source off, unentitled field, or insufficient samples), not zero or proof of success. Rates reflect counter delivery, including delayed catch-up, not per-request timing. increase/rate handle observed resets but omit the first observed counter value, so first-seen and restarted instances can under-count. Historical ranges are not filtered by current collector health; these panels do not prove storage or live source coverage. Total inference seconds per wall-clock second (source milliseconds divided by 1000). This is aggregate inference work, not latency, a percentile, per-request duration or cost; concurrent work can exceed 1.",
+          "id": 2670,
+          "links": [],
+          "title": "Workers AI total inference-time rate",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "unit": "suffix: inference-seconds/s"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
       "panel-2701": {
         "kind": "Panel",
         "spec": {
@@ -27616,6 +28168,98 @@
                           }
                         },
                         "title": "Turnstile, Logpush and Email"
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "collapse": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2665"
+                                  },
+                                  "height": 4,
+                                  "width": 8,
+                                  "x": 0,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2666"
+                                  },
+                                  "height": 4,
+                                  "width": 8,
+                                  "x": 8,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2667"
+                                  },
+                                  "height": 4,
+                                  "width": 8,
+                                  "x": 16,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2668"
+                                  },
+                                  "height": 8,
+                                  "width": 8,
+                                  "x": 0,
+                                  "y": 4
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2669"
+                                  },
+                                  "height": 8,
+                                  "width": 8,
+                                  "x": 8,
+                                  "y": 4
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2670"
+                                  },
+                                  "height": 8,
+                                  "width": 8,
+                                  "x": 16,
+                                  "y": 4
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "title": "Workers AI (opt-in account aggregates)"
                       }
                     }
                   ]
