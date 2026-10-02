@@ -132,7 +132,7 @@ type LogConfig struct {
 }
 
 var collectorNames = []string{
-	"access.logins", "access.login_metrics", "access.scim", "inventory.access",
+	"access.logins", "access.login_metrics", "access.scim", "access.seats", "inventory.access",
 	"httpreq.events", "httpreq.metrics", "aigateway.logs", "aigateway.metrics",
 	"audit.logs", "firewall.events", "firewall.metrics", "dns.events", "dns.metrics",
 	"rum.pageloads", "rum.web_vitals", "gateway.dns",
@@ -156,6 +156,7 @@ func Default() Config {
 		c.Collectors[name] = CollectorConfig{Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
 	}
 	// Snapshot collectors have no lookback window or checkpoint key.
+	c.Collectors["access.seats"] = CollectorConfig{Enabled: true, Interval: 15 * time.Minute}
 	c.Collectors["certs.packs"] = CollectorConfig{Interval: time.Hour}
 	c.Collectors["tunnels.status"] = CollectorConfig{Interval: time.Minute}
 	c.Collectors["httpreq.transfer"] = CollectorConfig{Enabled: true, Interval: time.Hour}
@@ -309,7 +310,7 @@ func (c Config) Validate() error {
 		if v.Enabled {
 			add(v.Interval > 0, name+".interval must be positive")
 			add(v.InitialLookback >= 0, name+".initial_lookback must be nonnegative")
-			if name != "certs.packs" && name != "tunnels.status" && name != "httpreq.transfer" {
+			if name != "certs.packs" && name != "tunnels.status" && name != "httpreq.transfer" && name != "access.seats" {
 				add(v.MaxWindow > 0, name+".max_window must be positive")
 			}
 		}

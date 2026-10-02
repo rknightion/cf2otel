@@ -87,6 +87,8 @@ These declarations reserve the following signals; this seam-only change does not
 
 ## Metrics
 
+The seat source is `GET /accounts/{account}/access/users`. Cloudflare's [official Go SDK `AccessUserListResponse`](https://github.com/cloudflare/cloudflare-go/blob/05ca1e4fc7c7f02ffd8257ea199c985e1ec618e8/zero_trust/accessuser.go#L347-L368) defines `access_seat` and `gateway_seat` as boolean flags, separately from active device count. cf2otel preserves field presence: false is valid, but missing, null and nonboolean flags fail the scrape. Each successful full-list scrape emits exactly two gauge points, including two zeros for a genuinely empty list. A user with both flags contributes one to each type. Existing `cloudflare.access.users` inventory is unchanged.
+
 | Name | Unit | Meaning |
 | --- | --- | --- |
 | `cloudflare.http.response.bytes` | `By` | Response byte count on the HTTP request dimensions. (CFO-0046.01) |
@@ -117,6 +119,7 @@ These declarations reserve the following signals; this seam-only change does not
 | `cloudflare.access.requests` | `{request}` | Access request count from `accessLoginRequestsAdaptiveGroups`; keep `nonidentity` traffic separate. |
 | `cloudflare.access.apps` | `1` | Access application inventory gauge. |
 | `cloudflare.access.users` | `1` | Access user inventory gauge. |
+| `cloudflare.access.seats` | `1` | Current user seat gauge by independent `access` or `gateway` type; overlapping types are not an additive billing-user total. |
 | `cloudflare.http.requests` | `{request}` | Request count from sample-corrected `httpRequestsAdaptiveGroups`. |
 | `cloudflare.http.origin.duration` | `s` | Average origin response duration per Groups window, in seconds. |
 | `cloudflare.audit.events` | `1` | Exact audit event count by resource product, action type and action result. |
@@ -213,6 +216,7 @@ The retired AI Gateway dashboard's **Data boundaries** panel was static provenan
 | Resource and common | `service.name`, `service.version`, `service.instance.id`, `event_name`, `cf2otel.collector.name`, `cf2otel.status_class`, `cf2otel.api.method` |
 | Access app and decision | `cloudflare.access.app`, `cloudflare.access.app.id`, `cloudflare.access.app.type`, `cloudflare.access.connection`, `cloudflare.access.host`, `cloudflare.access.path`, `cloudflare.access.action`, `cloudflare.access.allowed`, `cloudflare.access.country`, `cloudflare.access.login_type`, `cloudflare.access.identity_provider`, `cloudflare.access.service_token` |
 | Access identity | `cloudflare.access.user.email`, `cloudflare.access.user.id`, `cloudflare.access.user.ip_address`, `cloudflare.access.identity.inferred`, `cloudflare.access.identity.login_ray_id`, `cloudflare.access.ray_id` |
+| Access seats | `cloudflare.access.seat.type` (string enum `access`, `gateway`); no user, email, IP, device or account identity attributes. |
 | Access SCIM | `cloudflare.access.scim.resource_type`, `cloudflare.access.scim.method`, `cloudflare.access.scim.status`, `cloudflare.access.scim.idp_id`, `cloudflare.access.scim.resource_id`, `cloudflare.access.scim.user_email` |
 | HTTP | `cloudflare.http.host`, `cloudflare.http.method`, `cloudflare.http.path`, `cloudflare.http.query`, `cloudflare.http.status_code`, `cloudflare.http.origin_status_code`, `cloudflare.http.client_ip`, `cloudflare.http.user_agent`, `cloudflare.http.ray_id`, `cloudflare.http.zone`, `cloudflare.http.cache_status`, `cloudflare.http.security_action`, `cloudflare.http.colo` |
 | AI Gateway content | `cloudflare.ai_gateway.content.side`, `cloudflare.ai_gateway.content.length` |
@@ -272,6 +276,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cloudflare.access.logins` |
 | Metric | `cloudflare.access.requests` |
 | Metric | `cloudflare.access.users` |
+| Metric | `cloudflare.access.seats` |
 | Metric | `cloudflare.ai_gateway.cache_hits` |
 | Metric | `cloudflare.ai_gateway.cost` |
 | Metric | `cloudflare.ai_gateway.dlp.requests` |
@@ -361,6 +366,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Attribute | `cloudflare.access.login_type` |
 | Attribute | `cloudflare.access.path` |
 | Attribute | `cloudflare.access.ray_id` |
+| Attribute | `cloudflare.access.seat.type` |
 | Attribute | `cloudflare.access.scim.idp_id` |
 | Attribute | `cloudflare.access.scim.method` |
 | Attribute | `cloudflare.access.scim.resource_id` |

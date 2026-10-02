@@ -16,6 +16,7 @@ The table maps every configured collector name to its expected read group. For G
 | `access.login_metrics` | `Account Analytics Read` (Account) | Unverified |
 | `access.scim` | `Access: SCIM Logs Read` (Account) | Unverified |
 | `inventory.access` | `Access: Apps Read` and `Access: Users Read` (Account) | Unverified |
+| `access.seats` | `Access: Users Read` (Account), the same users endpoint used by `inventory.access` | User-list seat fields verified by read-only contract canary; permission name unverified |
 | `tunnels.status` | `Cloudflare Tunnel Read` (Account) | Loop 14 preparation verified the required group; without it the list can be an empty 200, so an empty result does not prove permission |
 | `httpreq.events` | `Analytics Read` (Zone); `Access: Apps Read` (Account) when `http.scope` is `access_protected` | Unverified |
 | `httpreq.threats` | `Analytics Read` (Zone) | Free/Pro rollup entitlement verified; least permission group unverified. (CFO-0046.05) |
@@ -64,6 +65,8 @@ The table maps every configured collector name to its expected read group. For G
 The expected groups for other collectors are candidates based on their API surface and GraphQL dataset scope. Verify them against the target account before enabling a collector; Cloudflare can require dataset-specific entitlements in addition to the base analytics group.
 
 ## Personal data in signals
+
+`access.seats` decodes only the two boolean flags from each user row and retains only aggregate counts across pages. User identifiers, emails, names, IPs and device data are not parsed into the collector's row model, stored in a catalog, or attached to its metrics. Its only metric attribute is the string `cloudflare.access.seat.type`, with values `access` and `gateway`. The HTTP client still receives the upstream response subject to its existing response-size limit; this collector does not log response bodies.
 
 Access login logs can contain email addresses, user IDs, IP addresses and ray IDs. HTTP event logs can contain client IPs, paths, queries and user agents. AI Gateway logs and traces can include model usage and request metadata. These values belong on log or span records only; metrics use bounded dimensions such as app, model, provider, status class or action. Configure retention and access controls at the OTLP destination for the data you choose to collect.
 

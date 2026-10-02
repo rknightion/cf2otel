@@ -9,4 +9,5 @@ func Register(deps collector.Deps) {
 	}
 	registerLoginMetrics(deps)
 	registerSCIM(deps)
+	registerSeats(deps)
 }

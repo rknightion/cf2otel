@@ -62,6 +62,7 @@ var metricSpecs = map[string]MetricSpec{
 	MetricAccessRequests:                 {Unit: "{request}", Description: "Access request count from accessLoginRequestsAdaptiveGroups; keep nonidentity traffic separate."},
 	MetricAccessApps:                     {Unit: "1", Description: "Access application inventory gauge."},
 	MetricAccessUsers:                    {Unit: "1", Description: "Access user inventory gauge."},
+	MetricAccessSeats:                    {Unit: "1", Description: "Current user seat count by independent Access or Gateway flag; types overlap and must not be summed as unique billing users."},
 	MetricHTTPRequests:                   {Unit: "{request}", Description: "Request count from sample-corrected httpRequestsAdaptiveGroups."},
 	MetricHTTPOriginDuration:             {Unit: "s", Description: "Average origin response duration per Groups window, in seconds."},
 	MetricAuditEvents:                    {Unit: "1", Description: "Exact audit event count by resource product, action type and action result."},

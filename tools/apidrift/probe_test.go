@@ -643,6 +643,10 @@ func TestRESTEntriesWithoutNewRowRulesKeepFirstRowBehaviorAndMessages(t *testing
 			missingFirst := map[string]any{"id": "present", "name": "example", "domain": "example.com"}
 			delete(missingFirst, tc.field)
 			second := map[string]any{"id": "present", "name": "example", "domain": "example.com"}
+			if tc.name == "access-users" {
+				missingFirst["access_seat"], missingFirst["gateway_seat"] = false, false
+				second["access_seat"], second["gateway_seat"] = false, false
+			}
 			api := fakeAPI{contract: c, restRows: map[string][]map[string]any{tc.name: {missingFirst, second}}}
 			want := "REST " + tc.name + " scope #1: missing field " + tc.field
 			if diffs := probe(context.Background(), api, c); !containsDiff(diffs, want) {

@@ -566,7 +566,9 @@
       "scope": "account",
       "path": "/accounts/{account}/access/users",
       "required_fields": [
-        "id"
+        "id",
+        "access_seat",
+        "gateway_seat"
       ],
       "allow_empty": true
     },

@@ -1,6 +1,10 @@
 package semconv
 
 const (
+	CollectorNameAccessSeats = "access.seats"
+	MetricAccessSeats        = "cloudflare.access.seats"
+	// AttrAccessSeatType is the bounded string enum access or gateway, never a user identity.
+	AttrAccessSeatType           = "cloudflare.access.seat.type"
 	EventAccessLogin             = "cloudflare.access.login"
 	EventAccessSCIM              = "cloudflare.access.scim_update"
 	MetricAccessLogins           = "cloudflare.access.logins"

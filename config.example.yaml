@@ -55,6 +55,9 @@ collectors:
     enabled: true
   access.scim:
     enabled: true
+  access.seats: # Independent user seat flags; not an additive billing-user total.
+    enabled: true
+    interval: 15m
   inventory.access:
     enabled: true
   httpreq.events:

@@ -92,7 +92,7 @@ func TestDefaultCollectorNamesHaveDistinctEnvironmentForms(t *testing.T) {
 }
 
 func TestDefaultEnabledCollectorsUnchanged(t *testing.T) {
-	const want = "access.login_metrics,access.logins,access.scim,aigateway.logs,audit.logs,d1.analytics,d1.queries,d1.storage,dns.events,dns.metrics,durableobjects.invocations,durableobjects.periodic,durableobjects.sql_storage,durableobjects.subrequests,email.routing,email.sending,firewall.events,firewall.metrics,gateway.dns,httpreq.events,httpreq.metrics,httpreq.threats,httpreq.transfer,inventory.access,kv.operations,kv.storage,logpush.health,queues.backlog,queues.consumer,queues.delayed_backlog,queues.message_operations,r2.bandwidth,r2.catalog_data,r2.catalog_maintenance,r2.operations,r2.sql,r2.storage,rum.pageloads,rum.web_vitals,selfobs,turnstile.events,workers.invocations,workers.overview"
+	const want = "access.login_metrics,access.logins,access.scim,access.seats,aigateway.logs,audit.logs,d1.analytics,d1.queries,d1.storage,dns.events,dns.metrics,durableobjects.invocations,durableobjects.periodic,durableobjects.sql_storage,durableobjects.subrequests,email.routing,email.sending,firewall.events,firewall.metrics,gateway.dns,httpreq.events,httpreq.metrics,httpreq.threats,httpreq.transfer,inventory.access,kv.operations,kv.storage,logpush.health,queues.backlog,queues.consumer,queues.delayed_backlog,queues.message_operations,r2.bandwidth,r2.catalog_data,r2.catalog_maintenance,r2.operations,r2.sql,r2.storage,rum.pageloads,rum.web_vitals,selfobs,turnstile.events,workers.invocations,workers.overview"
 	var enabled []string
 	for name, cfg := range Default().Collectors {
 		if cfg.Enabled {
