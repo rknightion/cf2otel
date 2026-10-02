@@ -114,6 +114,26 @@ cf2otel also emits two span families. Deduplicate the AI Gateway request span by
 `cf2otel.api.request` span by its OpenTelemetry `trace_id` and `span_id`; each observed API call is a
 separate span.
 
+### Metric HTTP partial-success reporting
+
+An offline reproduction through `NewProviders`, metric emission, `Shutdown` and the CLI's
+self-observability callback verifies the pinned `otlpmetrichttp` v1.46.0 contract. The fake
+OTLP endpoint decodes an actual protobuf request containing at least two datapoints and returns
+HTTP 200 with `Content-Type: application/x-protobuf`. A full-acceptance response produces no
+caller or observer error and increments `cf2otel.export.success` for `signal=metrics`. A valid
+`partial_success` response with `rejected_data_points=1` and an error message produces an error
+at both boundaries and increments `cf2otel.export.errors`, not the success counter. cf2otel
+omits the backend message from that error. `TestMetricHTTPPartialSuccessOutcome` pins these
+outcomes; the silent-acceptance hypothesis failed by assertion on the unchanged pinned SDK.
+No SDK defect or dependency correction was demonstrated for this response contract.
+
+HTTP 200 alone does not prove that all datapoints were accepted. Nor does an absent diagnostic
+prove acceptance of individual datapoints: these counters describe export outcomes, not backend
+storage or per-datapoint receipts. Metrics are exported by a periodic reader outside window
+commits; their failures do not prevent log/span checkpoint advancement, and this reproduction
+does not establish metric replay or at-least-once metric delivery. The verified result is limited
+to protobuf metric HTTP responses, not other encodings, protocols or signals.
+
 ## Opt-in high-cardinality HTTP breakdowns
 
 Add `colo`, `asn` and/or `error_path` to `http.breakdowns`. None is in the default list;
