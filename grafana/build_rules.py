@@ -149,12 +149,71 @@ def certificate_fixtures() -> dict:
     return {"rule_files": [], "evaluation_interval": "1m", "tests": tests}
 
 
+def dashboard_panel_fixtures() -> dict:
+    """Evaluate the shipped panel queries locally; no live data or replicas summed.
+
+    Replace Grafana macros with a five-minute fixture window and the All zone
+    filter. Expected values follow gauge/counter semantics, not panel snapshots.
+    """
+    panels = render()["spec"]["elements"]
+
+    def expr(pid: int, query: int = 0) -> str:
+        return (panels[f"panel-{pid}"]["spec"]["data"]["spec"]["queries"][query]
+                ["spec"]["query"]["spec"]["expr"]
+                .replace("$__range", "5m").replace("$__interval", "5m").replace("$zone", ".*"))
+
+    zone_series = []
+    zone_checks = []
+    for index, stage in enumerate(("discovered", "filtered", "processed", "skipped")):
+        reason = ',cf2otel_zone_reason="exclude"' if stage == "filtered" else (
+            ',cf2otel_zone_reason="unentitled"' if stage == "skipped" else "")
+        value = (8, 2, 6, 0)[index]
+        for instance in ("fresh-fixture", "replica-fixture", "old-fixture"):
+            labels = f'service_name="cf2otel",instance="{instance}",cf2otel_collector="fixture-collector"{reason}'
+            zone_series.append({"series": f'cf2otel_zones_{stage}{{{labels}}}', "values": f'{value}+0x5'})
+        zone_checks.append({"expr": expr(2715, index), "eval_time": "5m", "exp_samples": [
+            {"labels": f'{{instance="{instance}",cf2otel_collector="fixture-collector"{reason}}}', "value": value}
+            for instance in ("fresh-fixture", "replica-fixture")]})
+    for instance, timestamp in (("fresh-fixture", 300), ("replica-fixture", 300), ("old-fixture", -900)):
+        zone_series.append({"series": f'cf2otel_scrape_last_success_timestamp_seconds{{service_name="cf2otel",instance="{instance}",cf2otel_collector="fixture-collector"}}',
+                            "values": f'{timestamp}+0x5'})
+    # A gauge with no last-success witness is not considered fresh.
+    zone_series.append({"series": 'cf2otel_zones_discovered{service_name="cf2otel",instance="unknown-fixture",cf2otel_collector="fixture-collector"}',
+                        "values": '99+0x5'})
+
+    error_labels = 'instance="fresh-fixture",cf2otel_collector="fixture-collector"'
+    errors = [{"series": f'cf2otel_scrape_errors_total{{service_name="cf2otel",{error_labels},cf2otel_error_class="{kind}"}}',
+               "values": values} for kind, values in (("auth", "0+1x5"), ("timeout", "0+2x5"), ("other", "0+0x5"))]
+    firewall_labels = ('instance="fresh-fixture",cloudflare_firewall_zone="fixture-zone",'
+                       'cloudflare_firewall_rule_id="fixture-rule",cloudflare_firewall_rule_description="Fixture rule",'
+                       'cloudflare_firewall_host="fixture-host",cloudflare_firewall_client_country="GB",'
+                       'cloudflare_firewall_action="block",cloudflare_firewall_source="fixture-engine"')
+    fallback_labels = 'instance="fresh-fixture",cloudflare_firewall_zone="fixture-fallback"'
+    return {"rule_files": [], "evaluation_interval": "1m", "tests": [
+        {"name": "zone gauges preserve reasons zero and independent fresh instances", "interval": "1m",
+         "input_series": zone_series, "promql_expr_test": zone_checks},
+        {"name": "error classes remain independent including seeded zero", "interval": "1m", "input_series": errors,
+         "promql_expr_test": [{"expr": expr(2714), "eval_time": "5m", "exp_samples": [
+             {"labels": f'{{{error_labels},cf2otel_error_class="{kind}"}}', "value": value}
+             for kind, value in (("auth", 5), ("timeout", 10), ("other", 0))]}]},
+        {"name": "absent never incremented errors are not manufactured", "interval": "1m", "input_series": [],
+         "promql_expr_test": [{"expr": expr(2714), "eval_time": "5m", "exp_samples": []}]},
+        {"name": "firewall metric retains enrichment and unadvertised fallback", "interval": "1m",
+         "input_series": [{"series": f'cloudflare_firewall_events_total{{service_name="cf2otel",{labels}}}', "values": values}
+                          for labels, values in ((firewall_labels, "0+2x5"), (fallback_labels, "0+1x5"))],
+         "promql_expr_test": [{"expr": expr(2116), "eval_time": "5m", "exp_samples": [
+             {"labels": '{' + firewall_labels + '}', "value": 10},
+             {"labels": '{' + fallback_labels + '}', "value": 5}]}]},
+    ]}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     artifacts = [(OUT / f"{rule[0]}.json", resource(*rule)) for rule in RULES]
     artifacts.append((OUT / "fixtures" / "certificates.test.yaml", certificate_fixtures()))
+    artifacts.append((OUT / "fixtures" / "dashboard-panels.test.yaml", dashboard_panel_fixtures()))
     for path, artifact in artifacts:
         content = json.dumps(artifact, indent=2, sort_keys=True) + "\n"
         if args.check:

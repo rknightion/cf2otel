@@ -73,6 +73,47 @@ class AuditAnnotationsTest(unittest.TestCase):
                     self.assertIn(value, " ".join(rendered))
 
 
+class LandedMetricPanelsTest(unittest.TestCase):
+    def generated_targets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "grafana" / "build_dashboard.py"
+            script.parent.mkdir()
+            script.write_bytes((ROOT / "grafana/build_dashboard.py").read_bytes())
+            subprocess.run([sys.executable, str(script)], check=True, timeout=30)
+            dashboard = json.loads((script.parent.parent / "dashboards/cf2otel.json").read_text())
+        queries = [q["spec"]["query"] for p in dashboard["spec"]["elements"].values()
+                   for q in p["spec"]["data"]["spec"]["queries"]]
+        return [q["spec"] for q in queries if q["group"] == "prometheus"]
+
+    def test_zone_selection_gauges_reach_generated_dashboard(self):
+        targets = self.generated_targets()
+        for metric in ("cf2otel_zones_discovered", "cf2otel_zones_filtered",
+                       "cf2otel_zones_processed", "cf2otel_zones_skipped"):
+            matches = [t for t in targets if metric + "{" in t["expr"]]
+            self.assertTrue(matches, f"missing zone selection gauge query: {metric}")
+            for target in matches:
+                self.assertNotRegex(target["expr"], r"(?:rate|increase)\(")
+                self.assertIn("instance", target["expr"])
+                self.assertIn("cf2otel_collector", target["expr"])
+                if metric.endswith(("filtered", "skipped")):
+                    self.assertIn("cf2otel_zone_reason", target["expr"])
+
+    def test_error_classes_reach_generated_dashboard(self):
+        targets = self.generated_targets()
+        self.assertTrue(any("cf2otel_scrape_errors_total{" in t["expr"] and
+                            "cf2otel_error_class" in t["expr"] for t in targets),
+                        "missing bounded collector error-class breakdown")
+
+    def test_firewall_enrichment_reaches_generated_metric_table(self):
+        targets = self.generated_targets()
+        self.assertTrue(any("cloudflare_firewall_events_total{" in t["expr"] and
+                            all(label in t["expr"] for label in (
+                                "cloudflare_firewall_rule_id", "cloudflare_firewall_rule_description",
+                                "cloudflare_firewall_host", "cloudflare_firewall_client_country"))
+                            and t["instant"] and t["format"] == "table" for t in targets),
+                        "missing enriched firewall metric table; logs are not a substitute")
+
+
 class AccessSeatsTest(unittest.TestCase):
     def generate(self, interval=None):
         with tempfile.TemporaryDirectory() as directory:

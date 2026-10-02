@@ -727,6 +727,23 @@ def security_tab(d: Dashboard) -> dict:
         columns={"cloudflare_firewall_host": "Host", "cloudflare_firewall_path": "Path"},
         order=["cloudflare_firewall_host", "cloudflare_firewall_path", "Sampled events"], sort_by="Sampled events")
 
+    d.table(2116, "Firewall metric dimensions", "Groups event counts over the selected range, not sampled log counts. "
+        "Each exporter instance is independent; do not sum duplicate pollers. Rule dimensions are opt-in via "
+        "firewall.rule_dimensions and require advertised fields. Missing rule, host or country columns can mean disabled "
+        "or unadvertised enrichment; a missing description can mean an unresolved rule or unavailable ruleset permission. "
+        "The all-other row is the collector's bounded remainder, not a resolved rule. Zone-filtered; the HTTP host dropdown does not apply. "
+        "No data is not proof of healthy delivery. Counts from a counter first seen inside the range can be undercounted.",
+        [table_q(f'sum by (instance, cloudflare_firewall_zone, cloudflare_firewall_rule_id, cloudflare_firewall_rule_description, '
+                 f'cloudflare_firewall_host, cloudflare_firewall_client_country, cloudflare_firewall_action, cloudflare_firewall_source) '
+                 f'(increase(cloudflare_firewall_events_total{{{FW}}}[$__range]))')],
+        columns={"instance": "Exporter instance", "cloudflare_firewall_zone": "Zone", "cloudflare_firewall_rule_id": "Rule ID",
+                 "cloudflare_firewall_rule_description": "Rule description", "cloudflare_firewall_host": "Host",
+                 "cloudflare_firewall_client_country": "Country", "cloudflare_firewall_action": "Action",
+                 "cloudflare_firewall_source": "Engine", "Value": "Events"},
+        order=["instance", "cloudflare_firewall_zone", "cloudflare_firewall_rule_id", "cloudflare_firewall_rule_description",
+               "cloudflare_firewall_host", "cloudflare_firewall_client_country", "cloudflare_firewall_action", "cloudflare_firewall_source", "Value"],
+        hide=["__name__"], sort_by="Events", decimals=0)
+
     d.ts(913, "Audit events by product", "Audit events per bar interval by resource product; entries without a product are account-level and show as account.",
         [prom(f'label_replace(sum by (cloudflare_audit_resource_product) (increase(cloudflare_audit_events_total{{{S}}}[$__interval])), '
               f'"cloudflare_audit_resource_product", "account", "cloudflare_audit_resource_product", "")', "{{cloudflare_audit_resource_product}}")],
@@ -754,7 +771,7 @@ def security_tab(d: Dashboard) -> dict:
 
     return tab(TAB_SECURITY, [
         row("Summary", [(2101, 4, 4), (2102, 4, 4), (2103, 4, 4), (2104, 4, 4), (2105, 4, 4), (2106, 4, 4)]),
-        row("Firewall and WAF", [(910, 16, 9), (2111, 8, 9), (2113, 12, 10), (2112, 12, 10), (2114, 12, 9), (2115, 12, 9)]),
+        row("Firewall and WAF", [(910, 16, 9), (2111, 8, 9), (2113, 12, 10), (2112, 12, 10), (2114, 12, 9), (2115, 12, 9), (2116, 24, 10)]),
         row("Account audit log", [(913, 12, 8), (2121, 12, 8), (2122, 24, 10)]),
         row("Firewall event logs", [(2131, 24, 12)], collapse=True),
         row("Audit logs", [(2132, 24, 12)], collapse=True),
@@ -1350,6 +1367,28 @@ def collector_tab(d: Dashboard) -> dict:
     d.ts(402, "Collector errors", "Failed polls by collector. Only collectors with at least one failure appear; empty means no failures.",
         [prom(f'sum by (cf2otel_collector) (increase(cf2otel_scrape_errors_total{{{S}}}[$__interval])) > 0', "{{cf2otel_collector}}")],
         unit="short", bars=True, stack=True, decimals=0, interval="15m", no_value="No failed polls")
+    d.ts(2714, "Collector errors by class", "Failed polls by collector and bounded class: rate_limited, auth, unentitled, "
+        "timeout, schema or other. Instances are independent, not replica totals. An absent never-incremented error series "
+        "is not a delivery failure or a coverage gap; verify delivery using poll attempts and successes, not error-series presence. "
+        "A counter first seen inside the interval may be undercounted.",
+        [prom(f'sum by (instance, cf2otel_collector, cf2otel_error_class) '
+              f'(increase(cf2otel_scrape_errors_total{{{S}}}[$__interval]))',
+              "{{cf2otel_collector}} / {{instance}} / {{cf2otel_error_class}}")],
+        unit="short", bars=True, decimals=0, interval="15m", no_value="No error series")
+
+    zone_fresh = f'(time() - max by (instance, cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{{{S}}}) < 900)'
+    d.ts(2715, "Zone selection by collector", "Latest complete successful poll: discovered and processed zones, plus filtered "
+        "and skipped zones by bounded reason. These are gauges, not rates or counts over the selected range. "
+        "Each collector and exporter instance is independent; stages are not additive, and duplicate pollers must not be summed. "
+        "Failed polls retain prior values. Hide samples when last success is 15 minutes old, matching Collector health's stale "
+        "threshold; slower configured poll intervals can therefore show gaps. No data is not a healthy zero. "
+        "No zone or host filter applies to these per-collector counts.",
+        [prom(f'max by (instance, cf2otel_collector, cf2otel_zone_reason) (cf2otel_zones_{stage}{{{S}}}) '
+              f'and on (instance, cf2otel_collector) {zone_fresh}',
+              stage + " / {{cf2otel_collector}} / {{instance}} / {{cf2otel_zone_reason}}", ref=ref)
+         for ref, stage in (("A", "discovered"), ("B", "filtered"), ("C", "processed"), ("D", "skipped"))],
+        unit="short", decimals=0, no_value="No fresh zone selection")
+
     d.bargauge(404, "Checkpoint age", "Age of each collector checkpoint; compare with its configured interval. Over 12 hours on access.logins "
         "approaches the Access REST log's roughly one-day reach.",
         [prom(f'sort_desc(max by (cf2otel_collector) (cf2otel_checkpoint_age_seconds{{{S}}}))', "{{cf2otel_collector}}", instant=True)],
@@ -1394,6 +1433,7 @@ def collector_tab(d: Dashboard) -> dict:
     return tab(TAB_COLLECTOR, [
         row("Status", [(2701, 4, 4), (2702, 4, 4), (403, 4, 4), (407, 4, 4), (2703, 4, 4), (2704, 4, 4), (401, 24, 12), (2711, 24, 18)]),
         row("Polling and windows", [(402, 12, 8), (404, 12, 16), (405, 6, 8), (406, 6, 8), (2712, 12, 8), (2713, 12, 8)]),
+        row("Selection and error classes", [(2715, 24, 10), (2714, 24, 8)]),
         row("Cloudflare API and export", [(408, 8, 8), (2721, 8, 8), (2722, 8, 8), (2731, 24, 7), (2723, 12, 8), (2724, 12, 8)]),
         row("Retention-gap logs", [(2741, 24, 8)], collapse=True),
     ])
