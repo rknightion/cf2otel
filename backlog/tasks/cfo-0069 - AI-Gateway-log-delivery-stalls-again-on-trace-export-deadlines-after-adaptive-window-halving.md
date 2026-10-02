@@ -3,10 +3,10 @@ id: CFO-0069
 title: >-
   AI Gateway log delivery stalls again on trace export deadlines after adaptive
   window halving
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-01 17:50'
-updated_date: '2026-10-01 18:28'
+updated_date: '2026-10-02 17:17'
 labels:
   - aigateway
   - telemetry
@@ -27,7 +27,7 @@ On 0.10.1 the aigateway.logs collector delivered for about 90 minutes after depl
 - [x] #1 The cause of the trace export deadline is established from live evidence (per-commit span count, bytes and exporter response), not inferred from the timeout
 - [x] #2 A reproduction through the scheduler, provider and a real HTTP OTLP collaborator fails by assertion on the released code
 - [x] #3 A window whose trace payload cannot be delivered inside the commit budget converges to a deliverable size within one scheduled cycle, exporting before the checkpoint moves and without dropping or truncating required signals silently
-- [ ] #4 After deploy the collector's last-success age stays under 15 minutes for 60 continuous minutes and the stale alert instance is Normal
+- [x] #4 After deploy the collector's last-success age stays under 15 minutes for 60 continuous minutes and the stale alert instance is Normal
 <!-- AC:END -->
 
 ## Definition of Done
@@ -55,4 +55,6 @@ On 0.10.1 the aigateway.logs collector delivered for about 90 minutes after depl
 
 <!-- SECTION:NOTES:BEGIN -->
 Preparation fix 58ad345: aigateway.logs is a budgeted collector. It emits whole source seconds until the buffered records reach a 16 MiB payload budget and returns that second as its mark; the scheduler commits the slices inside one run, halves the budget on an aggregate deadline (floor one 512 KiB export chunk) and doubles it back once per quiet hour. Cause measured live: a burst of 1,340 gateway rows in four source minutes at about 124 KB exported per row and 1.5 to 1.7 s of body fetches per row; each failed window was collected again from its start, the window halved once per attempt and never grew back. Reproduction TestDenseBurstAdvancesWithinOneRun failed on unchanged behaviour with the live error text and passes. TestRegisterAdaptiveDeliveryBudget was changed because the intended behaviour changed: it asserted two failed window halvings and now asserts budget halving, unchanged checkpoint and metrics on a failed slice, and complete exactly-once delivery. just check exit 0; CodeRabbit 0 findings over all 7 files. AC1 to AC3 are met by this evidence; AC4 needs the sustained live read after deploy.
+
+Loop16 HOUR-0 retry sustained pass on running 0.13.0 across3900seconds and14reads, all49collectors attempts equal successes and AI Gateway last-success age bounded. Receipt hour-0-retry.json; one root rules API read observed the aigateway.logs stale-alert instance Normal, health ok, saved safe summary hour-0-alert-safe.json. AC4 checked on required dual witnesses; no missing error-series condition imposed.
 <!-- SECTION:NOTES:END -->

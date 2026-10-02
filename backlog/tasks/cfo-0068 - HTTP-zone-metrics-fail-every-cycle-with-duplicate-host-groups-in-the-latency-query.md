@@ -3,11 +3,11 @@ id: CFO-0068
 title: >-
   HTTP zone metrics fail every cycle with duplicate host groups in the latency
   query
-status: In Progress
+status: Done
 assignee:
   - '@loop15-root'
 created_date: '2026-10-01 17:50'
-updated_date: '2026-10-02 14:10'
+updated_date: '2026-10-02 17:17'
 labels:
   - http
   - telemetry
@@ -28,7 +28,7 @@ Since the 0.10.0 deploy on 2026-10-01 the httpreq.metrics collector has succeede
 - [x] #1 A reproduction through the registered collector with a real HTTP collaborator fails by assertion on the released code and names the actual cause of the duplicate host groups
 - [x] #2 One host appearing in several source groups for a window no longer fails the collector, and latency percentiles are never averaged or summed across groups
 - [x] #3 A latency failure for one zone cannot stop request, bytes and breakdown totals for the window without that loss being visible in self-observability
-- [ ] #4 After deploy the collector records a success on every cycle for 60 minutes with no scrape error, and the request counter increases
+- [x] #4 After deploy the collector records a success on every cycle for 60 minutes with no scrape error, and the request counter increases
 <!-- AC:END -->
 
 ## Definition of Done
@@ -50,4 +50,6 @@ Loop15 implementation follows the frozen lane packet; assertion-based red witnes
 Cause proven live at loop 15 preparation (2026-10-01, runtime token, eyeball filter): the dataset returns the raw Host header, so a client sending name:port creates a second source group that normalises to the same host. Over ten hours 4 of 23 zones had such groups (17 port-suffixed groups with 31 requests beside 7 canonical groups with 3,239), one zone inside a single five-minute window. The sub-window hypothesis in the description is wrong: maxDuration is 30 days on every zone, so the client never splits these windows.
 
 Loop16 RECON-M1 checked source criteria 1,2,3 against landed tests at ced4edfbfb66f1b9ee45037bdb425b69820a8ebe. Evidence: codex/evidence-loop16/RECON-return.txt. No new live or browser observation is claimed.
+
+Loop16 HOUR-0 sole retry passed on unchanged running version 0.13.0: 14 reads across 3900 seconds, all49collector attempts equal successes, one instance, no counter reset, ages bounded, no query errors. Receipt codex/live-loop16/hour-0-retry.json. The initial proof failed on a real Durable Objects poll and remains retained in hour-0.json; no error series was required. All source ACs previously reconciled. Live AC4 checked, task Done.
 <!-- SECTION:NOTES:END -->
