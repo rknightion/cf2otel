@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@loop16-root'
 created_date: '2026-10-02 13:52'
-updated_date: '2026-10-02 19:23'
+updated_date: '2026-10-02 21:37'
 labels: []
 dependencies: []
 priority: high
@@ -22,13 +22,13 @@ After the running release started, 27 account-scoped GraphQL collectors each fai
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 The first-cycle error is explained from saved sanitised error lines and the responsible code path, including whether a data window was lost or delayed.
-- [ ] #2 A scheduler reproduction with a real HTTP collaborator fails on the base by assertion with the observed error class and passes on the fixed candidate without a first-cycle failure.
+- [x] #2 A scheduler reproduction with a real HTTP collaborator fails on the base by assertion with the observed error class and passes on the fixed candidate without a first-cycle failure.
 - [ ] #3 After the next authorised deployment, the sustained-hour evidence supports the fixed first-cycle behaviour, or the live criterion is parked with the exact evidence.
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
+- [x] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
@@ -43,4 +43,6 @@ Loop16 BOOT follows the retained aligned-cursor diagnosis. Use existing WindowLa
 
 <!-- SECTION:NOTES:BEGIN -->
 Loop16 BOOT-D mapped 27 local complete-five-minute-bucket errors and nonadvancing marks, not upstream failure. Preserved predeploy checkpoint snapshot confirms all 27 affected collector cursors at the same aligned timestamp; the second-aligned scheduler upper bound remains within that bucket after restart. These paths return before commit/checkpoint advance and delay rather than intentionally skip data. Proposed existing WindowLagAt alignment awaits public scheduler reproduction and core-chain availability; eventual live recovery not newly proven.
+
+Loop16 source landed ca207018dec85ab25e8a51ab32844e8e4bd26bc8 after fresh high REV-BOOT-R1 PASSbdbe5a04d1898ea4c1dc6d98e815dc9dae915eff. Corrected public fixture independently assertion-red across27 registered scheduler/FileStore/HTTP paths on base, candidate all27 green and full gate repeated; ten-minute lag retained, twelve LagAt additions align closed buckets without validation weakening. BOOT-I1 fixture-pagination gate failed, BOOT-I2 repaired truthful pagination and passed CodeRabbit all13paths/zero findings; two implementations/no infra/no review-repair. Source AC2 checked. AC3 remains unverified behind final failed deploy-kit manifestc7a24d991d3795cee41cb871abe5b3454b0a8edc77b2b15850b169b7ee8f72b9; runtime unchanged0.13.0, no restart or live fixed-version proof. Exact CI pending.
 <!-- SECTION:NOTES:END -->

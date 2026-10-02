@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-10-02 16:50'
+updated_date: '2026-10-02 21:53'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -332,3 +332,15 @@ Account dataset `aiInferenceAdaptiveGroups` was advertised enabled and returned 
 Observed settings: maxNumberOfFields 30, maxPageSize 10000, maxDuration and notOlderThan 2764800 seconds. The collector is opt-in, aggregate-only, with an operational ten-minute closed-bucket holdback; this is not a verified upstream ingestion-latency bound. Runtime-token success does not establish least privilege.
 
 The pre-land canary matched and drift run 37036301862 concluded success at d997015505c8b73a97affe9a7bef5c8509d3d312. Hyperdrive and Vectorize datasets were advertised but had no rows in the seven-day existence probe and were not built. The raw Workers AI source was eligible but not selected for duplicate metrics or a new log surface.
+
+
+
+## Loop 16 bounded resource and documented-only detail contracts (2026-10-02)
+
+The integrated pre-land canary matched at ca207018dec85ab25e8a51ab32844e8e4bd26bc8; exact drift run 37067975951 concluded success. The preceding resource-catalog contract batch also passed exact drift run 37052805358 at 65089d58a8068ea4fb7f3f22f80512489a617fc1. These are read-only API contract observations, not deployed exporter or least-privilege proof.
+
+Load-balancer health source admission is now partial, superseding the blanket source park in section 17 only for the direct optional documented `pop_health.healthy` Boolean. The exporter reports an unattributed provider health flag by bounded resolved pool name, not regional or origin health, RTT, traffic, or aggregate availability. Missing or null health remains unknown, not false. Pool catalog is covered by the live canary; `/accounts/{account}/load_balancers/pools/{pool}/health` remains **documented shape, no live rows observed**, explicitly `documented_only` and unprobed. No populated pool-health response or origin RTT units were proved. The unresolved traffic and origin semantics in section 17 remain parked.
+
+DEX HTTP and traceroute result detail paths likewise remain **documented shape, no live rows observed**, explicitly `documented_only` and unprobed with nonempty fixture-only reasons. Their exact documented templates are registered but are never called by the live canary. Source fixtures establish optional millisecond, hop and percentage measurements, retry isolation and empty/unknown behavior; they do not establish populated live detail, source-to-storage equality or browser rendering. Default-live probes and the existing production path registry remain unchanged.
+
+Platform resource-name catalogs and field-budget fallback were accepted as bounded source behavior with the registered API paths; names are resolved and capped, and resource identifiers remain internal. The successful canaries do not establish every resource type has populated live rows or that all least-privilege tokens were exercised. No resource creation, permission edit or credential edit occurred.
