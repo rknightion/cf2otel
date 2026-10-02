@@ -20,12 +20,15 @@ resolutions), then checks added lines in the net base-to-head diff. An add-then-
 still rejected. It does not rewrite history or override a publication exception.
 
 The standard-library-only tool flags 32-hex identifiers, email-shaped literals (including example
-addresses), valid IPv4/IPv6 addresses outside the RFC 5737 / RFC 3849 documentation ranges, and
-Cloudflare token prefixes `cfut_`, `cfapi_` and `v1.0-`. Unprefixed tokens and other sensitive names
+addresses), valid IPv4/IPv6 addresses outside the loopback and RFC 5737 / RFC 3849 documentation
+ranges, and Cloudflare token prefixes `cfut_`, `cfapi_` and `v1.0-`. Unprefixed tokens and other sensitive names
 need the external literal list: set `PUSHSCAN_LITERALS` to a local file containing one exact literal
 per line. Its resolved path must be outside the publication repository; repository-contained files,
 including external symlinks targeting them, fail with a generic configuration error. Empty lines are
 ignored; CRLF is accepted. The list is never checked in or printed.
+IPv4 loopback (the full 127/8 range) and IPv6 loopback are allowed, including IPv4-mapped loopback
+addresses. Other address exemptions are unchanged. Explicit entries in the external literal list
+still match even when they contain an otherwise allowed address.
 Literal matching is case-sensitive. This is a content gate, not a complete secret detector.
 
 Exit status is 0 for clean, 1 for findings, and 2 for configuration/Git errors. Findings print only

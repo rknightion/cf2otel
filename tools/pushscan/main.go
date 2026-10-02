@@ -219,9 +219,12 @@ func (s *scanner) scanDiff(commit string, command, refs []string) error {
 	return nil
 }
 
-func isDocumentation(addr netip.Addr) bool {
-	// Mapped addresses are IPv4 and must not bypass its documentation-only rule.
+func isAllowedAddress(addr netip.Addr) bool {
+	// Mapped addresses follow the same loopback and documentation rules as IPv4.
 	addr = addr.Unmap()
+	if addr.IsLoopback() {
+		return true
+	}
 	for _, prefix := range documentation {
 		if prefix.Contains(addr) {
 			return true
@@ -241,7 +244,7 @@ func (s *scanner) classes(line string) []string {
 		}
 	}
 	for _, candidate := range ipv4.FindAllString(line, -1) {
-		if addr, err := netip.ParseAddr(candidate); err == nil && !isDocumentation(addr) {
+		if addr, err := netip.ParseAddr(candidate); err == nil && !isAllowedAddress(addr) {
 			classes = append(classes, "ipv4")
 			break
 		}
@@ -259,7 +262,7 @@ func (s *scanner) classes(line string) []string {
 }
 
 // Parse bounded slices rather than trusting punctuation-delimited regex matches.
-// Longer valid addresses cover their inner slices so documentation addresses do
+// Longer valid addresses cover their inner slices so allowed addresses do
 // not become false positives when their leading groups are removed.
 func containsPublicIPv6(line string) bool {
 	for _, run := range ipv6.FindAllString(line, -1) {
@@ -272,7 +275,7 @@ func containsPublicIPv6(line string) bool {
 					continue
 				}
 				if end > coveredEnd {
-					if !isDocumentation(addr) {
+					if !isAllowedAddress(addr) {
 						return true
 					}
 					coveredEnd = end
