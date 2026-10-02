@@ -167,3 +167,5 @@ None approved; ask at preparation.
   IDs, per-signal endpoint hostnames, and account/zone identifiers are not repeated here — they live
   only in the operator's local credential files and the loop's private state (loop3 goal,
   "Credentials").
+
+wave-notify receiver: https://loopwatch.m7kni.com
