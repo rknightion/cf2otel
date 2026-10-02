@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-10-01 14:28'
+updated_date: '2026-10-02 07:03'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -269,3 +269,26 @@ Read-only introspection, exact live selections and the integrated contract canar
 | Zone `healthCheckEventsAdaptiveGroups` | Numeric `count`; average `rttMs`, `timeToFirstByteMs`, `tcpConnMs`, `tlsHandshakeMs`; source dimensions include health status, failure reason, health-check name and FQDN. | Free disabled, zero duration/retention; Pro enabled, maxDuration and notOlderThan 262800 s; field cap 30. Disabled Free scopes are not queried. Origin timing identity is explicit opt-in, bounded, non-IP and never raw `originIP`; counts and origin-average selections are separate to avoid invalid unweighted averages. |
 
 Source timing values convert to seconds only where declared above; negative N/A or missing optional values are omitted, not fabricated as zero. Latest observed bucket gauges do not establish universal snapshot retirement. No new permissions, health-check creation or other resource writes were used to verify these selections.
+
+
+## 16. Loop 15 doc-derived empty surfaces (2026-10-02)
+
+The root fetched the current official API documentation with Firecrawl and made read-only first-page checks with the existing drift-canary token at 06:55 UTC. Each returned HTTP 200, a successful envelope and a genuine empty list. These observations supersede preparation's historical empty counts, but do not prove populated row shapes, complete pagination, measurement values or least privilege. No devices, tests, pools, monitors or load balancers were created.
+
+| Surface | Current empty observation | Doc-derived contract and limitations |
+| --- | --- | --- |
+| `GET /accounts/{account}/dex/fleet-status/devices` | Successful `result: []`; requested page 1/per_page 50, source `last_seen`, and a bounded 15-minute from/to range. | Required device-row strings: `colo`, `deviceId`, `mode`, `platform`, `status`, `timestamp`, `version`. Page/per_page are documented; per_page maximum 50. Optional result_info has page/per_page/count/total_count/total_pages. `last_seen` allows up to 60 minutes; `hourly` and `raw` up to seven days. `status` is described as network status, without a connected/active enum: preserve observed status labels, never infer a Boolean classification. Device/user identifiers must not become metric labels. |
+| `GET /accounts/{account}/dex/tests/overview` | Successful result object with an empty `tests` array; page 1/per_page 50. | Tests contain string id/name and kind http/traceroute. Page/per_page maximum 50; do not assume result_info pagination. Per-test HTTP and traceroute result shapes remain doc-derived, not live row observations. |
+| `GET /accounts/{account}/load_balancers/pools` | Successful empty result array. | Pool/health rows remain doc-derived. Health GET is account-scoped `/accounts/{account}/load_balancers/pools/{pool}/health`; optional regional/origin fields must not imply healthy or zero RTT when missing. The REST RTT field is a string with unverified units; do not invent conversion. |
+
+Official WARP device method: https://developers.cloudflare.com/api/resources/zero_trust/subresources/dex/subresources/fleet_status/subresources/devices/methods/list/
+
+The separate WARP live endpoint `/dex/fleet-status/live` has optional since_minutes 1–60 and optional five marginal deviceStats arrays. It is not the paginated device-row source and must not silently replace the frozen full-pagination contract.
+
+Official DEX methods: https://developers.cloudflare.com/api/resources/zero_trust/subresources/dex/subresources/tests/methods/list/ ; https://developers.cloudflare.com/api/resources/zero_trust/subresources/dex/subresources/http_tests/methods/get/ ; https://developers.cloudflare.com/api/resources/zero_trust/subresources/dex/subresources/traceroute_tests/methods/get/
+
+DEX result requests require from/to ISO-ms strings and minute/hour interval, over a documented period of one hour to seven days. Optional HTTP stats include resourceFetchTimeMs; traceroute stats include roundTripTimeMs, hopsCount, packetLossPct and availabilityPct, with slots and avg/max/min. Time names declare milliseconds; percentage names must not be silently treated as fractions. Missing optional measurements are unknown, not zero. Shared-client retries and per-test isolation need local behavior proof; no checkpoint or partial-output semantics are established by these empty checks.
+
+Official pool methods: https://developers.cloudflare.com/api/resources/load_balancers/subresources/pools/methods/list/ ; https://developers.cloudflare.com/api/resources/load_balancers/subresources/pools/subresources/health/methods/get/
+
+The WARP/DEX method documentation accepts one of Cloudflare DEX Read, Cloudflare DEX Write, Zero Trust Report or Zero Trust Read. Pool list/health accepts Load Balancing: Monitors and Pools Read or Write. Current empty access does not establish which group is minimal; no permission or credential edit was made. Load-balancing GraphQL selectors and RTT units require additional verification before source admission.
