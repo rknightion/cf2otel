@@ -61,6 +61,28 @@ def access_seats_interval_seconds() -> int:
     return interval
 
 
+def warp_deployment_seconds(key: str, default: int, maximum: int | None = None) -> int:
+    """Static selected-deployment settings, not exporter runtime readback."""
+    value = os.environ.get(key, str(default))
+    error = f"{key} must be a positive integer in seconds"
+    if maximum is not None:
+        error += f" no greater than {maximum}"
+    if not value.isascii() or not value.isdecimal():
+        raise SystemExit(error)
+    try:
+        seconds = int(value)
+    except ValueError:
+        raise SystemExit(error) from None
+    if seconds <= 0 or (maximum is not None and seconds > maximum):
+        raise SystemExit(error)
+    return seconds
+
+
+WARP_INTERVAL_SECONDS = warp_deployment_seconds("GRAFANA_WARP_INTERVAL_SECONDS", 300)
+WARP_LAST_SEEN_WINDOW_SECONDS = warp_deployment_seconds("GRAFANA_WARP_LAST_SEEN_WINDOW_SECONDS", 900, 3600)
+WARP_FRESHNESS_SECONDS = 3 * WARP_INTERVAL_SECONDS
+WARP_FRESH = '(time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="warp.fleet"}) < ' + str(WARP_FRESHNESS_SECONDS) + ')'
+
 ACCESS_SEATS_INTERVAL_SECONDS = access_seats_interval_seconds()
 ACCESS_SEATS_FRESHNESS_SECONDS = 3 * ACCESS_SEATS_INTERVAL_SECONDS
 ACCESS_SEATS_FRESH = '(time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="access.seats"}) < ' + str(ACCESS_SEATS_FRESHNESS_SECONDS) + ')'
@@ -847,6 +869,30 @@ def access_tab(d: Dashboard) -> dict:
               f'and on (instance) {ACCESS_SEATS_FRESH})', "Gateway", ref="B", instant=True)],
         unit="none", decimals=0, text_mode="value_and_name", no_value="No data")
 
+    warp_columns = {
+        "cloudflare_account_name": "Account", "instance": "Exporter instance",
+        "cloudflare_warp_status": "Network status", "cloudflare_warp_platform": "Platform",
+        "cloudflare_warp_client_version": "Client version", "cloudflare_warp_mode": "WARP mode",
+        "cloudflare_warp_colo": "Colo", "cloudflare_warp_remainder": "Remainder", "Value": "Devices",
+    }
+    d.table(2325, "WARP recently seen devices",
+        f"Recently seen device counts in the selected deployment's last-seen window ({WARP_LAST_SEEN_WINDOW_SECONDS} seconds). "
+        "Each row retains the source account/exporter instance and full network status, platform, client version, WARP mode and colo tuple. "
+        "Network status is a raw enum, including unknown; this is not Boolean connected/active state, a physical fleet total, billing or licensing. "
+        "Remainder=true preserves counts folded into an all-other tuple by long fields or the metric series cap; its dimensions are not specific categories. "
+        "Remainder=false distinguishes a normal tuple containing literal other values. Rows from duplicate pollers are not summed or deduplicated. "
+        "Missing data (disabled, empty population, expired snapshot or failed collection) is unknown, not a healthy zero. "
+        f"Requires per-instance last success less than {WARP_FRESHNESS_SECONDS} seconds old (three statically configured polling intervals). "
+        "Regenerate with GRAFANA_WARP_INTERVAL_SECONDS (default 300) and GRAFANA_WARP_LAST_SEEN_WINDOW_SECONDS (default 900, range 1..3600) "
+        "matching the selected deployment, especially for non-default settings. These are generator settings, not automatic or observed runtime configuration; "
+        "mixed-interval fleets are unsupported. Disabling after a successful poll can leave last observed values visible until the freshness threshold.",
+        [table_q(f'(cloudflare_warp_devices_ratio{{{S}}} and on (instance) {WARP_FRESH})')],
+        columns=warp_columns, order=list(warp_columns), unit="short", decimals=0,
+        hide=["__name__", "service_name", "service_namespace", "service_version", "service_instance_id",
+              "telemetry_sdk_name", "telemetry_sdk_language", "telemetry_sdk_version", "otel_scope_name", "otel_scope_version",
+              "job"],
+        overrides=[by_name("Devices", min=0)])
+
     return tab(TAB_ACCESS, [
         row("Summary", [(2301, 4, 4), (2302, 4, 4), (2303, 4, 4), (2304, 4, 4), (2305, 4, 4), (2306, 4, 4)]),
         row("Logins", [(103, 12, 9), (102, 12, 9), (2311, 12, 9), (101, 12, 9)]),
@@ -854,6 +900,7 @@ def access_tab(d: Dashboard) -> dict:
         row("Identity inference", [(2331, 12, 7), (202, 12, 7)]),
         row("Access logs", [(2341, 24, 12), (2342, 24, 8)], collapse=True),
         row("Seat inventory", [(2324, 24, 4)]),
+        row("WARP fleet", [(2325, 24, 9)]),
     ])
 
 

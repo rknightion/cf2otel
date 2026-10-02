@@ -9634,6 +9634,138 @@
           }
         }
       },
+      "panel-2325": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(cloudflare_warp_devices_ratio{service_name=\"cf2otel\"} and on (instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"warp.fleet\"}) < 900))",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "",
+                        "range": false,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "organize",
+                  "spec": {
+                    "id": "organize",
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true,
+                        "job": true,
+                        "otel_scope_name": true,
+                        "otel_scope_version": true,
+                        "service_instance_id": true,
+                        "service_name": true,
+                        "service_namespace": true,
+                        "service_version": true,
+                        "telemetry_sdk_language": true,
+                        "telemetry_sdk_name": true,
+                        "telemetry_sdk_version": true
+                      },
+                      "indexByName": {
+                        "Value": 8,
+                        "cloudflare_account_name": 0,
+                        "cloudflare_warp_client_version": 4,
+                        "cloudflare_warp_colo": 6,
+                        "cloudflare_warp_mode": 5,
+                        "cloudflare_warp_platform": 3,
+                        "cloudflare_warp_remainder": 7,
+                        "cloudflare_warp_status": 2,
+                        "instance": 1
+                      },
+                      "renameByName": {
+                        "Value": "Devices",
+                        "cloudflare_account_name": "Account",
+                        "cloudflare_warp_client_version": "Client version",
+                        "cloudflare_warp_colo": "Colo",
+                        "cloudflare_warp_mode": "WARP mode",
+                        "cloudflare_warp_platform": "Platform",
+                        "cloudflare_warp_remainder": "Remainder",
+                        "cloudflare_warp_status": "Network status",
+                        "instance": "Exporter instance"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "description": "Recently seen device counts in the selected deployment's last-seen window (900 seconds). Each row retains the source account/exporter instance and full network status, platform, client version, WARP mode and colo tuple. Network status is a raw enum, including unknown; this is not Boolean connected/active state, a physical fleet total, billing or licensing. Remainder=true preserves counts folded into an all-other tuple by long fields or the metric series cap; its dimensions are not specific categories. Remainder=false distinguishes a normal tuple containing literal other values. Rows from duplicate pollers are not summed or deduplicated. Missing data (disabled, empty population, expired snapshot or failed collection) is unknown, not a healthy zero. Requires per-instance last success less than 900 seconds old (three statically configured polling intervals). Regenerate with GRAFANA_WARP_INTERVAL_SECONDS (default 300) and GRAFANA_WARP_LAST_SEEN_WINDOW_SECONDS (default 900, range 1..3600) matching the selected deployment, especially for non-default settings. These are generator settings, not automatic or observed runtime configuration; mixed-interval fleets are unsupported. Disabling after a successful poll can leave last observed values visible until the freshness threshold.",
+          "id": 2325,
+          "links": [],
+          "title": "WARP recently seen devices",
+          "vizConfig": {
+            "group": "table",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": false
+                  },
+                  "decimals": 0,
+                  "unit": "short"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Devices"
+                    },
+                    "properties": [
+                      {
+                        "id": "min",
+                        "value": 0
+                      }
+                    ]
+                  }
+                ]
+              },
+              "options": {
+                "cellHeight": "sm",
+                "footer": {
+                  "countRows": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "show": false
+                },
+                "showHeader": true
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
       "panel-2331": {
         "kind": "Panel",
         "spec": {
@@ -25027,6 +25159,33 @@
                           }
                         },
                         "title": "Seat inventory"
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "collapse": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2325"
+                                  },
+                                  "height": 9,
+                                  "width": 24,
+                                  "x": 0,
+                                  "y": 0
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "title": "WARP fleet"
                       }
                     }
                   ]

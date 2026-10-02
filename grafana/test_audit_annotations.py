@@ -129,5 +129,124 @@ class AccessSeatsTest(unittest.TestCase):
                 self.assertIsNone(dashboard)
 
 
+class WARPFleetTest(unittest.TestCase):
+    def generate(self, interval=None, window=None):
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "grafana" / "build_dashboard.py"
+            script.parent.mkdir()
+            script.write_bytes((ROOT / "grafana/build_dashboard.py").read_bytes())
+            env = dict(os.environ)
+            for key in ("GRAFANA_WARP_INTERVAL_SECONDS", "GRAFANA_WARP_LAST_SEEN_WINDOW_SECONDS",
+                        "GRAFANA_ACCESS_SEATS_INTERVAL_SECONDS", "GRAFANA_CERTS_PACKS_INTERVAL_SECONDS"):
+                env.pop(key, None)
+            if interval is not None:
+                env["GRAFANA_WARP_INTERVAL_SECONDS"] = interval
+            if window is not None:
+                env["GRAFANA_WARP_LAST_SEEN_WINDOW_SECONDS"] = window
+            result = subprocess.run([sys.executable, str(script)], env=env,
+                                    capture_output=True, text=True, timeout=30)
+            output = script.parent.parent / "dashboards/cf2otel.json"
+            return result, json.loads(output.read_text()) if output.exists() else None
+
+    def test_raw_recent_counts_preserve_source_dimensions_and_instance(self):
+        columns = {
+            "cloudflare_account_name": "Account", "instance": "Exporter instance",
+            "cloudflare_warp_status": "Network status", "cloudflare_warp_platform": "Platform",
+            "cloudflare_warp_client_version": "Client version", "cloudflare_warp_mode": "WARP mode",
+            "cloudflare_warp_colo": "Colo", "cloudflare_warp_remainder": "Remainder", "Value": "Devices",
+        }
+        for interval, window, threshold, seconds in ((None, None, 900, 900), ("600", "1800", 1800, 1800)):
+            with self.subTest(interval=interval, window=window):
+                result, dashboard = self.generate(interval, window)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("panel-2325", dashboard["spec"]["elements"],
+                              "landed WARP devices need a source-preserving table")
+                panel = dashboard["spec"]["elements"]["panel-2325"]["spec"]
+                self.assertEqual(panel["title"], "WARP recently seen devices")
+                self.assertEqual(panel["vizConfig"]["group"], "table")
+                queries = panel["data"]["spec"]["queries"]
+                self.assertEqual(len(queries), 1)
+                query = queries[0]["spec"]["query"]
+                self.assertEqual(query["group"], "prometheus")
+                self.assertEqual(query["datasource"]["name"], "${ds_prometheus}")
+                target = query["spec"]
+                self.assertIs(target["instant"], True)
+                self.assertIs(target["range"], False)
+                self.assertEqual(target["format"], "table")
+                self.assertEqual(target["expr"],
+                                 '(cloudflare_warp_devices_ratio{service_name="cf2otel"} and on (instance) '
+                                 '(time() - max by (instance) ('
+                                 'cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",'
+                                 f'cf2otel_collector="warp.fleet"}}) < {threshold}))')
+                transforms = panel["data"]["spec"]["transformations"]
+                self.assertEqual(len(transforms), 1, "no reduction or aggregation of source rows")
+                self.assertEqual(transforms[0]["kind"], "organize")
+                options = transforms[0]["spec"]["options"]
+                self.assertEqual(options["renameByName"], columns)
+                self.assertEqual(options["indexByName"], {key: i for i, key in enumerate(columns)})
+                self.assertFalse(set(columns) & {k for k, hidden in options["excludeByName"].items() if hidden})
+                self.assertTrue(options["excludeByName"]["Time"])
+                self.assertTrue(options["excludeByName"]["__name__"])
+                # Model organize's public field selection on a returned table frame. Literal
+                # 'other' is distinct from overflow; neither strings nor counts are remapped.
+                source = {key: f"fixture-{key}" for key in columns}
+                source.update(cloudflare_warp_status="unknown", cloudflare_warp_platform="other",
+                              cloudflare_warp_remainder="false", Value=7, Time=123, __name__="fixture-metric")
+                def visible(frame):
+                    return {options["renameByName"].get(k, k): v for k, v in frame.items()
+                            if not options["excludeByName"].get(k, False)}
+                self.assertEqual(visible(source), {columns[k]: source[k] for k in columns})
+                remainder = {**source, "cloudflare_warp_remainder": "true", "Value": 2}
+                self.assertEqual(visible(remainder)["Remainder"], "true")
+                self.assertEqual(visible(remainder)["Devices"], 2)
+                defaults = panel["vizConfig"]["spec"]["fieldConfig"]["defaults"]
+                self.assertEqual(defaults["unit"], "short")
+                self.assertEqual(defaults["decimals"], 0)
+                overrides = panel["vizConfig"]["spec"]["fieldConfig"]["overrides"]
+                self.assertIn({"matcher": {"id": "byName", "options": "Devices"},
+                               "properties": [{"id": "min", "value": 0}]}, overrides)
+                self.assertFalse(panel["vizConfig"]["spec"]["options"]["footer"]["show"])
+                self.assertIn(f"{seconds} seconds", panel["description"])
+                self.assertIn("GRAFANA_WARP_INTERVAL_SECONDS", panel["description"])
+                self.assertIn("GRAFANA_WARP_LAST_SEEN_WINDOW_SECONDS", panel["description"])
+
+    def test_appended_access_row_preserves_existing_dashboard_semantics(self):
+        result, dashboard = self.generate()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        access = next(t for t in dashboard["spec"]["layout"]["spec"]["tabs"]
+                      if t["spec"]["title"] == "Access and Zero Trust")
+        rows = access["spec"]["layout"]["spec"]["rows"]
+        self.assertEqual(rows[-1]["spec"]["title"], "WARP fleet")
+        items = rows[-1]["spec"]["layout"]["spec"]["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["spec"]["element"]["name"], "panel-2325")
+        self.assertEqual(items[0]["spec"]["width"], 24)
+        self.assertEqual(items[0]["spec"]["x"], 0)
+        rows.pop()
+        dashboard["spec"]["elements"].pop("panel-2325")
+        # Compare all existing semantic content to the parent committed asset, not
+        # incidental JSON ordering or a hardcoded panel count. This also survives landing.
+        baseline = subprocess.run(["git", "show", "HEAD:dashboards/cf2otel.json"], cwd=ROOT,
+                                  check=True, capture_output=True, text=True, timeout=30)
+        original = json.loads(baseline.stdout)
+        if "panel-2325" in original["spec"]["elements"]:
+            original["spec"]["elements"].pop("panel-2325")
+            old_access = next(t for t in original["spec"]["layout"]["spec"]["tabs"]
+                              if t["spec"]["title"] == "Access and Zero Trust")
+            old_access["spec"]["layout"]["spec"]["rows"].pop()
+        self.assertEqual(dashboard, original, "all previous panels, layouts and dashboard settings must survive")
+
+    def test_invalid_deployment_settings_fail_without_output(self):
+        cases = (("0", None), ("-1", None), ("+1", None), ("1.5", None), ("１２", None),
+                 (None, "0"), (None, "3601"), (None, "１２"))
+        for interval, window in cases:
+            with self.subTest(interval=interval, window=window):
+                result, dashboard = self.generate(interval, window)
+                self.assertNotEqual(result.returncode, 0)
+                key = "GRAFANA_WARP_INTERVAL_SECONDS" if interval is not None else "GRAFANA_WARP_LAST_SEEN_WINDOW_SECONDS"
+                self.assertIn(key + " must be", result.stderr)
+                self.assertIsNone(dashboard)
+
+
 if __name__ == "__main__":
     unittest.main()
