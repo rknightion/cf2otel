@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -31,6 +32,57 @@ func TestRateLimitLoadDefaultsAndPrecedence(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkRateLimit(t, c, 4, 2)
+	// Validate the effective value, not a YAML value superseded by environment.
+	if err := os.WriteFile(path, []byte("cloudflare:\n  rate_limit:\n    burst: true\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, err = Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkRateLimit(t, c, 4, 2)
+}
+
+func TestRateLimitLoadIntegerBurst(t *testing.T) {
+	for _, value := range []string{"true", "1.9", ".inf", "9223372036854775808", "18446744073709551616", "[]"} {
+		t.Run("YAML_"+value, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(path, []byte("cloudflare:\n  rate_limit:\n    burst: "+value+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "cloudflare.rate_limit.burst") {
+				t.Fatalf("noninteger burst %s accepted or unrelated error: %v", value, err)
+			}
+		})
+	}
+	for _, value := range []string{"true", "1.9", "1.0", "9223372036854775808", ""} {
+		t.Run("ENV_"+value, func(t *testing.T) {
+			t.Setenv("CF2OTEL_CLOUDFLARE__RATE_LIMIT__BURST", value)
+			if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "cloudflare.rate_limit.burst") {
+				t.Fatalf("noninteger environment burst %q accepted or unrelated error: %v", value, err)
+			}
+		})
+	}
+	// Numeric YAML spelling is immaterial; exact integral values within int range work.
+	for _, value := range []string{"2", "2.0", strconv.Itoa(int(^uint(0) >> 1))} {
+		t.Run("valid_"+value, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(path, []byte("cloudflare:\n  rate_limit:\n    burst: "+value+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			c, err := Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if value == "2.0" {
+				if c.Cloudflare.RateLimit.Burst != 2 {
+					t.Fatalf("burst=%d; want 2", c.Cloudflare.RateLimit.Burst)
+				}
+			} else if strconv.Itoa(c.Cloudflare.RateLimit.Burst) != value {
+				t.Fatalf("burst=%d; want %s", c.Cloudflare.RateLimit.Burst, value)
+			}
+		})
+	}
 }
 
 func TestRateLimitValidation(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -272,6 +273,15 @@ func Load(path string) (*Config, error) {
 	}}), nil); err != nil {
 		return nil, fmt.Errorf("environment: %w", err)
 	}
+	// Check after all overrides, before weak decoding can truncate fractions or
+	// coerce booleans. Normalize the checked value to avoid decoder overflow.
+	burst, err := integerBurst(k.Get("cloudflare.rate_limit.burst"))
+	if err != nil {
+		return nil, err
+	}
+	if err := k.Set("cloudflare.rate_limit.burst", burst); err != nil {
+		return nil, fmt.Errorf("cloudflare.rate_limit.burst: %w", err)
+	}
 	var c Config
 	if err := k.UnmarshalWithConf("", &c, koanf.UnmarshalConf{Tag: "yaml", DecoderConfig: &mapstructure.DecoderConfig{Result: &c, WeaklyTypedInput: true, ErrorUnused: true, DecodeHook: mapstructure.StringToTimeDurationHookFunc()}}); err != nil {
 		return nil, fmt.Errorf("decode config: %w", err)
@@ -283,6 +293,41 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	return &c, nil
+}
+
+// integerBurst accepts numeric integers without imposing a YAML spelling.
+// Environment strings must parse as integers, and all values must fit an int.
+func integerBurst(raw any) (int, error) {
+	invalid := errors.New("cloudflare.rate_limit.burst must be an integer within int range")
+	if text, ok := raw.(string); ok {
+		value, err := strconv.Atoi(text)
+		if err != nil {
+			return 0, invalid
+		}
+		return value, nil
+	}
+	value := reflect.ValueOf(raw)
+	switch value.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		n := value.Int()
+		if int64(int(n)) == n {
+			return int(n), nil
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		n := value.Uint()
+		if n <= uint64(^uint(0)>>1) {
+			return int(n), nil
+		}
+	case reflect.Float32, reflect.Float64:
+		n := value.Float()
+		// The upper bound is exclusive: float64(maxInt) rounds up on 64-bit
+		// systems, so comparison against maxInt would allow an overflow.
+		bound := math.Ldexp(1, strconv.IntSize-1)
+		if n >= -bound && n < bound && math.Trunc(n) == n {
+			return int(n), nil
+		}
+	}
+	return 0, invalid
 }
 
 func applyCollectorEnvironment(c *Config) error {
