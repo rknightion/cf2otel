@@ -584,6 +584,15 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 
 ## Collector scrape error classes
 
+Registration seeds `cf2otel.scrape.errors` with one zero-valued point per
+registered, enabled collector, using `cf2otel.error.class="other"`. This makes
+never-failing collectors visible without recording a failure. Window collectors
+also receive a zero-valued `cf2otel.window.commit_failures` point with only
+`cf2otel.collector`; actual commit failures continue to carry their existing
+signal and retry/dropped outcome dimensions. Disabled collectors get no seed,
+and disabling periodic self-observability snapshots does not disable these
+registration points. Dry-run does not export or persist them.
+
 `cf2otel.scrape.errors` remains a monotonic counter with unit `1`: each failed
 collector attempt adds one, grouped by `cf2otel.collector` and the bounded
 `cf2otel.error.class` attribute. Successful attempts do not add an error. No raw

@@ -101,17 +101,28 @@ func TestRegisteredScrapeErrorClasses(t *testing.T) {
 						if !ok || !sum.IsMonotonic || metric.Unit != "1" {
 							t.Fatalf("scrape errors counter contract: %+v", metric)
 						}
-						if len(sum.DataPoints) != 1 {
+						if len(sum.DataPoints) != 2 {
 							t.Fatalf("error points: %+v", sum.DataPoints)
 						}
-						point := sum.DataPoints[0]
-						class, ok := point.Attributes.Value(attribute.Key(semconv.AttrErrorClass))
-						if !ok || class.AsString() != tc.class {
-							t.Fatalf("error class = %q (present %t), want %q", class.AsString(), ok, tc.class)
-						}
-						name, _ := point.Attributes.Value(attribute.Key(semconv.AttrCollector))
-						if point.Value != 2 || point.Attributes.Len() != 2 || name.AsString() != "fixture" {
-							t.Fatalf("error counter leaked attributes or changed count: %+v", point)
+						seen := make(map[string]bool)
+						for _, point := range sum.DataPoints {
+							name, present := point.Attributes.Value(attribute.Key(semconv.AttrCollector))
+							if !present || point.Attributes.Len() != 2 || seen[name.AsString()] {
+								t.Fatalf("error counter leaked attributes or duplicated collector: %+v", point)
+							}
+							seen[name.AsString()] = true
+							wantClass, wantValue := tc.class, float64(2)
+							switch name.AsString() {
+							case "fixture":
+							case "selfobs":
+								wantClass, wantValue = "other", 0
+							default:
+								t.Fatalf("unexpected error point: %+v", point)
+							}
+							class, ok := point.Attributes.Value(attribute.Key(semconv.AttrErrorClass))
+							if !ok || class.AsString() != wantClass || point.Value != wantValue {
+								t.Fatalf("error point = %+v, want class %q value %v", point, wantClass, wantValue)
+							}
 						}
 					}
 				}

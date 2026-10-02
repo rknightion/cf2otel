@@ -57,8 +57,9 @@ type Entry struct {
 	Interval, InitialLookback, MaxWindow time.Duration
 }
 type Registry struct {
-	entries []Entry
-	names   map[string]bool
+	entries    []Entry
+	names      map[string]bool
+	onRegister func(Entry)
 }
 
 func NewRegistry() *Registry { return &Registry{names: map[string]bool{}} }
@@ -70,7 +71,7 @@ func (r *Registry) RegisterSnapshot(c SnapshotCollector, interval time.Duration)
 		interval = c.DefaultInterval()
 	}
 	r.names[c.Name()] = true
-	r.entries = append(r.entries, Entry{Collector: c, Interval: interval})
+	r.add(Entry{Collector: c, Interval: interval})
 }
 func (r *Registry) RegisterWindow(c WindowCollector, interval, initialLookback, maxWindow time.Duration) {
 	if r.names[c.Name()] {
@@ -80,8 +81,25 @@ func (r *Registry) RegisterWindow(c WindowCollector, interval, initialLookback, 
 		interval = c.DefaultInterval()
 	}
 	r.names[c.Name()] = true
-	r.entries = append(r.entries, Entry{Collector: c, Interval: interval, InitialLookback: initialLookback, MaxWindow: maxWindow})
+	r.add(Entry{Collector: c, Interval: interval, InitialLookback: initialLookback, MaxWindow: maxWindow})
 }
+
+// ObserveRegistrations installs a startup observer and replays existing entries.
+// Like registration itself, this must be called before scheduling begins.
+func (r *Registry) ObserveRegistrations(observe func(Entry)) {
+	r.onRegister = observe
+	for _, entry := range r.entries {
+		observe(entry)
+	}
+}
+
+func (r *Registry) add(entry Entry) {
+	r.entries = append(r.entries, entry)
+	if r.onRegister != nil {
+		r.onRegister(entry)
+	}
+}
+
 func (r *Registry) Entries() []Entry { return append([]Entry(nil), r.entries...) }
 
 type Deps struct {

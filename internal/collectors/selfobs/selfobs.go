@@ -48,6 +48,25 @@ func (s *Stats) Expect(name string) {
 	s.expected[name] = struct{}{}
 }
 
+// Register seeds counters once per enabled registry entry, independently of
+// whether the periodic selfobs snapshot collector is enabled. Zero commit
+// failures use only the collector dimension; actual failures retain their
+// existing signal and outcome dimensions.
+func (s *Stats) Register(ctx context.Context, name string, windowed bool) error {
+	s.Expect(name)
+	attr := telemetry.Attr{Key: semconv.AttrCollector, Value: name}
+	var errs []error
+	if err := s.emitter.Counter(ctx, semconv.MetricScrapeErrors, 0, attr, telemetry.Attr{Key: semconv.AttrErrorClass, Value: "other"}); err != nil {
+		errs = append(errs, err)
+	}
+	if windowed {
+		if err := s.emitter.Counter(ctx, semconv.MetricWindowCommitFailures, 0, attr); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // SetIdentityStats attaches a new outcome source, starting a fresh delta baseline.
 func (s *Stats) SetIdentityStats(snapshot func() identity.Stats) {
 	s.identityMu.Lock()
