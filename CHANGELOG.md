@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.15.0](https://github.com/rknightion/cf2otel/compare/v0.14.0...v0.15.0) (2026-10-02)
+
+
+### Features
+
+* **firewall:** export advertised bot score dimensions ([c99ab3d](https://github.com/rknightion/cf2otel/commit/c99ab3da85c4aafd83bcde621a3e2bd5a39b1980))
+* **grafana:** show resolved platform resources and DEX test averages ([784d005](https://github.com/rknightion/cf2otel/commit/784d00537a2f1c5aa6a263b280f21e4baa8a5281))
+* **loadbalancers:** export bounded provider health flags ([ee7ea55](https://github.com/rknightion/cf2otel/commit/ee7ea55cb05e3c5c3082de88722e94a7dabcb5b9))
+
+
+### Bug Fixes
+
+* **collectors:** schedule only complete five-minute buckets ([266fec9](https://github.com/rknightion/cf2otel/commit/266fec9c64453b905b953ce2ef2a798807cabff9))
+* **firewall:** finalize discovery before admitting bot sources ([4c7e113](https://github.com/rknightion/cf2otel/commit/4c7e1138102936389d3fcfdda7fb2f2a642cdfac))
+
 ## [0.14.0](https://github.com/rknightion/cf2otel/compare/v0.13.0...v0.14.0) (2026-10-02)
 
 
