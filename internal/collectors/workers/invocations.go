@@ -31,6 +31,11 @@ func (c *invocationsMetrics) Name() string                   { return invocation
 func (c *invocationsMetrics) DefaultInterval() time.Duration { return workersBucket }
 func (c *invocationsMetrics) Lag() time.Duration             { return 10 * time.Minute }
 
+// LagAt exposes only complete UTC five-minute buckets to the scheduler.
+func (c *invocationsMetrics) LagAt(now time.Time) time.Duration {
+	return now.Sub(now.UTC().Add(-c.Lag()).Truncate(5 * time.Minute))
+}
+
 type invocationValue struct{ field, metric, statistic string }
 
 var invocationSums = []invocationValue{

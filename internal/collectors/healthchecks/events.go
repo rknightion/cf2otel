@@ -45,6 +45,11 @@ func (*events) Name() string                   { return "healthchecks.events" }
 func (*events) DefaultInterval() time.Duration { return bucketSize }
 func (*events) Lag() time.Duration             { return 10 * time.Minute }
 
+// LagAt exposes only complete UTC five-minute buckets to the scheduler.
+func (c *events) LagAt(now time.Time) time.Duration {
+	return now.Sub(now.UTC().Add(-c.Lag()).Truncate(5 * time.Minute))
+}
+
 type eventKey struct{ zone, status, reason string }
 type originKey struct{ zone, origin string }
 type observation struct {

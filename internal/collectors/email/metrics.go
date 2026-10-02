@@ -60,6 +60,11 @@ func (c *metrics) Name() string                   { return c.spec.name }
 func (c *metrics) DefaultInterval() time.Duration { return 5 * time.Minute }
 func (*metrics) Lag() time.Duration               { return 10 * time.Minute }
 
+// LagAt exposes only complete UTC five-minute buckets to the scheduler.
+func (c *metrics) LagAt(now time.Time) time.Duration {
+	return now.Sub(now.UTC().Add(-c.Lag()).Truncate(5 * time.Minute))
+}
+
 func (c *metrics) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (mark time.Time, collectErr error) {
 	ctx, poll := collector.StartZonePoll(ctx)
 	defer poll.Finish(ctx, out, c.Name(), &collectErr)

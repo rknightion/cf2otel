@@ -92,6 +92,11 @@ func (c *groupsCollector) Name() string                 { return c.spec.collecto
 func (*groupsCollector) DefaultInterval() time.Duration { return 5 * time.Minute }
 func (*groupsCollector) Lag() time.Duration             { return 10 * time.Minute }
 
+// LagAt exposes only complete UTC five-minute buckets to the scheduler.
+func (c *groupsCollector) LagAt(now time.Time) time.Duration {
+	return now.Sub(now.UTC().Add(-c.Lag()).Truncate(5 * time.Minute))
+}
+
 func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (time.Time, error) {
 	if !from.Before(to) {
 		return from, errors.New("invalid D1 Groups window")

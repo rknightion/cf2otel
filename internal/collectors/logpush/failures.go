@@ -33,6 +33,11 @@ func (*failureMetrics) Name() string                   { return failuresCollecto
 func (*failureMetrics) DefaultInterval() time.Duration { return logpushBucket }
 func (*failureMetrics) Lag() time.Duration             { return 10 * time.Minute }
 
+// LagAt exposes only complete UTC five-minute buckets to the scheduler.
+func (c *failureMetrics) LagAt(now time.Time) time.Duration {
+	return now.Sub(now.UTC().Add(-c.Lag()).Truncate(5 * time.Minute))
+}
+
 type failureScope struct {
 	scope    cfapi.Scope
 	id, zone string

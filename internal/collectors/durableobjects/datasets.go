@@ -90,6 +90,11 @@ func (c *datasetCollector) Name() string                 { return c.spec.name }
 func (*datasetCollector) DefaultInterval() time.Duration { return 5 * time.Minute }
 func (*datasetCollector) Lag() time.Duration             { return 10 * time.Minute }
 
+// LagAt exposes only complete UTC five-minute buckets to the scheduler.
+func (c *datasetCollector) LagAt(now time.Time) time.Duration {
+	return now.Sub(now.UTC().Add(-c.Lag()).Truncate(5 * time.Minute))
+}
+
 type metricPoint struct {
 	name  string
 	kind  metricKind
