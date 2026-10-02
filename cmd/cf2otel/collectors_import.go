@@ -25,6 +25,7 @@ import (
 	"github.com/rknightion/cf2otel/internal/collectors/turnstile"
 	"github.com/rknightion/cf2otel/internal/collectors/warp"
 	"github.com/rknightion/cf2otel/internal/collectors/workers"
+	"github.com/rknightion/cf2otel/internal/collectors/workersai"
 )
 
 // registerCollectors is the frozen domain order. Domain stubs are intentionally
@@ -53,4 +54,5 @@ func registerCollectors(deps collector.Deps) {
 	tunnels.Register(deps)
 	healthchecks.Register(deps)
 	warp.Register(deps)
+	workersai.Register(deps)
 }

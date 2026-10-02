@@ -175,3 +175,8 @@ collectors:
   tunnels.status: # Requires Cloudflare Tunnel Read; snapshot, no checkpoint key.
     enabled: false
     interval: 1m
+  workersai.metrics: # Account aggregate Groups; complete five-minute buckets, 10m holdback.
+    enabled: false
+    interval: 5m
+    initial_lookback: 30m
+    max_window: 1h

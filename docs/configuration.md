@@ -24,6 +24,24 @@ The Access REST log has only about a day's observed reach. Keep its polling inte
 
 See [Security and PII](security.md) before enabling AI Gateway body capture or wider HTTP scope.
 
+## Workers AI metrics
+
+`workersai.metrics` is disabled by default. Enable it with
+`CF2OTEL_COLLECTORS__WORKERSAI_METRICS__ENABLED=true` or its collector YAML entry.
+Defaults are `interval: 5m`, `initial_lookback: 30m`, and `max_window: 1h`.
+It uses the configured account and `aiInferenceAdaptiveGroups`, emitting only
+account aggregate inference count, input/output tokens and total inference time.
+There is no new config group; `platform.max_metric_series_per_window` (default
+500) caps its aggregate series. It does not select model IDs or raw inferences.
+
+Queries cover complete UTC five-minute half-open buckets. The scheduler applies
+a ten-minute operational holdback and bucket alignment, not a verified bound on
+ingestion lag. Late arrivals in already committed buckets are not recovered.
+Unavailable or null optional sums are omitted without fabricated zeros. Dataset
+entitlement, field, page, duration and retention limits are checked; a saturated
+single bucket or invalid numeric value fails atomically. Preserve checkpoints to
+avoid recounting previously successful windows.
+
 ## Firewall metric dimensions
 
 Set `firewall.rule_dimensions: true` (or `CF2OTEL_FIREWALL__RULE_DIMENSIONS=true`) to replace the default metric family's dimension set with advertised rule ID, host and client country dimensions. Optional dimensions are selected in rule ID, host, then country order within the dataset's advertised field budget. Saturated source windows are bisected down to one minute before aggregation; an incomplete leaf fails the window without emitting partial counts. It does not emit a second copy of each event. Rule descriptions are read from custom and managed phase zone rulesets and cached per zone for one hour; denied or failed lookups leave descriptions absent without failing metrics. Free ByTimeGroups remains count-only because its schema rejects dimensions despite advertising them.

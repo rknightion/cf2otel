@@ -2,6 +2,13 @@
   "version": 1,
   "graphql": [
     {
+      "scope": "account",
+      "dataset": "aiInferenceAdaptiveGroups",
+      "required_fields": ["count", "dimensions_datetimeFiveMinutes", "sum_totalInputTokens", "sum_totalOutputTokens", "sum_totalInferenceTimeMs"],
+      "minimum_max_duration_seconds": 3600,
+      "minimum_not_older_than_seconds": 3600
+    },
+    {
       "scope": "zone",
       "dataset": "logpushHealthAdaptiveGroups",
       "required_fields": ["sum_uploads", "dimensions_datetimeFiveMinutes", "dimensions_jobId", "dimensions_destinationType", "dimensions_status", "dimensions_final", "dimensions_success"],

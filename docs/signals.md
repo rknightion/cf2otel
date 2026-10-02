@@ -56,6 +56,33 @@ and pinned by local fixtures. The root's current canary observed only successful
 empty rows (`doc-0003`, section 16); populated rows and real fleet pagination are
 not live-verified. Dashboard delivery is a separate pending work item.
 
+## Workers AI aggregate metrics
+
+The opt-in `workersai.metrics` collector reads account-scoped
+`aiInferenceAdaptiveGroups`, not raw inference rows. It emits additive Counters
+from complete UTC five-minute half-open buckets, with no metric attributes:
+
+| Metric | Unit | Source |
+| --- | --- | --- |
+| `cloudflare.workers_ai.inferences` | `1` | `count`, total number of inferences for an account |
+| `cloudflare.workers_ai.input_tokens` | `{token}` | `sum.totalInputTokens` |
+| `cloudflare.workers_ai.output_tokens` | `{token}` | `sum.totalOutputTokens` |
+| `cloudflare.workers_ai.inference_time` | `s` | `sum.totalInferenceTimeMs` divided by 1000 |
+
+Count and bucket time are required; optional sums are selected only when
+advertised and within the field limit. Missing/null optional values are omitted,
+not zero-filled. Empty windows emit no fabricated metrics. Counts and sums add
+across successful windows; a malformed value or saturated single bucket fails
+the whole window without checkpoint advancement or partial publication. Query
+limits and dataset duration/retention are respected, with saturated windows
+bisected at five-minute boundaries. The existing platform series cap applies.
+No model/resource ID, tag, cost, byte metric, log or trace is selected or emitted.
+
+The scheduler holds back ten minutes and aligns its upper bound to a complete
+five-minute bucket. This is operational policy, not a guarantee of ingestion
+latency or recovery of late arrivals after a checkpoint has advanced. Dashboard
+panels and live canary/proof delivery are separate root-owned work.
+
 ## Logs and traces
 
 | Event or span | Source | Notes |

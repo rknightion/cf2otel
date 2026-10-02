@@ -36,6 +36,7 @@ The table maps every configured collector name to its expected read group. For G
 | `rum.web_vitals` | `Account Analytics Read` (Account) | Unverified |
 | `gateway.dns` | `Account Analytics Read` (Account) | Unverified |
 | `workers.overview` | `Account Analytics Read` (Account) | Unverified |
+| `workersai.metrics` | `Account Analytics Read` (Account) | Disabled by default; account aggregate only, no model/resource ID or tag labels. Runtime selection succeeded, but least-privilege permission group remains unverified. |
 | `workers.invocations` | `Account Analytics Read` (Account) | Unverified |
 | `turnstile.events` | `Account Analytics Read` (Account) | Unverified |
 | `logpush.health` | `Account Analytics Read` (Account) | Unverified |
