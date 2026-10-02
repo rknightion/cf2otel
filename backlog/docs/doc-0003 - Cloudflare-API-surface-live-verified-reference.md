@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-10-02 08:52'
+updated_date: '2026-10-02 16:50'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -323,3 +323,12 @@ Load-balancing groups were enabled on one zone. Its settings advertised the sele
 Introspection of the previously discovered ZoneHttpRequestsAdaptiveGroupsFilter_InputObject at 08:41 UTC returned HTTP 200, no GraphQL errors, and scalar uint16 edgeResponseStatus_geq and edgeResponseStatus_leq inputs. A separate HTTP-groups query at 08:43 UTC preserved requestSource eyeball and added integer bounds 400 and 599. Both its five-row unfiltered control and five-row filtered list were present; every returned filtered status was an integer in range. These checks establish selector validity and returned shape/range, not complete rows, rate totals or pagination.
 
 Error-path grouping may use these verified bounds upstream while retaining local defensive status validation. Colo, ASN and legacy queries must retain their original source policy without this error-only predicate. The filter map must be copied independently so one selection cannot mutate another. Query saturation, complete-window series caps and checkpoint atomicity remain required; narrowing must not weaken their tests. No actual request path, zone identifier or field value is reproduced here.
+
+
+## Workers AI aggregate analytics (loop 16, verified 2026-10-02)
+
+Account dataset `aiInferenceAdaptiveGroups` was advertised enabled and returned at least one row in the preceding seven days. An exact live selection of `count`, `dimensions.datetimeFiveMinutes`, `sum.totalInputTokens`, `sum.totalOutputTokens` and `sum.totalInferenceTimeMs` returned nonnull numeric values. Schema descriptions define count as total account inferences, token fields as total input/output tokens and inference time in milliseconds. Exported total time converts milliseconds to seconds. No model identifier or dynamic cost label is exported.
+
+Observed settings: maxNumberOfFields 30, maxPageSize 10000, maxDuration and notOlderThan 2764800 seconds. The collector is opt-in, aggregate-only, with an operational ten-minute closed-bucket holdback; this is not a verified upstream ingestion-latency bound. Runtime-token success does not establish least privilege.
+
+The pre-land canary matched and drift run 37036301862 concluded success at d997015505c8b73a97affe9a7bef5c8509d3d312. Hyperdrive and Vectorize datasets were advertised but had no rows in the seven-day existence probe and were not built. The raw Workers AI source was eligible but not selected for duplicate metrics or a new log surface.

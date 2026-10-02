@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@loop16-root'
 created_date: '2026-09-30 21:17'
-updated_date: '2026-10-02 14:30'
+updated_date: '2026-10-02 16:50'
 labels:
   - platform
 dependencies: []
@@ -23,14 +23,14 @@ Newer developer-platform products have GraphQL datasets no comparable exporter c
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 A per-dataset build/skip decision with reason is recorded
-- [ ] #2 Chosen datasets are built
-- [ ] #3 A new dataset or endpoint has a live-verified entry in doc-0003 and an API drift canary probe
+- [x] #2 Chosen datasets are built
+- [x] #3 A new dataset or endpoint has a live-verified entry in doc-0003 and an API drift canary probe
 - [ ] #4 Every new signal and attribute is declared in internal/semconv, listed in docs/signals.md, and has a panel in grafana/build_dashboard.py
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
+- [x] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
@@ -45,4 +45,8 @@ Loop16 chooses aiInferenceAdaptiveGroups for aggregate metrics, not sampled raw-
 
 <!-- SECTION:NOTES:BEGIN -->
 AC1 decided from one settings read and seven-day limit-one existence queries per advertised dataset: both Workers AI sources eligible, Groups chosen for corrected aggregates; raw alternative skipped as redundant for metrics and raw-log expansion not chosen. Eight Hyperdrive/Vectorize sources empty and skipped. Count one is a lower bound, zero is exact. Live schema describes count as total inferences, input/output token sums and total inference time in milliseconds; exact selected fields returned numeric nonnull values. No backend delivery proof or ingestion-lag guarantee is claimed.
+
+Loop16 Workers AI source accepted on exact REV PASS 6783cb01fcf788bedaeac57d8818aab1bb21a312, cherry-picked identically as bb1ba00, pushed d997015505c8b73a97affe9a7bef5c8509d3d312. Public boundary red/candidate, CodeRabbit all14paths and integrated gate passed. Pre-land live contract canary matched; R0 run 37036301862 and landing CI pending. AC3 doc entry/canary conclusion and AC4 dedicated panel remain open. One implementation, zero review-repair/infra. Retention minor justified by existing client gap handling; short configured-window limitation logged separately.
+
+Loop16 live-verified Workers AI field/settings entry added to doc-0003 after exact pre-land canary matched and R0 drift run 37036301862 concluded success at d997015505c8b73a97affe9a7bef5c8509d3d312. AC3 checked. AC4 dedicated Workers AI panel remains open; no new exporter deployment occurred.
 <!-- SECTION:NOTES:END -->
