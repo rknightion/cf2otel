@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@loop15-root'
 created_date: '2026-10-01 11:17'
-updated_date: '2026-10-01 18:47'
+updated_date: '2026-10-02 14:10'
 labels:
   - security
   - tooling
@@ -23,9 +23,9 @@ Loop14 independent drift review proved a net-tree added-line scan can miss prohi
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Pre-push privacy validation checks additions in every newly reachable commit as well as the final tree diff
-- [ ] #2 An assertion-based fixture adding then removing a prohibited literal is rejected even though its net tree diff is clean
-- [ ] #3 Validation retains documented fixture exceptions without silently broadening identifier allowlists
+- [x] #1 Pre-push privacy validation checks additions in every newly reachable commit as well as the final tree diff
+- [x] #2 An assertion-based fixture adding then removing a prohibited literal is rejected even though its net tree diff is clean
+- [x] #3 Validation retains documented fixture exceptions without silently broadening identifier allowlists
 - [ ] #4 Historical publication exceptions are reported accurately without rewriting history
 <!-- AC:END -->
 
@@ -41,3 +41,9 @@ Loop14 independent drift review proved a net-tree added-line scan can miss prohi
 <!-- SECTION:PLAN:BEGIN -->
 Loop15 implementation follows the frozen lane packet; assertion-based red witness, local just check and CodeRabbit, independent REV where required, root linear landing and sustained live evidence where applicable.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Loop16 RECON-M1 checked source criteria 1,2,3 against landed tests at ced4edfbfb66f1b9ee45037bdb425b69820a8ebe. Evidence: codex/evidence-loop16/RECON-return.txt. No new live or browser observation is claimed.
+<!-- SECTION:NOTES:END -->

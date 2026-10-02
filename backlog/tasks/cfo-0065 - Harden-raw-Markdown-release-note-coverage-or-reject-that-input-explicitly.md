@@ -1,11 +1,11 @@
 ---
 id: CFO-0065
 title: Harden raw Markdown release-note coverage or reject that input explicitly
-status: In Progress
+status: Done
 assignee:
   - '@loop15-root'
 created_date: '2026-10-01 07:32'
-updated_date: '2026-10-01 19:13'
+updated_date: '2026-10-02 14:10'
 labels:
   - release
 dependencies: []
@@ -22,9 +22,9 @@ Loop14 preserved an unshipped scratch parser after independent review proved fal
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The supported release-note input contract is explicit about rendered text versus raw Markdown
-- [ ] #2 Hidden Markdown destination and title text cannot satisfy required visible release-note descriptions for any supported input
-- [ ] #3 Rendered issue references match without waiving required subject, distinct-entry or patch-equivalence checks
+- [x] #1 The supported release-note input contract is explicit about rendered text versus raw Markdown
+- [x] #2 Hidden Markdown destination and title text cannot satisfy required visible release-note descriptions for any supported input
+- [x] #3 Rendered issue references match without waiving required subject, distinct-entry or patch-equivalence checks
 <!-- AC:END -->
 
 ## Definition of Done
@@ -39,3 +39,15 @@ Loop14 preserved an unshipped scratch parser after independent review proved fal
 <!-- SECTION:PLAN:BEGIN -->
 Loop15 E65: rendered-text-only CLI contract; reject raw Markdown explicitly rather than extending the parked parser; assertion-based public CLI regression for hidden destinations and rendered issue references, retaining subject/distinct-entry/patch-equivalence checks; full local gate and CodeRabbit.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Loop16 RECON-M1 checked source criteria 1,2,3 against landed tests at ced4edfbfb66f1b9ee45037bdb425b69820a8ebe. Evidence: codex/evidence-loop16/RECON-return.txt. No new live or browser observation is claimed.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Loop16 reconciled all acceptance criteria on the landed source and cited test evidence.
+<!-- SECTION:FINAL_SUMMARY:END -->

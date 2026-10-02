@@ -1,11 +1,11 @@
 ---
 id: CFO-0063
 title: Prove current certificate status and expiry across snapshot changes
-status: In Progress
+status: Done
 assignee:
   - '@loop15-root'
 created_date: '2026-10-01 07:32'
-updated_date: '2026-10-01 18:47'
+updated_date: '2026-10-02 14:10'
 labels:
   - certs
   - telemetry
@@ -23,9 +23,9 @@ Loop14 independent certificate review found that status is part of a synchronous
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A real SDK/export-boundary reproduction distinguishes current certificate pack state from retained prior status series
-- [ ] #2 Successful changed and empty snapshots do not leave stale positive expiry or status evidence usable as current state
-- [ ] #3 Certificate dashboard and alert queries are verified against the corrected snapshot semantics
+- [x] #1 A real SDK/export-boundary reproduction distinguishes current certificate pack state from retained prior status series
+- [x] #2 Successful changed and empty snapshots do not leave stale positive expiry or status evidence usable as current state
+- [x] #3 Certificate dashboard and alert queries are verified against the corrected snapshot semantics
 <!-- AC:END -->
 
 ## Definition of Done
@@ -40,3 +40,15 @@ Loop14 independent certificate review found that status is part of a synchronous
 <!-- SECTION:PLAN:BEGIN -->
 Loop15 implementation follows the frozen lane packet; assertion-based red witness, local just check and CodeRabbit, independent REV where required, root linear landing and sustained live evidence where applicable.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Loop16 RECON-M1 checked source criteria 1,2,3 against landed tests at ced4edfbfb66f1b9ee45037bdb425b69820a8ebe. Evidence: codex/evidence-loop16/RECON-return.txt. No new live or browser observation is claimed.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Loop16 reconciled all acceptance criteria on the landed source and cited test evidence.
+<!-- SECTION:FINAL_SUMMARY:END -->

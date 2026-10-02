@@ -3,7 +3,7 @@ id: doc-0004
 title: Parity checklist - reference pollers
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-09-30 21:17'
+updated_date: '2026-10-02 14:17'
 ---
 cf2otel must cover every capability listed here. The list is a behaviour contract drawn from a survey
 of open-source Cloudflare pollers and exporters; no other project is named and no code is copied.
@@ -94,33 +94,33 @@ The OTel SDK cardinality limit is per instrument and configurable (CFO-0045).
 
 ## HTTP zone analytics [Prom] (CFO-0046)
 
-- Edge response bytes alongside requests; eyeball-only `requestSource` policy (CFO-0046.01).
-- Exact edge status, origin status, country, HTTP protocol, TLS protocol, method, content type as
+- [x] Edge response bytes alongside requests; eyeball-only `requestSource` policy (CFO-0046.01).
+- [x] Exact edge status, origin status, country, HTTP protocol, TLS protocol, method, content type as
   default dimensions (CFO-0046.02).
-- Opt-in colo (host allowlist), ASN, and 4xx/5xx by normalised path (numeric, UUID and hex segments
-  collapsed) (CFO-0046.03).
-- Edge TTFB average and percentiles; origin duration p50/p95/p99 (CFO-0046.04).
-- Visits and threats where the plan allows; account data transfer month-to-date with a linear
+- [x] Opt-in colo (host allowlist), ASN, and 4xx/5xx by normalised path (numeric, UUID and hex segments
+  collapsed) (CFO-0046.03). Implemented using configured safe route names rather than raw or normalised path labels.
+- [x] Edge TTFB average and percentiles; origin duration p50/p95/p99 (CFO-0046.04).
+- [x] Visits and threats where the plan allows; account data transfer month-to-date with a linear
   projection (CFO-0046.05).
 
 ## Workers and platform depth [Prom] (CFO-0047)
 
-- Workers invocation status, errors, subrequests, CPU/duration/wall-time percentiles per script
+- [x] Workers invocation status, errors, subrequests, CPU/duration/wall-time percentiles per script
   (CFO-0047.01). Raw invocation events stay skipped (CFO-0023).
-- Durable Objects errors and wall-time/response-size percentiles with script; D1 rows read/written
+- [x] Durable Objects errors and wall-time/response-size percentiles with script; D1 rows read/written
   and batch-time percentiles; Queues lag time, retry count and billable operations breakdown
   (CFO-0047.02).
-- Logpush failed uploads by job, destination, status and final attempt, account and zone scope
+- [x] Logpush failed uploads by job, destination, status and final attempt, account and zone scope
   (CFO-0047.03).
 - Bounded per-resource names for D1, KV, Queues and DO; R2 action type (CFO-0047.04).
 
 ## Zero Trust state [Prom] (CFO-0048)
 
-- Tunnel status and connector health (CFO-0048.01).
+- [x] Tunnel status and connector health (CFO-0048.01).
 - WARP fleet status as aggregates by status, platform, version, mode and colo, fully paginated; never
   per device (CFO-0048.02).
 - DEX HTTP and traceroute test results (CFO-0048.03).
-- Access and Gateway seat counts (CFO-0048.04).
+- [x] Access and Gateway seat counts (CFO-0048.04).
 
 ## Firewall depth [Prom] (CFO-0049)
 
@@ -136,9 +136,9 @@ The OTel SDK cardinality limit is per instrument and configurable (CFO-0045).
 
 ## Operations [Prom] (CFO-0051)
 
-- Zone exclude list; discovered/filtered/processed/skipped zone self-metrics (CFO-0051.01).
+- [x] Zone exclude list; discovered/filtered/processed/skipped zone self-metrics (CFO-0051.01).
 - Metric and attribute deny list validated against semconv (CFO-0051.02).
-- Classified collector errors (CFO-0051.03).
+- [x] Classified collector errors (CFO-0051.03).
 - Per-zone entitlement backoff and a shared client-side rate limiter (CFO-0051.04).
 - Multiple accounts, listed or discovered (CFO-0051.05).
 - Optional Prometheus `/metrics` endpoint (CFO-0051.06).
@@ -149,3 +149,6 @@ Magic Transit, Magic Firewall and Network Analytics datasets (Enterprise/Magic p
 Images statistics, running cf2otel as a Worker, Global API Key authentication, a hostname trace
 probe (synthetic monitoring does this better), and a runtime configuration API. The retired REST
 analytics endpoints are superseded by the GraphQL datasets above.
+
+
+Loop 16 source reconciliation at ced4edf: checked items above have landed collector and boundary-test evidence. Checks denote source parity, not fresh deployed proof. WARP connected-device parity, resource names, DEX, deny list, limiter/backoff, multiple accounts and pull endpoint remain unchecked on this baseline.

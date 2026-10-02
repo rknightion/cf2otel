@@ -1,9 +1,11 @@
 ---
 id: CFO-0070
 title: Verify OTLP HTTP partial-success rejection reporting
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@loop16-root'
 created_date: '2026-10-02 11:24'
+updated_date: '2026-10-02 13:52'
 labels: []
 dependencies: []
 priority: high
@@ -30,3 +32,9 @@ Loop15 source review of the pinned OpenTelemetry Go HTTP metrics exporter v1.46.
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Loop 16 S70 drives the pinned real exporter through cf2otel using full-acceptance and partial-success HTTP responses, records the observed reporting contract, and documents the consequence without changing dependencies.
+<!-- SECTION:PLAN:END -->
