@@ -21,7 +21,7 @@ import (
 )
 
 func TestGaugeSnapshotOTLPReplacement(t *testing.T) {
-	for _, scenario := range []string{"status-change", "disappearance", "empty", "stale"} {
+	for _, scenario := range []string{"status-change", "disappearance", "empty", "stale", "attribute-collision"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx := context.Background()
 			var exported []*metricsproto.NumberDataPoint
@@ -40,6 +40,9 @@ func TestGaugeSnapshotOTLPReplacement(t *testing.T) {
 				for _, rm := range req.ResourceMetrics {
 					for _, sm := range rm.ScopeMetrics {
 						for _, m := range sm.Metrics {
+							if m.Name == semconv.MetricCertificatePack {
+								t.Error("denied snapshot instrument exported")
+							}
 							if m.Name == semconv.MetricCertificateExpiry {
 								exported = append(exported, m.GetGauge().DataPoints...)
 							}
@@ -49,7 +52,9 @@ func TestGaugeSnapshotOTLPReplacement(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			}))
 			defer server.Close()
-			p, err := NewProviders(ctx, ProviderOptions{Endpoint: server.URL, Interval: time.Hour})
+			options := ProviderOptions{Endpoint: server.URL, Interval: time.Hour}
+			denyOptions(&options, []string{semconv.MetricCertificatePack}, []string{semconv.AttrCertificatePackID})
+			p, err := NewProviders(ctx, options)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -60,7 +65,7 @@ func TestGaugeSnapshotOTLPReplacement(t *testing.T) {
 			}()
 			e := p.Emitter.(SnapshotEmitter)
 			point := func(id, status string) GaugePoint {
-				return GaugePoint{Value: 42, Attrs: []Attr{{Key: semconv.AttrCertificatePackID, Value: id}, {Key: semconv.AttrCertificateStatus, Value: status}}}
+				return GaugePoint{Value: 42, Attrs: []Attr{{Key: semconv.AttrCertificatePackID, Value: id}, {Key: semconv.AttrCertificateStatus, Value: status}, {Key: semconv.AttrCertificateZone, Value: id}}}
 			}
 			ttl := time.Hour
 			if err := e.GaugeSnapshot(ctx, semconv.MetricCertificateExpiry, ttl, []GaugePoint{point("first", "active"), point("second", "active")}); err != nil {
@@ -86,6 +91,13 @@ func TestGaugeSnapshotOTLPReplacement(t *testing.T) {
 			case "disappearance":
 				next = []GaugePoint{point("first", "active")}
 				want = 1
+			case "attribute-collision":
+				first, last := point("first", "active"), point("second", "active")
+				first.Attrs = first.Attrs[:2]
+				last.Attrs = last.Attrs[:2]
+				first.Value, last.Value = 7, 13
+				next = []GaugePoint{first, last}
+				want = 1
 			case "stale":
 				// Publish the short-lived snapshot only after proving the initial
 				// export; slow HTTP/SDK startup cannot race that first assertion.
@@ -95,13 +107,23 @@ func TestGaugeSnapshotOTLPReplacement(t *testing.T) {
 				time.Sleep(5 * time.Millisecond)
 			}
 			if scenario != "stale" {
-				if err := e.GaugeSnapshot(ctx, semconv.MetricCertificateExpiry, ttl, next); err != nil {
+				if err := p.Emitter.(SnapshotBatchEmitter).GaugeSnapshots(ctx, ttl, map[string][]GaugePoint{semconv.MetricCertificateExpiry: next, semconv.MetricCertificatePack: {{Value: 1}}}); err != nil {
 					t.Fatal(err)
 				}
 			}
 			flush()
 			if len(exported) != want {
 				t.Fatalf("%s exported points=%d, want %d (obsolete snapshot leaked)", scenario, len(exported), want)
+			}
+			if scenario == "attribute-collision" && exported[0].GetAsDouble() != 13 {
+				t.Fatalf("snapshot collision value=%v, want last input 13", exported[0].GetAsDouble())
+			}
+			for _, dp := range exported {
+				for _, a := range dp.Attributes {
+					if a.Key == semconv.AttrCertificatePackID {
+						t.Fatal("denied retained attribute exported")
+					}
+				}
 			}
 			if scenario == "status-change" {
 				for _, dp := range exported {
@@ -149,6 +171,7 @@ func TestGaugeSnapshotsFailedPublicationAtomic(t *testing.T) {
 			if err := e.GaugeSnapshots(ctx, time.Hour, pair("active")); err != nil {
 				t.Fatal(err)
 			}
+			filtered := FilterEmitter(e, nil, []string{semconv.AttrCertificatePackID}).(SnapshotBatchEmitter)
 			before := map[string]time.Time{}
 			for name, s := range e.snapshots {
 				before[name] = s.expires
@@ -166,7 +189,7 @@ func TestGaugeSnapshotsFailedPublicationAtomic(t *testing.T) {
 			next := pair("pending")
 			// An additional valid instrument forces real registration after old ones exist.
 			next[semconv.MetricCertificateExpiry+".extra"] = nil
-			err := e.GaugeSnapshots(attempt, 2*time.Hour, next)
+			err := filtered.GaugeSnapshots(attempt, 2*time.Hour, next)
 			want := sentinel
 			if scenario == "cancellation" {
 				want = context.Canceled

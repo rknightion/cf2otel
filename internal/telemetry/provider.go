@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 	"time"
@@ -30,7 +31,8 @@ type ProviderOptions struct {
 	Interval                                                            time.Duration
 	// CardinalityLimit is per instrument: zero preserves the SDK default,
 	// negative disables the limit, and positive sets the global SDK limit.
-	CardinalityLimit int
+	CardinalityLimit                  int
+	MetricDenylist, AttributeDenylist []string
 }
 type Providers struct {
 	Emitter Emitter
@@ -41,6 +43,17 @@ type Providers struct {
 }
 
 func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
+	for _, name := range o.MetricDenylist {
+		if _, ok := semconv.Metric(name); !ok {
+			return nil, fmt.Errorf("unknown metric deny key %q", name)
+		}
+	}
+	for _, name := range o.AttributeDenylist {
+		if !semconv.IsAttribute(name) {
+			return nil, fmt.Errorf("unknown attribute deny key %q", name)
+		}
+	}
+	policy := newDenyPolicy(o.MetricDenylist, o.AttributeDenylist)
 	if o.Endpoint == "" {
 		return nil, errors.New("OTLP endpoint required")
 	}
@@ -109,7 +122,7 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 		o.Interval = 15 * time.Second
 	}
 	hook := &exportObserver{}
-	overflow := &cardinalityExporter{Exporter: mx, lastWarning: make(map[string]time.Time)}
+	overflow := &cardinalityExporter{Exporter: mx, lastWarning: make(map[string]time.Time), omitInstrument: policy.attribute(semconv.AttrInstrument)}
 	mx = observedMetricExporter{Exporter: overflow, hook: hook}
 	lx = observedLogExporter{Exporter: lx, hook: hook}
 	lx = newBoundedLogExporter(lx)
@@ -120,16 +133,19 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 	}
 	mp := sdkmetric.NewMeterProvider(metricOptions...)
 	spec, _ := semconv.Metric(semconv.MetricCardinalityOverflows)
-	counter, err := mp.Meter(semconv.ServiceName).Int64Counter(semconv.MetricCardinalityOverflows, metric.WithUnit(spec.Unit), metric.WithDescription(spec.Description))
-	if err != nil {
-		return nil, errors.Join(err, mp.Shutdown(ctx), lx.Shutdown(ctx), tx.Shutdown(ctx))
+	if !policy.metric(semconv.MetricCardinalityOverflows) {
+		counter, err := mp.Meter(semconv.ServiceName).Int64Counter(semconv.MetricCardinalityOverflows, metric.WithUnit(spec.Unit), metric.WithDescription(spec.Description))
+		if err != nil {
+			return nil, errors.Join(err, mp.Shutdown(ctx), lx.Shutdown(ctx), tx.Shutdown(ctx))
+		}
+		overflow.setCounter(counter)
 	}
-	overflow.setCounter(counter)
 	// The log SDK's batch queue drops records on overflow without reporting the
 	// loss through ForceFlush. Synchronous bounded export retains backpressure.
 	lp := sdklog.NewLoggerProvider(sdklog.WithResource(res), sdklog.WithProcessor(sdklog.NewSimpleProcessor(lx)))
 	tp := sdktrace.NewTracerProvider(sdktrace.WithResource(res), sdktrace.WithBatcher(tx, sdktrace.WithBlocking()))
-	return &Providers{Emitter: NewEmitter(mp.Meter(semconv.ServiceName), lp.Logger(semconv.ServiceName), tp.Tracer(semconv.ServiceName)), metrics: mp, logs: lp, traces: tp, hook: hook}, nil
+	emitter := NewEmitter(mp.Meter(semconv.ServiceName), lp.Logger(semconv.ServiceName), tp.Tracer(semconv.ServiceName)).(*otelEmitter)
+	return &Providers{Emitter: filterEmitterWithPolicy(emitter, policy), metrics: mp, logs: lp, traces: tp, hook: hook}, nil
 }
 func (p *Providers) SetExportObserver(fn func(context.Context, string, error)) {
 	p.hook.Set(fn)

@@ -2,6 +2,18 @@
 
 All signals carry `service.name=cf2otel`. Cloudflare-specific names begin `cloudflare.*`; GenAI names follow `gen_ai.*`; the poller's own measurements begin `cf2otel.*`. Names are declared in `internal/semconv` and this page is the public inventory.
 
+## Source deny-lists
+
+The [source deny-list settings](configuration.md#source-metric-and-attribute-deny-lists)
+use exact semantic names from this inventory before Prometheus translation.
+`otlp.metric_denylist` suppresses SDK registration/observation; `otlp.attribute_denylist`
+removes keys from every signal attribute bag, including generated `event_name`
+and nested span bags, but not resources or bodies. Both default to empty. Denying
+`event_name` removes the usual event-name log query selector, not the log signal.
+Dropping dimensions merges counter/histogram series and loses their distinction;
+gauge and retained-snapshot collisions use the last input point. Denying metrics
+does not disable their collectors or upstream reads.
+
 ## Zone selection and poll gauges
 
 `zones.exclude` (or comma-separated `CF2OTEL_ZONES__EXCLUDE`) defaults to empty.

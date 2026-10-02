@@ -19,9 +19,10 @@ import (
 // Its counter is collected by the SDK on the next export cycle.
 type cardinalityExporter struct {
 	sdkmetric.Exporter
-	mu          sync.Mutex
-	counter     metric.Int64Counter
-	lastWarning map[string]time.Time
+	mu             sync.Mutex
+	counter        metric.Int64Counter
+	omitInstrument bool
+	lastWarning    map[string]time.Time
 }
 
 func (e *cardinalityExporter) setCounter(counter metric.Int64Counter) {
@@ -40,7 +41,11 @@ func (e *cardinalityExporter) Export(ctx context.Context, data *metricdata.Resou
 			now := time.Now()
 			e.mu.Lock()
 			if e.counter != nil {
-				e.counter.Add(ctx, count, metric.WithAttributes(attribute.String(semconv.AttrInstrument, instrument.Name)))
+				if e.omitInstrument {
+					e.counter.Add(ctx, count)
+				} else {
+					e.counter.Add(ctx, count, metric.WithAttributes(attribute.String(semconv.AttrInstrument, instrument.Name)))
+				}
 			}
 			last := e.lastWarning[instrument.Name]
 			warn := last.IsZero() || now.Sub(last) >= time.Hour

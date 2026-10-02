@@ -34,6 +34,16 @@ func TestEveryEventConstantHasDocumentedDedupeKey(t *testing.T) {
 }
 
 func eventStringConstants(t *testing.T) []string {
+	values := semanticStringConstants(t, "Event")
+	names := make([]string, 0, len(values))
+	for name := range values {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func semanticStringConstants(t *testing.T, prefix string) map[string]string {
 	t.Helper()
 
 	paths, err := filepath.Glob("*.go")
@@ -59,7 +69,7 @@ func eventStringConstants(t *testing.T) []string {
 		t.Fatalf("type-check semconv constants: %v", err)
 	}
 
-	var events []string
+	events := make(map[string]string)
 	for _, file := range files {
 		for _, declaration := range file.Decls {
 			group, ok := declaration.(*ast.GenDecl)
@@ -72,7 +82,7 @@ func eventStringConstants(t *testing.T) []string {
 					continue
 				}
 				for _, name := range values.Names {
-					if !strings.HasPrefix(name.Name, "Event") {
+					if !strings.HasPrefix(name.Name, prefix) {
 						continue
 					}
 					constantValue, ok := info.Defs[name].(*types.Const)
@@ -81,17 +91,52 @@ func eventStringConstants(t *testing.T) []string {
 					}
 					basic, ok := constantValue.Type().Underlying().(*types.Basic)
 					if ok && (basic.Kind() == types.String || basic.Kind() == types.UntypedString) && constantValue.Val().Kind() == constant.String {
-						events = append(events, name.Name)
+						events[name.Name] = constant.StringVal(constantValue.Val())
 					}
 				}
 			}
 		}
 	}
 	if len(events) == 0 {
-		t.Fatal("found no string constants named Event* in internal/semconv")
+		t.Fatalf("found no string constants named %s* in internal/semconv", prefix)
 	}
-	sort.Strings(events)
 	return events
+}
+
+func TestEveryAttributeConstantIsDenyKey(t *testing.T) {
+	declared := semanticStringConstants(t, "Attr")
+	file, err := parser.ParseFile(token.NewFileSet(), "deny_registry.go", nil, parser.AllErrors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var registry *ast.CompositeLit
+	ast.Inspect(file, func(node ast.Node) bool {
+		spec, ok := node.(*ast.ValueSpec)
+		if ok && len(spec.Names) == 1 && spec.Names[0].Name == "denyAttributes" && len(spec.Values) == 1 {
+			registry, _ = spec.Values[0].(*ast.CompositeLit)
+		}
+		return true
+	})
+	if registry == nil {
+		t.Fatal("compiled denyAttributes registry missing")
+	}
+	rows := make(map[string]bool)
+	for _, row := range registry.Elts {
+		pair, ok := row.(*ast.KeyValueExpr)
+		if !ok {
+			t.Fatal("registry entries must reference attribute constants")
+		}
+		key, ok := pair.Key.(*ast.Ident)
+		if !ok || declared[key.Name] == "" {
+			t.Fatal("registry keys must reference declared Attr* constants, not literals or aliases")
+		}
+		rows[key.Name] = true
+	}
+	for name := range declared {
+		if !rows[name] {
+			t.Errorf("%s is missing from compiled deny keys", name)
+		}
+	}
 }
 
 func documentedEventRows(t *testing.T, document string) map[string]struct{} {

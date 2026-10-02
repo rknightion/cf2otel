@@ -39,6 +39,8 @@ ai_gateway:
   max_body_bytes: 16384
   link_caller_traces: true
 otlp:
+  metric_denylist: [] # Exact internal/semconv metric names, before Prometheus translation.
+  attribute_denylist: [] # Exact semantic keys on signals, not resource attributes or bodies.
   metric_cardinality_limit: 10000 # Nonnegative; 0 disables the SDK cardinality limit.
   endpoint: https://otlp-gateway-prod-gb-south-1.grafana.net/otlp
   protocol: http

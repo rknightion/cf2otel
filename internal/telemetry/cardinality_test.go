@@ -49,7 +49,7 @@ func (c *cardinalityCapture) find(name string) *metricspb.Metric {
 	}
 	return nil
 }
-func testCardinalityProvider(t *testing.T, limit int) (*Providers, *cardinalityCapture) {
+func testCardinalityProvider(t *testing.T, limit int, configure ...func(*ProviderOptions)) (*Providers, *cardinalityCapture) {
 	t.Helper()
 	capture := &cardinalityCapture{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +77,11 @@ func testCardinalityProvider(t *testing.T, limit int) (*Providers, *cardinalityC
 		w.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(server.Close)
-	p, err := NewProviders(context.Background(), cardinalityOptions(server.URL, limit))
+	options := cardinalityOptions(server.URL, limit)
+	for _, configure := range configure {
+		configure(&options)
+	}
+	p, err := NewProviders(context.Background(), options)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -28,6 +28,8 @@ Configuration loads defaults, then YAML, then `CF2OTEL_` environment overrides. 
 | `ai_gateway.capture_bodies` | `CF2OTEL_AI_GATEWAY__CAPTURE_BODIES` |
 | `ai_gateway.max_body_bytes` | `CF2OTEL_AI_GATEWAY__MAX_BODY_BYTES` |
 | `ai_gateway.link_caller_traces` | `CF2OTEL_AI_GATEWAY__LINK_CALLER_TRACES` |
+| `otlp.metric_denylist` | `CF2OTEL_OTLP__METRIC_DENYLIST` |
+| `otlp.attribute_denylist` | `CF2OTEL_OTLP__ATTRIBUTE_DENYLIST` |
 | `otlp.endpoint` | `CF2OTEL_OTLP__ENDPOINT` |
 | `otlp.protocol` | `CF2OTEL_OTLP__PROTOCOL` |
 | `otlp.grafana_cloud.instance_id` | `CF2OTEL_OTLP__GRAFANA_CLOUD__INSTANCE_ID` |

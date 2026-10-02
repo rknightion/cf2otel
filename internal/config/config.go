@@ -19,6 +19,7 @@ import (
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
+	"github.com/rknightion/cf2otel/internal/semconv"
 )
 
 const EnvPrefix = "CF2OTEL_"
@@ -112,6 +113,8 @@ type AIGatewayConfig struct {
 	LinkCallerTraces bool     `yaml:"link_caller_traces" json:"link_caller_traces"`
 }
 type OTLPConfig struct {
+	MetricDenylist         []string           `yaml:"metric_denylist" json:"metric_denylist"`
+	AttributeDenylist      []string           `yaml:"attribute_denylist" json:"attribute_denylist"`
 	MetricCardinalityLimit int                `yaml:"metric_cardinality_limit" json:"metric_cardinality_limit"`
 	Endpoint               string             `yaml:"endpoint" json:"endpoint"`
 	Protocol               string             `yaml:"protocol" json:"protocol"`
@@ -164,6 +167,8 @@ func Default() Config {
 	c.HTTP.HighCardinalityLimit = 500
 	c.HTTP.HighCardinalityHosts = []string{}
 	c.WARP = WARPConfig{LastSeenWindow: 15 * time.Minute, MaxMetricSeries: 500}
+	c.OTLP.MetricDenylist = []string{}
+	c.OTLP.AttributeDenylist = []string{}
 	c.Firewall = FirewallConfig{MaxMetricSeriesPerWindow: 500}
 	for _, name := range collectorNames {
 		c.Collectors[name] = CollectorConfig{Enabled: true, Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
@@ -222,7 +227,7 @@ func Load(path string) (*Config, error) {
 			return "", nil
 		}
 		name := strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(key, EnvPrefix)), "__", ".")
-		if name == "http.breakdowns" || name == "http.high_cardinality_hosts" || name == "zones.exclude" {
+		if name == "http.breakdowns" || name == "http.high_cardinality_hosts" || name == "zones.exclude" || name == "otlp.metric_denylist" || name == "otlp.attribute_denylist" {
 			if value == "" {
 				return name, []string{}
 			}
@@ -238,6 +243,9 @@ func Load(path string) (*Config, error) {
 	}
 	if err := applyCollectorEnvironment(&c); err != nil {
 		return nil, fmt.Errorf("environment: %w", err)
+	}
+	if err := c.OTLP.normalizeDenylists(); err != nil {
+		return nil, err
 	}
 	return &c, nil
 }
@@ -286,8 +294,36 @@ func applyCollectorEnvironment(c *Config) error {
 	}
 	return nil
 }
+func (o *OTLPConfig) normalizeDenylists() error {
+	for _, list := range []struct {
+		key    string
+		values *[]string
+		known  func(string) bool
+	}{
+		{"otlp.metric_denylist", &o.MetricDenylist, func(name string) bool { _, ok := semconv.Metric(name); return ok }},
+		{"otlp.attribute_denylist", &o.AttributeDenylist, semconv.IsAttribute},
+	} {
+		seen := make(map[string]struct{}, len(*list.values))
+		out := make([]string, 0, len(*list.values))
+		for _, name := range *list.values {
+			if !list.known(name) {
+				return fmt.Errorf("%s contains unknown semantic name %q", list.key, name)
+			}
+			if _, exists := seen[name]; !exists {
+				out = append(out, name)
+				seen[name] = struct{}{}
+			}
+		}
+		*list.values = out
+	}
+	return nil
+}
+
 func (c Config) Validate() error {
 	var issues []string
+	if err := c.OTLP.normalizeDenylists(); err != nil {
+		issues = append(issues, err.Error())
+	}
 	add := func(ok bool, msg string) {
 		if !ok {
 			issues = append(issues, msg)

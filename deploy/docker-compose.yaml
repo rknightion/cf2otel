@@ -17,6 +17,9 @@ services:
       CF2OTEL_CLOUDFLARE__API_TOKEN: ${CF2OTEL_CLOUDFLARE__API_TOKEN:-}
       CF2OTEL_OTLP__GRAFANA_CLOUD__INSTANCE_ID: ${CF2OTEL_OTLP__GRAFANA_CLOUD__INSTANCE_ID:-}
       CF2OTEL_OTLP__GRAFANA_CLOUD__TOKEN: ${CF2OTEL_OTLP__GRAFANA_CLOUD__TOKEN:-}
+      # Unset host variables preserve YAML values; explicitly empty ones clear them.
+      CF2OTEL_OTLP__METRIC_DENYLIST:
+      CF2OTEL_OTLP__ATTRIBUTE_DENYLIST:
     volumes:
       - /opt/cf2otel/config.yaml:/etc/cf2otel/config.yaml:ro
       - /opt/cf2otel/state:/var/lib/cf2otel

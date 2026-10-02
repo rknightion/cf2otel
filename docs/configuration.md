@@ -42,6 +42,41 @@ entitlement, field, page, duration and retention limits are checked; a saturated
 single bucket or invalid numeric value fails atomically. Preserve checkpoints to
 avoid recounting previously successful windows.
 
+## Source metric and attribute deny-lists
+
+`otlp.metric_denylist` and `otlp.attribute_denylist` default to `[]`. Each entry
+must exactly match a declared `internal/semconv` metric name or attribute key,
+respectively. Use OTLP names before Prometheus translation, not underscores,
+renames, wildcards or regular expressions. Unknown, empty and wrong-case members
+fail configuration loading before any exporter or Cloudflare initialization;
+duplicates are deduplicated. Environment overrides are comma-separated:
+`CF2OTEL_OTLP__METRIC_DENYLIST` and `CF2OTEL_OTLP__ATTRIBUTE_DENYLIST`. An empty
+environment value clears the list.
+
+```yaml
+otlp:
+  metric_denylist: [cloudflare.dns.queries]
+  attribute_denylist: [cloudflare.access.user.id]
+```
+
+Denied metrics are not registered or observed by the SDK, including the direct
+`cf2otel.metric.cardinality_overflows` counter. Attribute filtering covers metrics,
+logs, spans, span events, correlated logs and span links, including generated
+`event_name` and the overflow counter's `cf2otel.instrument`. Resource attributes
+such as `service.name` are unchanged, even when their key is configured; SDK-added
+attributes such as the overflow marker are outside this semantic-key policy.
+Filtering does not remove log/span names or rewrite bodies, stop source reads,
+change checkpoints, or remove data already exported. Denying `event_name` removes
+the usual Loki `| event_name="..."` query selector from new logs; the log body and
+signal still remain.
+
+Dropping a metric dimension loses that distinction. Counters and histograms
+aggregate into the remaining series. Gauges, including retained snapshots, use
+the **last input point** on a collision, never a sum or average. Snapshot filtering
+happens before retention, preserves paired atomic publication, and does not
+refresh stale TTLs. A dry-run counts only measurements that survive filtering.
+These settings are startup-only; no reload is supported.
+
 ## Firewall metric dimensions
 
 Set `firewall.rule_dimensions: true` (or `CF2OTEL_FIREWALL__RULE_DIMENSIONS=true`) to replace the default metric family's dimension set with advertised rule ID, host and client country dimensions. Optional dimensions are selected in rule ID, host, then country order within the dataset's advertised field budget. Saturated source windows are bisected down to one minute before aggregation; an incomplete leaf fails the window without emitting partial counts. It does not emit a second copy of each event. Rule descriptions are read from custom and managed phase zone rulesets and cached per zone for one hour; denied or failed lookups leave descriptions absent without failing metrics. Free ByTimeGroups remains count-only because its schema rejects dimensions despite advertising them.

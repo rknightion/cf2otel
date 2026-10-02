@@ -177,6 +177,8 @@ config:
     max_body_bytes: 16384
     link_caller_traces: true
   otlp:
+    metric_denylist: []
+    attribute_denylist: []
     endpoint: https://otlp.example.invalid
     protocol: http
     grafana_cloud:

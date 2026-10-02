@@ -51,6 +51,7 @@ type Emitter interface {
 	Span(context.Context, SpanSpec) error
 }
 type otelEmitter struct {
+	policy               *denyPolicy
 	meter                metric.Meter
 	logger               otellog.Logger
 	tracer               trace.Tracer
@@ -150,7 +151,9 @@ func (e *otelEmitter) LogEvent(ctx context.Context, event, body string, at time.
 	r.SetObservedTimestamp(time.Now())
 	r.SetSeverity(severity)
 	r.SetBody(attribute.StringValue(body))
-	r.AddAttributes(attribute.String(semconv.AttrEventName, event))
+	if !e.policy.attribute(semconv.AttrEventName) {
+		r.AddAttributes(attribute.String(semconv.AttrEventName, event))
+	}
 	for _, v := range a {
 		if v.Key != "" {
 			r.AddAttributes(attribute.String(v.Key, v.Value))

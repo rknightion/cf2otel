@@ -98,7 +98,7 @@ func run(args []string) error {
 		if cardinalityLimit == 0 {
 			cardinalityLimit = -1 // Config zero means unlimited, unlike ProviderOptions zero.
 		}
-		providers, err = telemetry.NewProviders(ctx, telemetry.ProviderOptions{CardinalityLimit: cardinalityLimit, Endpoint: cfg.OTLP.Endpoint, Protocol: cfg.OTLP.Protocol, InstanceID: cfg.OTLP.GrafanaCloud.InstanceID, Token: cfg.OTLP.GrafanaCloud.Token.Value(), ServiceVersion: version, InstanceUUID: hostname(), Headers: cfg.OTLP.Headers})
+		providers, err = telemetry.NewProviders(ctx, telemetry.ProviderOptions{MetricDenylist: cfg.OTLP.MetricDenylist, AttributeDenylist: cfg.OTLP.AttributeDenylist, CardinalityLimit: cardinalityLimit, Endpoint: cfg.OTLP.Endpoint, Protocol: cfg.OTLP.Protocol, InstanceID: cfg.OTLP.GrafanaCloud.InstanceID, Token: cfg.OTLP.GrafanaCloud.Token.Value(), ServiceVersion: version, InstanceUUID: hostname(), Headers: cfg.OTLP.Headers})
 		if err != nil {
 			return err
 		}
@@ -110,6 +110,9 @@ func run(args []string) error {
 				slog.Error("OTLP shutdown failed", "error", e)
 			}
 		}()
+	}
+	if dryEmitter != nil {
+		emitter = telemetry.FilterEmitter(emitter, cfg.OTLP.MetricDenylist, cfg.OTLP.AttributeDenylist)
 	}
 	stats := selfobs.New(emitter, version, commit)
 	if providers != nil {
@@ -197,7 +200,7 @@ func run(args []string) error {
 	}
 	scheduler.OnCheckpoint = stats.Checkpoint
 	if opts.Once || !opts.Since.IsZero() || !opts.Before.IsZero() {
-		return runOnce(ctx, scheduler, opts)
+		return runOnce(ctx, scheduler, opts, dryEmitter)
 	}
 	go func() {
 		if e := health.Serve(ctx, cfg); e != nil {
@@ -245,9 +248,13 @@ func selected(name string, names []string) bool {
 	}
 	return false
 }
-func runOnce(ctx context.Context, s *collector.Scheduler, o cli.Options) error {
+func runOnce(ctx context.Context, s *collector.Scheduler, o cli.Options, accounting ...*dryRunEmitter) error {
 	var errs []error
 	dryEmitter, dryRun := s.Emitter.(*dryRunEmitter)
+	if len(accounting) > 0 {
+		dryEmitter = accounting[0]
+		dryRun = dryEmitter != nil
+	}
 	for _, entry := range s.Registry.Entries() {
 		if !selected(entry.Collector.Name(), o.Datasets) {
 			continue
