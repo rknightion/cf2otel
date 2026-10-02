@@ -218,3 +218,214 @@ func TestDenylistOTLPBufferedSignals(t *testing.T) {
 		t.Error("caller input mutated")
 	}
 }
+
+// Inferred identity must never become direct-looking when its qualifier is denied.
+// Exercise the SDK/export boundary and independently filtered nested attribute bags.
+func TestDenylistOTLPInferenceQualifier(t *testing.T) {
+	for _, tc := range []struct {
+		name                                 string
+		denied                               []string
+		inferredKept, markerKept, directKept bool
+	}{
+		{"marker denied", []string{semconv.AttrAccessIdentityInferred}, false, false, true},
+		{"identity denied", []string{semconv.AttrAccessUserEmail}, false, true, false},
+		{"empty policy", nil, true, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			var mu sync.Mutex
+			var bags, directBags [][]*commonpb.KeyValue
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				switch r.URL.Path {
+				case "/v1/metrics":
+					var req metricscollector.ExportMetricsServiceRequest
+					if err := proto.Unmarshal(body, &req); err != nil {
+						t.Error(err)
+						return
+					}
+					for _, rm := range req.ResourceMetrics {
+						for _, sm := range rm.ScopeMetrics {
+							for _, m := range sm.Metrics {
+								for _, d := range m.GetSum().GetDataPoints() {
+									bags = append(bags, d.Attributes)
+								}
+								for _, d := range m.GetGauge().GetDataPoints() {
+									bags = append(bags, d.Attributes)
+								}
+								for _, d := range m.GetHistogram().GetDataPoints() {
+									bags = append(bags, d.Attributes)
+								}
+							}
+						}
+					}
+				case "/v1/logs":
+					var req logscollector.ExportLogsServiceRequest
+					if err := proto.Unmarshal(body, &req); err != nil {
+						t.Error(err)
+						return
+					}
+					for _, rm := range req.ResourceLogs {
+						for _, sl := range rm.ScopeLogs {
+							for _, l := range sl.LogRecords {
+								if l.Body.GetStringValue() == "direct" {
+									directBags = append(directBags, l.Attributes)
+								} else {
+									bags = append(bags, l.Attributes)
+								}
+							}
+						}
+					}
+				case "/v1/traces":
+					var req tracescollector.ExportTraceServiceRequest
+					if err := proto.Unmarshal(body, &req); err != nil {
+						t.Error(err)
+						return
+					}
+					for _, rm := range req.ResourceSpans {
+						for _, ss := range rm.ScopeSpans {
+							for _, s := range ss.Spans {
+								bags = append(bags, s.Attributes)
+								for _, ev := range s.Events {
+									bags = append(bags, ev.Attributes)
+								}
+								for _, link := range s.Links {
+									bags = append(bags, link.Attributes)
+								}
+							}
+						}
+					}
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+			p, err := NewProviders(ctx, ProviderOptions{Endpoint: server.URL, Interval: time.Hour, AttributeDenylist: tc.denied})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := p.Shutdown(ctx); err != nil {
+					t.Error(err)
+				}
+			}()
+			inferred := []Attr{
+				{Key: semconv.AttrAccessUserEmail, Value: "opaque-inferred"},
+				{Key: semconv.AttrAccessUserID, Value: "opaque-user"},
+				{Key: semconv.AttrAccessUserIPAddress, Value: "opaque-address"},
+				{Key: semconv.AttrAccessIdentityInferred, Value: "true"},
+				{Key: semconv.AttrAccessIdentityLoginRayID, Value: "opaque-login-ray"},
+				{Key: semconv.AttrStatusClass, Value: "2xx"},
+			}
+			b := &Buffer{}
+			for _, emit := range []func(context.Context, string, float64, ...Attr) error{b.Gauge, b.Counter, b.Histogram} {
+				if err := emit(ctx, semconv.MetricDNSQueries, 1, inferred...); err != nil {
+					t.Fatal(err)
+				}
+			}
+			now := time.Now()
+			if err := b.LogEvent(ctx, semconv.EventHTTPRequest, "inferred", now, otellog.SeverityInfo, inferred...); err != nil {
+				t.Fatal(err)
+			}
+			// Both absent and explicit false markers describe non-inferred identity.
+			for _, marker := range []string{"", "false"} {
+				direct := []Attr{{Key: semconv.AttrAccessUserEmail, Value: "opaque-direct"}, {Key: semconv.AttrStatusClass, Value: "2xx"}}
+				if marker != "" {
+					direct = append(direct, Attr{Key: semconv.AttrAccessIdentityInferred, Value: marker})
+				}
+				if err := b.LogEvent(ctx, semconv.EventAccessLogin, "direct", now, otellog.SeverityInfo, direct...); err != nil {
+					t.Fatal(err)
+				}
+			}
+			links := []trace.Link{{SpanContext: trace.NewSpanContext(trace.SpanContextConfig{TraceID: trace.TraceID{1}, SpanID: trace.SpanID{1}}), Attributes: []attribute.KeyValue{
+				attribute.String(semconv.AttrAccessUserEmail, "opaque-inferred"),
+				attribute.String(semconv.AttrAccessUserID, "opaque-user"),
+				attribute.String(semconv.AttrAccessUserIPAddress, "opaque-address"),
+				attribute.Bool(semconv.AttrAccessIdentityInferred, true),
+				attribute.String(semconv.AttrAccessIdentityLoginRayID, "opaque-login-ray"),
+				attribute.String(semconv.AttrStatusClass, "2xx"),
+			}}}
+			if err := b.Span(ctx, SpanSpec{Name: semconv.SpanAPIRequest, Start: now.Add(-time.Second), End: now, Attrs: inferred,
+				Events: []SpanEvent{{Name: "inferred", Attrs: inferred}}, Logs: []LogRecord{{Name: semconv.EventHTTPRequest, At: now, Body: "inferred", Attrs: inferred}}, Links: links,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := b.ReplayInto(ctx, p.Emitter); err != nil {
+				t.Fatal(err)
+			}
+			if err := p.metrics.ForceFlush(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if err := p.FlushCommit(ctx, p.BeginCommit()); err != nil {
+				t.Fatal(err)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			for _, bag := range directBags {
+				found := false
+				for _, a := range bag {
+					if a.Key == semconv.AttrAccessUserEmail {
+						found = a.Value.GetStringValue() == "opaque-direct"
+					}
+					if a.Key == semconv.AttrAccessIdentityInferred && !tc.markerKept {
+						t.Error("denied marker retained on direct identity")
+					}
+				}
+				if found != tc.directKept {
+					t.Error("direct identity did not follow explicit deny policy")
+				}
+			}
+			if len(directBags) != 2 {
+				t.Errorf("direct logs missing: %d", len(directBags))
+			}
+			for _, bag := range bags {
+				values := map[string]*commonpb.AnyValue{}
+				for _, a := range bag {
+					values[a.Key] = a.Value
+				}
+				if values[semconv.AttrStatusClass].GetStringValue() != "2xx" {
+					t.Error("unlisted attribute lost")
+				}
+				if values[semconv.AttrAccessUserEmail] != nil && !tc.inferredKept {
+					t.Error("inferred identity exported without mandatory inference marker")
+				}
+				if values[semconv.AttrAccessIdentityInferred] != nil && !tc.markerKept {
+					t.Error("denied inference marker exported")
+				}
+				if tc.inferredKept && values[semconv.AttrAccessUserEmail].GetStringValue() != "opaque-inferred" {
+					t.Error("allowed inferred identity lost")
+				}
+				for _, key := range []string{semconv.AttrAccessUserID, semconv.AttrAccessUserIPAddress} {
+					if (values[key] != nil) != tc.markerKept {
+						t.Errorf("inferred identity field %s did not follow qualifier policy", key)
+					}
+				}
+				if !tc.markerKept && values[semconv.AttrAccessIdentityLoginRayID] != nil {
+					t.Error("inference login reference exported without marker")
+				}
+				if tc.markerKept {
+					marker := values[semconv.AttrAccessIdentityInferred]
+					if marker.GetStringValue() != "true" && !marker.GetBoolValue() {
+						t.Error("allowed inference qualifier lost")
+					}
+					if values[semconv.AttrAccessIdentityLoginRayID].GetStringValue() != "opaque-login-ray" {
+						t.Error("allowed inference reference lost")
+					}
+				}
+			}
+			// Gauge, counter, histogram, log, span, event, nested log and link.
+			if len(bags) != 8 {
+				t.Errorf("inferred signal bags missing: %d", len(bags))
+			}
+			if inferred[0].Value != "opaque-inferred" || len(links[0].Attributes) != 6 {
+				t.Error("caller input mutated")
+			}
+		})
+	}
+}

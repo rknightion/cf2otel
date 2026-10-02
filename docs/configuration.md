@@ -70,6 +70,13 @@ change checkpoints, or remove data already exported. Denying `event_name` remove
 the usual Loki `| event_name="..."` query selector from new logs; the log body and
 signal still remain.
 
+Denying `cloudflare.access.identity.inferred` also removes Access user email,
+user ID, user IP address and inference login-ray reference from any attribute
+bag originally marked as inferred. This prevents inferred identity from looking
+like direct identity. Unmarked or explicitly non-inferred identity follows only
+its own configured denies. The denied marker is never retained implicitly, and
+this rule applies independently to nested span events, logs and links.
+
 Dropping a metric dimension loses that distinction. Counters and histograms
 aggregate into the remaining series. Gauges, including retained snapshots, use
 the **last input point** on a collision, never a sum or average. Snapshot filtering

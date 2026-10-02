@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/rknightion/cf2otel/internal/semconv"
 	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/trace"
@@ -44,9 +45,56 @@ func (p *denyPolicy) attrs(input []Attr) []Attr {
 	if p == nil || len(p.attributes) == 0 {
 		return input
 	}
+	suppressIdentity := false
+	if p.attribute(semconv.AttrAccessIdentityInferred) {
+		for _, a := range input {
+			if a.Key == semconv.AttrAccessIdentityInferred && a.Value == "true" {
+				suppressIdentity = true
+				break
+			}
+		}
+	}
 	out := make([]Attr, 0, len(input))
 	for _, a := range input {
-		if !p.attribute(a.Key) {
+		if !p.dropAttribute(a.Key, suppressIdentity) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// Removing a true inference qualifier must also remove the identity it qualifies.
+// Decide from the original bag, not the filtered output; direct identity remains
+// subject only to explicit denies. The HTTP producer uses email and login ray,
+// while the other Access user fields are identity if present in a marked bag.
+func (p *denyPolicy) dropAttribute(key string, suppressIdentity bool) bool {
+	if p.attribute(key) {
+		return true
+	}
+	if suppressIdentity {
+		switch key {
+		case semconv.AttrAccessUserEmail, semconv.AttrAccessUserID,
+			semconv.AttrAccessUserIPAddress, semconv.AttrAccessIdentityLoginRayID:
+			return true
+		}
+	}
+	return false
+}
+
+func (p *denyPolicy) linkAttrs(input []attribute.KeyValue) []attribute.KeyValue {
+	suppressIdentity := false
+	if p.attribute(semconv.AttrAccessIdentityInferred) {
+		for _, a := range input {
+			if string(a.Key) == semconv.AttrAccessIdentityInferred &&
+				(a.Value == attribute.BoolValue(true) || a.Value == attribute.StringValue("true")) {
+				suppressIdentity = true
+				break
+			}
+		}
+	}
+	out := make([]attribute.KeyValue, 0, len(input))
+	for _, a := range input {
+		if !p.dropAttribute(string(a.Key), suppressIdentity) {
 			out = append(out, a)
 		}
 	}
@@ -124,14 +172,7 @@ func (e *filteredEmitter) Span(ctx context.Context, s SpanSpec) error {
 	}
 	s.Links = append([]trace.Link(nil), s.Links...)
 	for i := range s.Links {
-		input := s.Links[i].Attributes
-		out := make([]attribute.KeyValue, 0, len(input))
-		for _, a := range input {
-			if !e.policy.attribute(string(a.Key)) {
-				out = append(out, a)
-			}
-		}
-		s.Links[i].Attributes = out
+		s.Links[i].Attributes = e.policy.linkAttrs(s.Links[i].Attributes)
 	}
 	return e.Emitter.Span(ctx, s)
 }
