@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-10-02 07:03'
+updated_date: '2026-10-02 07:55'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -292,3 +292,16 @@ DEX result requests require from/to ISO-ms strings and minute/hour interval, ove
 Official pool methods: https://developers.cloudflare.com/api/resources/load_balancers/subresources/pools/methods/list/ ; https://developers.cloudflare.com/api/resources/load_balancers/subresources/pools/subresources/health/methods/get/
 
 The WARP/DEX method documentation accepts one of Cloudflare DEX Read, Cloudflare DEX Write, Zero Trust Report or Zero Trust Read. Pool list/health accepts Load Balancing: Monitors and Pools Read or Write. Current empty access does not establish which group is minimal; no permission or credential edit was made. Load-balancing GraphQL selectors and RTT units require additional verification before source admission.
+
+
+## 17. Load-balancing global schema limits (2026-10-02)
+
+A read-only GraphQL introspection of five previously discovered object types returned HTTP 200 with no GraphQL errors at 07:48 UTC. This is global schema metadata, not zone availability, a successful traffic selection, populated values or pagination proof.
+
+`ZoneLoadBalancingRequestsAdaptiveGroups` exposes count (uint64, described as number of metric values per dimension), dimensions, avg, sum and ratio. Its avg object exposes only sampleInterval (float64); it does not expose an avgRttMs field. The dimensions object exposes selectedPoolAvgRttMs (uint64), explicitly described as dynamic-latency RTT in milliseconds to the origin pool. This establishes pool timing units, not the units of the REST origin-health rtt string or an origin-specific RTT measurement.
+
+Other dimensions include string region, lbName, selectedPoolName, selectedOriginName and selectedOriginNames; uint8 selectedPoolHealthy and selectedPoolHealthChecksEnabled. Identifiers such as selectedPoolId are internal selectors only, not authorized metric labels.
+
+The sum object exposes ruleMatches and totalRequestsWithRule (uint64), explicitly weighted by sample interval and requiring ruleName grouping. The ratio object's ruleMatchPercentage (float64, 0–100) also requires ruleName. Omitting ruleName produces incorrect cross-rule totals or percentages. These fields do not establish a general request-total or weighted-RTT aggregation contract. The standalone count description is insufficient proof of sampling treatment.
+
+Load-balancer source admission remains parked pending origin RTT units, valid traffic selectors and sampling/aggregation semantics. The current successful empty account pool list does not prove entitlement to populated health or traffic rows. No pool, origin, monitor or load balancer was created and no permission or credential was changed.
