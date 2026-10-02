@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.13.0](https://github.com/rknightion/cf2otel/compare/v0.12.0...v0.13.0) (2026-10-02)
+
+
+### Features
+
+* **access:** export bounded Access and Gateway seat gauges ([707c021](https://github.com/rknightion/cf2otel/commit/707c021bd23853bd16a8b933a70266004b120931))
+* **collector:** exclude discovered zones and report selection gauges ([ddb4125](https://github.com/rknightion/cf2otel/commit/ddb412590db55f0059a7d4f217edc5e0f53ee6ce))
+* **grafana:** add toggleable account audit annotations ([0f1f5d2](https://github.com/rknightion/cf2otel/commit/0f1f5d2c405c1ccb8793883507df2e09169c4c3b))
+* **grafana:** alert on fresh certificate pack snapshots ([91bdd5b](https://github.com/rknightion/cf2otel/commit/91bdd5b22c3f954c7f94652027c883674a12d20d))
+* **grafana:** display independent Access and Gateway seats ([e5a2517](https://github.com/rknightion/cf2otel/commit/e5a2517d9098a8376d870ad34067aadc2256fe9b))
+* **grafana:** show opt-in HTTP dimension rates ([88b4379](https://github.com/rknightion/cf2otel/commit/88b4379e923ffe35c1830a92eca8c52ab21c923e))
+* **grafana:** show recently seen WARP devices by source tuple ([e8c8028](https://github.com/rknightion/cf2otel/commit/e8c8028157b6550ca76d50eef7fe0d65c7756252))
+* **httpreq:** add opt-in colo, ASN and safe error-route counters ([ea8e9d8](https://github.com/rknightion/cf2otel/commit/ea8e9d8c1743b6638f6bec442895a867bbe55177))
+* **warp:** export bounded recently seen fleet snapshots ([461185c](https://github.com/rknightion/cf2otel/commit/461185cbee8b2e3302137251434e80eed6f4b49d))
+
 ## [0.12.0](https://github.com/rknightion/cf2otel/compare/v0.11.0...v0.12.0) (2026-10-01)
 
 
