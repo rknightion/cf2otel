@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.14.0](https://github.com/rknightion/cf2otel/compare/v0.13.0...v0.14.0) (2026-10-02)
+
+
+### Features
+
+* **dex:** export bounded test result snapshots ([5d0413c](https://github.com/rknightion/cf2otel/commit/5d0413cee23377e37e356d687a5558bc1b37ee2c))
+* **grafana:** expose zone selection, error classes and firewall enrichment ([d997015](https://github.com/rknightion/cf2otel/commit/d997015505c8b73a97affe9a7bef5c8509d3d312))
+* **grafana:** show Workers AI account counters and traffic ([65089d5](https://github.com/rknightion/cf2otel/commit/65089d58a8068ea4fb7f3f22f80512489a617fc1))
+* **platform:** resolve bounded resource names and R2 actions ([fc9d299](https://github.com/rknightion/cf2otel/commit/fc9d299d987c7073bfe43b8d8e1fec3c95df530e))
+* **telemetry:** add opt-in Prometheus pull endpoint alongside OTLP ([40b2ec6](https://github.com/rknightion/cf2otel/commit/40b2ec672cc15587ca33e6c125b0e62d53304af5))
+* **telemetry:** filter denied metrics and semantic attributes at source ([1b21a88](https://github.com/rknightion/cf2otel/commit/1b21a88719a5d068d2e4555a13a61093fbf8697e))
+* **telemetry:** verify metric HTTP partial-success reporting ([2d04726](https://github.com/rknightion/cf2otel/commit/2d047269ca3c7c448bbc7466da55da6c21afc297))
+* **workersai:** collect bounded aggregate inference metrics ([bb1ba00](https://github.com/rknightion/cf2otel/commit/bb1ba00e835e21b24b6415a1560a3f332b3d87f6))
+
+
+### Bug Fixes
+
+* allow loopback addresses in public push scan ([a325fbe](https://github.com/rknightion/cf2otel/commit/a325fbe23379d1402517db018fec6a560ddbce33))
+* **apidrift:** bound platform catalog shape checks to fifty rows ([6609c15](https://github.com/rknightion/cf2otel/commit/6609c150ac5562176b450f38d46c6813d2bcddb9))
+* **deps:** update module github.com/prometheus/common to v0.72.0 ([#40](https://github.com/rknightion/cf2otel/issues/40)) ([c0247de](https://github.com/rknightion/cf2otel/commit/c0247de8f461fc63cf0702540b0bbfae8c031e42))
+* **selfobs:** initialise enabled collector error counters at zero ([ca6e69e](https://github.com/rknightion/cf2otel/commit/ca6e69ef24d031f1ead80288b1a3296f6a36da8c))
+* **semconv:** register platform name attributes for deny filtering ([1d6e6f4](https://github.com/rknightion/cf2otel/commit/1d6e6f47d05aceaa1a57cd02fdc6bb433c4f72a9))
+* **telemetry:** suppress inferred identity when its qualifier is denied ([dd7fd00](https://github.com/rknightion/cf2otel/commit/dd7fd00e7d4bda2d844783eef5b6c57531deb439))
+
 ## [0.13.0](https://github.com/rknightion/cf2otel/compare/v0.12.0...v0.13.0) (2026-10-02)
 
 
