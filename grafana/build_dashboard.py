@@ -78,6 +78,12 @@ def warp_deployment_seconds(key: str, default: int, maximum: int | None = None) 
     return seconds
 
 
+# HTTP high-cardinality features use the existing httpreq.metrics 5m default.
+# This is a selected-deployment generator setting, not an observed runtime interval.
+HIGH_HTTP_INTERVAL_SECONDS = warp_deployment_seconds("GRAFANA_HTTP_HIGH_CARDINALITY_INTERVAL_SECONDS", 300)
+HIGH_HTTP_FRESHNESS_SECONDS = 3 * HIGH_HTTP_INTERVAL_SECONDS
+HIGH_HTTP_FRESH = '(time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="httpreq.metrics"}) < ' + str(HIGH_HTTP_FRESHNESS_SECONDS) + ')'
+
 WARP_INTERVAL_SECONDS = warp_deployment_seconds("GRAFANA_WARP_INTERVAL_SECONDS", 300)
 WARP_LAST_SEEN_WINDOW_SECONDS = warp_deployment_seconds("GRAFANA_WARP_LAST_SEEN_WINDOW_SECONDS", 900, 3600)
 WARP_FRESHNESS_SECONDS = 3 * WARP_INTERVAL_SECONDS
@@ -629,6 +635,36 @@ def http_tab(d: Dashboard) -> dict:
     d.stat(2064, "Account projected monthly transfer", "Account-wide MTD eyeball bytes projected using exact UTC month duration and elapsed complete-period seconds. Not filtered by zone or host; an estimate, not a billing forecast.",
         [prom(f'max(cloudflare_http_account_transfer_projected_month_total_bytes{{{S}}})', instant=True)], unit="bytes")
 
+    high_http_description = (
+        "Opt-in cumulative counters from Cloudflare Groups counts, not raw request rows. "
+        "Each zone, exporter instance and source tuple is shown independently; no replica totals. "
+        "Zone-filtered only: the dashboard host dropdown does not apply. The collector's "
+        "high_cardinality_hosts allowlist limits collection, not dashboard selection. "
+        "All three features are off by default and require advertised source fields. "
+        "No series can mean disabled, unentitled, unsupported, empty, failed or expired; not healthy zero. "
+        "Remainder=true is an additive bounded overflow/unmatched bucket, not a specific colo, ASN, "
+        "route or HTTP status class; remainder=false preserves literal source values including other. "
+        f"Freshness uses three generator-configured intervals ({HIGH_HTTP_FRESHNESS_SECONDS} seconds) "
+        "for httpreq.metrics. Set "
+        "GRAFANA_HTTP_HIGH_CARDINALITY_INTERVAL_SECONDS and regenerate for a nondefault poll interval. "
+        "This static setting targets one selected deployment, not an observed interval or active flag; "
+        "mixed-interval fleets are unsupported. After disable, last series can linger until freshness expires. "
+    )
+    d.ts(2065, "HTTP requests by colo", high_http_description + "Colo codes are source dimensions.",
+        [prom(f'rate(cloudflare_http_requests_by_colo_total{{{HTTP_ZONE}}}[$__rate_interval]) and on (instance) {HIGH_HTTP_FRESH}',
+              '{{cloudflare_http_zone}} / {{instance}} / {{cloudflare_http_colo}} / remainder={{cloudflare_http_breakdown_remainder}}')],
+        unit="reqps", no_value="No data")
+    d.ts(2066, "HTTP requests by ASN", high_http_description + "ASN and description are strings, only where both fields are advertised.",
+        [prom(f'rate(cloudflare_http_requests_by_asn_total{{{HTTP_ZONE}}}[$__rate_interval]) and on (instance) {HIGH_HTTP_FRESH}',
+              '{{cloudflare_http_zone}} / {{instance}} / {{cloudflare_http_client_asn}} / {{cloudflare_http_client_asn_description}} / remainder={{cloudflare_http_breakdown_remainder}}')],
+        unit="reqps", no_value="No data")
+    d.ts(2067, "HTTP errors by configured route", high_http_description +
+        "Routes are safe configured names matched after internal normalization, never raw or normalized paths. "
+        "The error_path feature requires a nonempty configured route map; status class is retained.",
+        [prom(f'rate(cloudflare_http_errors_by_route_total{{{HTTP_ZONE}}}[$__rate_interval]) and on (instance) {HIGH_HTTP_FRESH}',
+              '{{cloudflare_http_zone}} / {{instance}} / {{cloudflare_http_route_name}} / {{cloudflare_http_status_class}} / remainder={{cloudflare_http_breakdown_remainder}}')],
+        unit="reqps", no_value="No data")
+
     return tab(TAB_HTTP, [
         row("Summary", [(2001, 4, 4), (2002, 4, 4), (2003, 4, 4), (2004, 4, 4), (2005, 4, 4), (2006, 4, 4)]),
         row("Visits, threats and account transfer", [(2061, 6, 4), (2062, 6, 4), (2063, 6, 4), (2064, 6, 4)]),
@@ -639,6 +675,7 @@ def http_tab(d: Dashboard) -> dict:
         row("Hosts", [(2014, 24, 10)]),
         row("Origin", [(204, 16, 8), (2021, 8, 8)]),
         row("HTTP request logs", [(203, 24, 12)], collapse=True),
+        row("Opt-in HTTP dimensions", [(2065, 8, 8), (2066, 8, 8), (2067, 8, 8)]),
     ])
 
 

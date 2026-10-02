@@ -5797,6 +5797,282 @@
           }
         }
       },
+      "panel-2065": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_http_requests_by_colo_total{service_name=\"cf2otel\",cloudflare_http_zone=~\"$zone\"}[$__rate_interval]) and on (instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"httpreq.metrics\"}) < 900)",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cloudflare_http_zone}} / {{instance}} / {{cloudflare_http_colo}} / remainder={{cloudflare_http_breakdown_remainder}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Opt-in cumulative counters from Cloudflare Groups counts, not raw request rows. Each zone, exporter instance and source tuple is shown independently; no replica totals. Zone-filtered only: the dashboard host dropdown does not apply. The collector's high_cardinality_hosts allowlist limits collection, not dashboard selection. All three features are off by default and require advertised source fields. No series can mean disabled, unentitled, unsupported, empty, failed or expired; not healthy zero. Remainder=true is an additive bounded overflow/unmatched bucket, not a specific colo, ASN, route or HTTP status class; remainder=false preserves literal source values including other. Freshness uses three generator-configured intervals (900 seconds) for httpreq.metrics. Set GRAFANA_HTTP_HIGH_CARDINALITY_INTERVAL_SECONDS and regenerate for a nondefault poll interval. This static setting targets one selected deployment, not an observed interval or active flag; mixed-interval fleets are unsupported. After disable, last series can linger until freshness expires. Colo codes are source dimensions.",
+          "id": 2065,
+          "links": [],
+          "title": "HTTP requests by colo",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "No data",
+                  "unit": "reqps"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2066": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_http_requests_by_asn_total{service_name=\"cf2otel\",cloudflare_http_zone=~\"$zone\"}[$__rate_interval]) and on (instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"httpreq.metrics\"}) < 900)",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cloudflare_http_zone}} / {{instance}} / {{cloudflare_http_client_asn}} / {{cloudflare_http_client_asn_description}} / remainder={{cloudflare_http_breakdown_remainder}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Opt-in cumulative counters from Cloudflare Groups counts, not raw request rows. Each zone, exporter instance and source tuple is shown independently; no replica totals. Zone-filtered only: the dashboard host dropdown does not apply. The collector's high_cardinality_hosts allowlist limits collection, not dashboard selection. All three features are off by default and require advertised source fields. No series can mean disabled, unentitled, unsupported, empty, failed or expired; not healthy zero. Remainder=true is an additive bounded overflow/unmatched bucket, not a specific colo, ASN, route or HTTP status class; remainder=false preserves literal source values including other. Freshness uses three generator-configured intervals (900 seconds) for httpreq.metrics. Set GRAFANA_HTTP_HIGH_CARDINALITY_INTERVAL_SECONDS and regenerate for a nondefault poll interval. This static setting targets one selected deployment, not an observed interval or active flag; mixed-interval fleets are unsupported. After disable, last series can linger until freshness expires. ASN and description are strings, only where both fields are advertised.",
+          "id": 2066,
+          "links": [],
+          "title": "HTTP requests by ASN",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "No data",
+                  "unit": "reqps"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2067": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_http_errors_by_route_total{service_name=\"cf2otel\",cloudflare_http_zone=~\"$zone\"}[$__rate_interval]) and on (instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"httpreq.metrics\"}) < 900)",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cloudflare_http_zone}} / {{instance}} / {{cloudflare_http_route_name}} / {{cloudflare_http_status_class}} / remainder={{cloudflare_http_breakdown_remainder}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Opt-in cumulative counters from Cloudflare Groups counts, not raw request rows. Each zone, exporter instance and source tuple is shown independently; no replica totals. Zone-filtered only: the dashboard host dropdown does not apply. The collector's high_cardinality_hosts allowlist limits collection, not dashboard selection. All three features are off by default and require advertised source fields. No series can mean disabled, unentitled, unsupported, empty, failed or expired; not healthy zero. Remainder=true is an additive bounded overflow/unmatched bucket, not a specific colo, ASN, route or HTTP status class; remainder=false preserves literal source values including other. Freshness uses three generator-configured intervals (900 seconds) for httpreq.metrics. Set GRAFANA_HTTP_HIGH_CARDINALITY_INTERVAL_SECONDS and regenerate for a nondefault poll interval. This static setting targets one selected deployment, not an observed interval or active flag; mixed-interval fleets are unsupported. After disable, last series can linger until freshness expires. Routes are safe configured names matched after internal normalization, never raw or normalized paths. The error_path feature requires a nonempty configured route map; status class is retained.",
+          "id": 2067,
+          "links": [],
+          "title": "HTTP errors by configured route",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "No data",
+                  "unit": "reqps"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
       "panel-2101": {
         "kind": "Panel",
         "spec": {
@@ -24260,6 +24536,59 @@
                           }
                         },
                         "title": "HTTP request logs"
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "collapse": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2065"
+                                  },
+                                  "height": 8,
+                                  "width": 8,
+                                  "x": 0,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2066"
+                                  },
+                                  "height": 8,
+                                  "width": 8,
+                                  "x": 8,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2067"
+                                  },
+                                  "height": 8,
+                                  "width": 8,
+                                  "x": 16,
+                                  "y": 0
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "title": "Opt-in HTTP dimensions"
                       }
                     }
                   ]

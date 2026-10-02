@@ -234,6 +234,15 @@ class WARPFleetTest(unittest.TestCase):
             old_access = next(t for t in original["spec"]["layout"]["spec"]["tabs"]
                               if t["spec"]["title"] == "Access and Zero Trust")
             old_access["spec"]["layout"]["spec"]["rows"].pop()
+        # The later HTTP batch has its own whole-dashboard preservation check below.
+        # Exclude only that explicitly appended feature from this earlier WARP comparison.
+        for asset in (dashboard, original):
+            if "panel-2065" in asset["spec"]["elements"]:
+                http = next(t for t in asset["spec"]["layout"]["spec"]["tabs"]
+                            if t["spec"]["title"] == "HTTP and cache")
+                http["spec"]["layout"]["spec"]["rows"].pop()
+                for pid in (2065, 2066, 2067):
+                    asset["spec"]["elements"].pop(f"panel-{pid}")
         self.assertEqual(dashboard, original, "all previous panels, layouts and dashboard settings must survive")
 
     def test_invalid_deployment_settings_fail_without_output(self):
@@ -245,6 +254,95 @@ class WARPFleetTest(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 key = "GRAFANA_WARP_INTERVAL_SECONDS" if interval is not None else "GRAFANA_WARP_LAST_SEEN_WINDOW_SECONDS"
                 self.assertIn(key + " must be", result.stderr)
+                self.assertIsNone(dashboard)
+
+
+class HTTPDimensionsTest(unittest.TestCase):
+    def generate(self, interval=None):
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "grafana" / "build_dashboard.py"
+            script.parent.mkdir()
+            script.write_bytes((ROOT / "grafana/build_dashboard.py").read_bytes())
+            env = {k: v for k, v in os.environ.items() if not k.startswith("GRAFANA_")}
+            if interval is not None:
+                env["GRAFANA_HTTP_HIGH_CARDINALITY_INTERVAL_SECONDS"] = interval
+            result = subprocess.run([sys.executable, str(script)], env=env,
+                                    capture_output=True, text=True, timeout=30)
+            output = script.parent.parent / "dashboards/cf2otel.json"
+            return result, json.loads(output.read_text()) if output.exists() else None
+
+    def test_source_counter_rates_preserve_every_tuple_and_instance(self):
+        dimensions = (
+            (2065, "HTTP requests by colo", "cloudflare_http_requests_by_colo_total",
+             ("cloudflare_http_colo",)),
+            (2066, "HTTP requests by ASN", "cloudflare_http_requests_by_asn_total",
+             ("cloudflare_http_client_asn", "cloudflare_http_client_asn_description")),
+            (2067, "HTTP errors by configured route", "cloudflare_http_errors_by_route_total",
+             ("cloudflare_http_route_name", "cloudflare_http_status_class")),
+        )
+        for setting, threshold in ((None, 900), ("600", 1800)):
+            with self.subTest(setting=setting):
+                result, dashboard = self.generate(setting)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                for pid, title, family, fields in dimensions:
+                    key = f"panel-{pid}"
+                    self.assertIn(key, dashboard["spec"]["elements"], "landed HTTP dimensions need panels")
+                    panel = dashboard["spec"]["elements"][key]["spec"]
+                    self.assertEqual(panel["title"], title)
+                    self.assertEqual(panel["vizConfig"]["group"], "timeseries")
+                    queries = panel["data"]["spec"]["queries"]
+                    self.assertEqual(len(queries), 1)
+                    query = queries[0]["spec"]["query"]
+                    self.assertEqual(query["kind"], "DataQuery")
+                    self.assertEqual(query["version"], "v0")
+                    self.assertEqual(query["group"], "prometheus")
+                    self.assertEqual(query["datasource"]["name"], "${ds_prometheus}")
+                    target = query["spec"]
+                    self.assertIs(target["instant"], False)
+                    self.assertIs(target["range"], True)
+                    self.assertEqual(target["expr"],
+                                     f'rate({family}{{service_name="cf2otel",cloudflare_http_zone=~"$zone"}}[$__rate_interval]) '
+                                     'and on (instance) (time() - max by (instance) ('
+                                     'cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",'
+                                     f'cf2otel_collector="httpreq.metrics"}}) < {threshold})')
+                    expected_fields = {"cloudflare_http_zone", "instance", "cloudflare_http_breakdown_remainder", *fields}
+                    self.assertEqual(set(re.findall(r"{{(\w+)}}", target["legendFormat"])), expected_fields)
+                    defaults = panel["vizConfig"]["spec"]["fieldConfig"]["defaults"]
+                    self.assertEqual(defaults["unit"], "reqps")
+                    self.assertEqual(defaults["custom"]["stacking"]["mode"], "none")
+                    self.assertIs(defaults["custom"]["spanNulls"], False)
+                    self.assertEqual(panel["data"]["spec"]["transformations"], [])
+
+    def test_appended_http_row_preserves_entire_prior_dashboard(self):
+        result, dashboard = self.generate()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        http = next(t for t in dashboard["spec"]["layout"]["spec"]["tabs"]
+                    if t["spec"]["title"] == "HTTP and cache")
+        rows = http["spec"]["layout"]["spec"]["rows"]
+        self.assertEqual(rows[-1]["spec"]["title"], "Opt-in HTTP dimensions")
+        items = rows[-1]["spec"]["layout"]["spec"]["items"]
+        self.assertEqual([(i["spec"]["element"]["name"], i["spec"]["width"], i["spec"]["x"]) for i in items],
+                         [("panel-2065", 8, 0), ("panel-2066", 8, 8), ("panel-2067", 8, 16)])
+        rows.pop()
+        for pid in (2065, 2066, 2067):
+            dashboard["spec"]["elements"].pop(f"panel-{pid}")
+        baseline = subprocess.run(["git", "show", "HEAD:dashboards/cf2otel.json"], cwd=ROOT,
+                                  check=True, capture_output=True, text=True, timeout=30)
+        original = json.loads(baseline.stdout)
+        if "panel-2065" in original["spec"]["elements"]:
+            old_http = next(t for t in original["spec"]["layout"]["spec"]["tabs"]
+                            if t["spec"]["title"] == "HTTP and cache")
+            old_http["spec"]["layout"]["spec"]["rows"].pop()
+            for pid in (2065, 2066, 2067):
+                original["spec"]["elements"].pop(f"panel-{pid}")
+        self.assertEqual(dashboard, original, "only the new HTTP panels and appended row may change")
+
+    def test_invalid_static_intervals_fail_without_output(self):
+        for setting in ("0", "１２"):
+            with self.subTest(setting=setting):
+                result, dashboard = self.generate(setting)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("GRAFANA_HTTP_HIGH_CARDINALITY_INTERVAL_SECONDS must be a positive integer in seconds", result.stderr)
                 self.assertIsNone(dashboard)
 
 
