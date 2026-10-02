@@ -17,6 +17,23 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def without_resource_and_dex_additions(dashboard):
+    """Earlier feature-preservation tests compare their pre-DASH-3 surface.
+
+    These two additive rows have separate query/behavior contracts below. Retain
+    all prior rows and panels in the whole-dashboard equality checks.
+    """
+    platform = next(t for t in dashboard["spec"]["layout"]["spec"]["tabs"]
+                    if t["spec"]["title"] == "Workers and platform")
+    rows = platform["spec"]["layout"]["spec"]["rows"]
+    for row in list(rows):
+        if row["spec"]["title"] in ("Resolved platform resources and R2 actions",
+                                    "DEX test results (opt-in provider averages)"):
+            for item in row["spec"]["layout"]["spec"]["items"]:
+                dashboard["spec"]["elements"].pop(item["spec"]["element"]["name"])
+            rows.remove(row)
+
+
 class AuditAnnotationsTest(unittest.TestCase):
     def test_generated_layer_reaches_loki_with_audit_context(self):
         # Exercise the generator's public CLI without rewriting the tracked output.
@@ -168,6 +185,129 @@ class LandedMetricPanelsTest(unittest.TestCase):
                                 "cloudflare_firewall_host", "cloudflare_firewall_client_country"))
                             and t["instant"] and t["format"] == "table" for t in targets),
                         "missing enriched firewall metric table; logs are not a substitute")
+
+
+class ResourceAndDEXPanelsTest(unittest.TestCase):
+    # Public OTLP names/units are frozen in semconv metadata; suffixes verified
+    # with the pinned Prometheus otlptranslator, not inferred from Grafana units.
+    resources = {
+        "cloudflare_d1_database_name": (
+            "cloudflare_d1_read_queries_total", "cloudflare_d1_write_queries_total",
+            "cloudflare_d1_queries_total", "cloudflare_d1_storage_max_database_bytes"),
+        "cloudflare_kv_namespace_name": (
+            "cloudflare_kv_requests_total", "cloudflare_kv_storage_max_namespace_bytes",
+            "cloudflare_kv_storage_max_namespace_keys"),
+        "cloudflare_durableobjects_namespace_name": (
+            "cloudflare_durableobjects_requests_total", "cloudflare_durableobjects_subrequests_total",
+            "cloudflare_durableobjects_subrequests_request_body_bytes_total",
+            "cloudflare_durableobjects_sql_storage_max_namespace_bytes"),
+        "cloudflare_queues_queue_name": (
+            "cloudflare_queues_message_operations_total", "cloudflare_queues_message_billable_operations_total",
+            "cloudflare_queues_backlog_max_queue_avg_messages",
+            "cloudflare_queues_delayed_backlog_max_queue_avg_messages",
+            "cloudflare_queues_backlog_max_queue_avg_bytes",
+            "cloudflare_queues_consumer_max_queue_avg_concurrency"),
+        "cloudflare_r2_action_type": ("cloudflare_r2_requests_total",),
+    }
+    dex = {
+        "cloudflare_dex_http_fetch_time_milliseconds": "ms",
+        "cloudflare_dex_traceroute_rtt_milliseconds": "ms",
+        "cloudflare_dex_traceroute_hops": "suffix: hops",
+        "cloudflare_dex_packet_loss_percent": "percent",
+        "cloudflare_dex_availability_percent": "percent",
+    }
+
+    def panels(self):
+        result, dashboard = HTTPDimensionsTest().generate()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return dashboard["spec"]["elements"].values()
+
+    def targets(self):
+        return [q["spec"]["query"]["spec"] for panel in self.panels()
+                for q in panel["spec"]["data"]["spec"]["queries"]
+                if q["spec"]["query"]["group"] == "prometheus"]
+
+    def test_resolved_resources_keep_raw_instance_and_source_reductions(self):
+        targets = self.targets()
+        for label, metrics in self.resources.items():
+            for metric in metrics:
+                with self.subTest(metric=metric):
+                    matches = [t for t in targets if metric + "{" in t["expr"] and
+                               "{{" + label + "}}" in t["legendFormat"] and
+                               "{{instance}}" in t["legendFormat"]]
+                    self.assertTrue(matches, f"missing resolved resource/action query: {metric}")
+                    selector = 'service_name="cf2otel"'
+                    if label == "cloudflare_r2_action_type":
+                        selector += ',cloudflare_r2_bucket_name=~"$bucket"'
+                    series = f"{metric}{{{selector}}}"
+                    expected = f"rate({series}[$__rate_interval])" if metric.endswith("_total") else series
+                    for target in matches:
+                        self.assertEqual(target["expr"], expected,
+                                         "retain account/instance/resource and source MAX; never combine replicas")
+                        self.assertFalse(target["instant"])
+                        self.assertIn("{{cloudflare_account_name}}", target["legendFormat"])
+                        if label == "cloudflare_r2_action_type":
+                            self.assertIn("{{cloudflare_r2_bucket_name}}", target["legendFormat"])
+
+    def test_dex_provider_averages_keep_kind_name_units_and_absence(self):
+        panels = list(self.panels())
+        for metric, unit in self.dex.items():
+            matches = [p["spec"] for p in panels if any(
+                q["spec"]["query"]["group"] == "prometheus" and
+                metric + "{" in q["spec"]["query"]["spec"]["expr"]
+                for q in p["spec"]["data"]["spec"]["queries"])]
+            self.assertTrue(matches, f"missing provider-average DEX panel: {metric}")
+            for panel in matches:
+                target = panel["data"]["spec"]["queries"][0]["spec"]["query"]["spec"]
+                self.assertEqual(target["expr"], f'{metric}{{service_name="cf2otel"}}',
+                                 "no pooled average, gauge rate, unit conversion or unavailable zero-fill")
+                self.assertEqual(set(re.findall(r"{{(\w+)}}", target["legendFormat"])),
+                                 {"instance", "cloudflare_dex_test_name", "cloudflare_dex_test_kind"})
+                defaults = panel["vizConfig"]["spec"]["fieldConfig"]["defaults"]
+                self.assertEqual(defaults["unit"], unit)
+                self.assertEqual(defaults["noValue"], "Unavailable")
+                self.assertIn("provider requested-interval averages", panel["description"])
+                self.assertIn("arithmetic mean", panel["description"])
+                self.assertIn("fixture-only", panel["description"])
+                self.assertIn("disabled by default", panel["description"])
+
+    def test_generated_queries_preserve_remainders_replicas_and_real_zero(self):
+        targets = self.targets()
+        expressions = []
+        for label, metric in (("cloudflare_d1_database_name", "cloudflare_d1_queries_total"),
+                              ("cloudflare_queues_queue_name", "cloudflare_queues_backlog_max_queue_avg_messages"),
+                              ("cloudflare_dex_test_name", "cloudflare_dex_availability_percent")):
+            matches = [t for t in targets if metric + "{" in t["expr"] and
+                       "{{" + label + "}}" in t["legendFormat"] and "{{instance}}" in t["legendFormat"]]
+            self.assertTrue(matches, f"missing query for behavioral evaluation: {metric}")
+            expressions.append((label, metric, matches[0]["expr"].replace("$__rate_interval", "5m")))
+        series, checks = [], []
+        for label, metric, expr in expressions:
+            samples = []
+            for instance, name, values, expected in (
+                    ("fixture-a", "Named", "0 60 0 60 120 180", 0.75),
+                    ("fixture-b", "Named", "0 60 120 180 240 300", 1),
+                    ("fixture-a", "other", "0 0 0 0 0 0", 0)):
+                attributes = f'instance="{instance}",{label}="{name}",service_name="cf2otel"'
+                if metric.startswith("cloudflare_dex_"):
+                    attributes += ',cloudflare_dex_test_kind="http"'
+                labels = attributes
+                if not metric.endswith("_total"):
+                    labels += f',__name__="{metric}"'
+                    expected = 40 if instance == "fixture-a" and name == "Named" else 90 if instance == "fixture-b" else 0
+                    values = " ".join([str(expected)] * 6)
+                series.append({"series": f'{metric}{{{attributes}}}', "values": values})
+                samples.append({"labels": "{" + labels + "}", "value": expected})
+            checks += [{"expr": expr, "eval_time": "5m", "exp_samples": samples},
+                       {"expr": expr, "eval_time": "15m", "exp_samples": []}]
+        fixture = {"rule_files": [], "evaluation_interval": "1m", "tests": [{
+            "interval": "1m", "input_series": series, "promql_expr_test": checks}]}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "resource-dex.json"
+            path.write_text(json.dumps(fixture))
+            result = subprocess.run(["promtool", "test", "rules", str(path)],
+                                    capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 class AccessSeatsTest(unittest.TestCase):
@@ -340,6 +480,8 @@ class WARPFleetTest(unittest.TestCase):
                 http["spec"]["layout"]["spec"]["rows"].pop()
                 for pid in (2065, 2066, 2067):
                     asset["spec"]["elements"].pop(f"panel-{pid}")
+        for asset in (dashboard, original):
+            without_resource_and_dex_additions(asset)
         self.assertEqual(dashboard, original, "all previous panels, layouts and dashboard settings must survive")
 
     def test_invalid_deployment_settings_fail_without_output(self):
@@ -432,6 +574,8 @@ class HTTPDimensionsTest(unittest.TestCase):
             old_http["spec"]["layout"]["spec"]["rows"].pop()
             for pid in (2065, 2066, 2067):
                 original["spec"]["elements"].pop(f"panel-{pid}")
+        for asset in (dashboard, original):
+            without_resource_and_dex_additions(asset)
         self.assertEqual(dashboard, original, "only the new HTTP panels and appended row may change")
 
     def test_invalid_static_intervals_fail_without_output(self):

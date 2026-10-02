@@ -17058,6 +17058,1872 @@
           }
         }
       },
+      "panel-2671": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_d1_read_queries_total{service_name=\"cf2otel\"}[$__rate_interval])",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "reads {{cloudflare_account_name}} / {{cloudflare_d1_database_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_d1_write_queries_total{service_name=\"cf2otel\"}[$__rate_interval])",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "writes {{cloudflare_account_name}} / {{cloudflare_d1_database_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "B"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "B"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_d1_queries_total{service_name=\"cf2otel\"}[$__rate_interval])",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "queries {{cloudflare_account_name}} / {{cloudflare_d1_database_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "C"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "C"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Bounded resolved resource names, never source IDs; 49 named attribute sets plus other per base metric. Counters SUM within each name/other; gauges MAX within each name/other from the globally latest complete five-minute bucket. other includes unresolved, invalid, ambiguous and overflow names, not a single resource. Each account and exporter instance remains independent; overlapping replicas must not be added together. Counter rates reflect delivery, including catch-up, and handle observed resets but omit first-seen values. Gauges are latest source bucket observations, not range maxima or averages; stale observations may persist after errors. Missing/unavailable data is not zero or proof of source or storage coverage. ",
+          "id": 2671,
+          "links": [],
+          "title": "D1 query rates by database",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "reqps"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2672": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_d1_storage_max_database_bytes{service_name=\"cf2otel\"}",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "storage {{cloudflare_account_name}} / {{cloudflare_d1_database_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Bounded resolved resource names, never source IDs; 49 named attribute sets plus other per base metric. Counters SUM within each name/other; gauges MAX within each name/other from the globally latest complete five-minute bucket. other includes unresolved, invalid, ambiguous and overflow names, not a single resource. Each account and exporter instance remains independent; overlapping replicas must not be added together. Counter rates reflect delivery, including catch-up, and handle observed resets but omit first-seen values. Gauges are latest source bucket observations, not range maxima or averages; stale observations may persist after errors. Missing/unavailable data is not zero or proof of source or storage coverage. ",
+          "id": 2672,
+          "links": [],
+          "title": "D1 storage by database",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "bytes"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2673": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_kv_requests_total{service_name=\"cf2otel\"}[$__rate_interval])",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "requests {{cloudflare_account_name}} / {{cloudflare_kv_namespace_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Bounded resolved resource names, never source IDs; 49 named attribute sets plus other per base metric. Counters SUM within each name/other; gauges MAX within each name/other from the globally latest complete five-minute bucket. other includes unresolved, invalid, ambiguous and overflow names, not a single resource. Each account and exporter instance remains independent; overlapping replicas must not be added together. Counter rates reflect delivery, including catch-up, and handle observed resets but omit first-seen values. Gauges are latest source bucket observations, not range maxima or averages; stale observations may persist after errors. Missing/unavailable data is not zero or proof of source or storage coverage. ",
+          "id": 2673,
+          "links": [],
+          "title": "KV requests by namespace",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "reqps"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2674": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_kv_storage_max_namespace_bytes{service_name=\"cf2otel\"}",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "storage {{cloudflare_account_name}} / {{cloudflare_kv_namespace_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Bounded resolved resource names, never source IDs; 49 named attribute sets plus other per base metric. Counters SUM within each name/other; gauges MAX within each name/other from the globally latest complete five-minute bucket. other includes unresolved, invalid, ambiguous and overflow names, not a single resource. Each account and exporter instance remains independent; overlapping replicas must not be added together. Counter rates reflect delivery, including catch-up, and handle observed resets but omit first-seen values. Gauges are latest source bucket observations, not range maxima or averages; stale observations may persist after errors. Missing/unavailable data is not zero or proof of source or storage coverage. ",
+          "id": 2674,
+          "links": [],
+          "title": "KV storage bytes by namespace",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "bytes"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2675": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_kv_storage_max_namespace_keys{service_name=\"cf2otel\"}",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "keys {{cloudflare_account_name}} / {{cloudflare_kv_namespace_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Bounded resolved resource names, never source IDs; 49 named attribute sets plus other per base metric. Counters SUM within each name/other; gauges MAX within each name/other from the globally latest complete five-minute bucket. other includes unresolved, invalid, ambiguous and overflow names, not a single resource. Each account and exporter instance remains independent; overlapping replicas must not be added together. Counter rates reflect delivery, including catch-up, and handle observed resets but omit first-seen values. Gauges are latest source bucket observations, not range maxima or averages; stale observations may persist after errors. Missing/unavailable data is not zero or proof of source or storage coverage. ",
+          "id": 2675,
+          "links": [],
+          "title": "KV keys by namespace",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2676": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_durableobjects_requests_total{service_name=\"cf2otel\"}[$__rate_interval])",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "requests {{cloudflare_account_name}} / {{cloudflare_durableobjects_namespace_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_durableobjects_subrequests_total{service_name=\"cf2otel\"}[$__rate_interval])",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "subrequests {{cloudflare_account_name}} / {{cloudflare_durableobjects_namespace_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "B"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "B"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Bounded resolved resource names, never source IDs; 49 named attribute sets plus other per base metric. Counters SUM within each name/other; gauges MAX within each name/other from the globally latest complete five-minute bucket. other includes unresolved, invalid, ambiguous and overflow names, not a single resource. Each account and exporter instance remains independent; overlapping replicas must not be added together. Counter rates reflect delivery, including catch-up, and handle observed resets but omit first-seen values. Gauges are latest source bucket observations, not range maxima or averages; stale observations may persist after errors. Missing/unavailable data is not zero or proof of source or storage coverage. ",
+          "id": 2676,
+          "links": [],
+          "title": "Durable Objects requests by namespace",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "reqps"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2677": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_durableobjects_subrequests_request_body_bytes_total{service_name=\"cf2otel\"}[$__rate_interval])",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "request body {{cloudflare_account_name}} / {{cloudflare_durableobjects_namespace_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Bounded resolved resource names, never source IDs; 49 named attribute sets plus other per base metric. Counters SUM within each name/other; gauges MAX within each name/other from the globally latest complete five-minute bucket. other includes unresolved, invalid, ambiguous and overflow names, not a single resource. Each account and exporter instance remains independent; overlapping replicas must not be added together. Counter rates reflect delivery, including catch-up, and handle observed resets but omit first-seen values. Gauges are latest source bucket observations, not range maxima or averages; stale observations may persist after errors. Missing/unavailable data is not zero or proof of source or storage coverage. ",
+          "id": 2677,
+          "links": [],
+          "title": "Durable Objects body traffic by namespace",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "Bps"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2678": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_durableobjects_sql_storage_max_namespace_bytes{service_name=\"cf2otel\"}",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "storage {{cloudflare_account_name}} / {{cloudflare_durableobjects_namespace_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Bounded resolved resource names, never source IDs; 49 named attribute sets plus other per base metric. Counters SUM within each name/other; gauges MAX within each name/other from the globally latest complete five-minute bucket. other includes unresolved, invalid, ambiguous and overflow names, not a single resource. Each account and exporter instance remains independent; overlapping replicas must not be added together. Counter rates reflect delivery, including catch-up, and handle observed resets but omit first-seen values. Gauges are latest source bucket observations, not range maxima or averages; stale observations may persist after errors. Missing/unavailable data is not zero or proof of source or storage coverage. ",
+          "id": 2678,
+          "links": [],
+          "title": "Durable Objects SQL storage by namespace",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "bytes"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2679": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_queues_message_operations_total{service_name=\"cf2otel\"}[$__rate_interval])",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "operations {{cloudflare_account_name}} / {{cloudflare_queues_queue_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_queues_message_billable_operations_total{service_name=\"cf2otel\"}[$__rate_interval])",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "billable operations {{cloudflare_account_name}} / {{cloudflare_queues_queue_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "B"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "B"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Bounded resolved resource names, never source IDs; 49 named attribute sets plus other per base metric. Counters SUM within each name/other; gauges MAX within each name/other from the globally latest complete five-minute bucket. other includes unresolved, invalid, ambiguous and overflow names, not a single resource. Each account and exporter instance remains independent; overlapping replicas must not be added together. Counter rates reflect delivery, including catch-up, and handle observed resets but omit first-seen values. Gauges are latest source bucket observations, not range maxima or averages; stale observations may persist after errors. Missing/unavailable data is not zero or proof of source or storage coverage. ",
+          "id": 2679,
+          "links": [],
+          "title": "Queue operations by queue",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "reqps"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2680": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_queues_backlog_max_queue_avg_messages{service_name=\"cf2otel\"}",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "backlog {{cloudflare_account_name}} / {{cloudflare_queues_queue_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_queues_delayed_backlog_max_queue_avg_messages{service_name=\"cf2otel\"}",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "delayed backlog {{cloudflare_account_name}} / {{cloudflare_queues_queue_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "B"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "B"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Bounded resolved resource names, never source IDs; 49 named attribute sets plus other per base metric. Counters SUM within each name/other; gauges MAX within each name/other from the globally latest complete five-minute bucket. other includes unresolved, invalid, ambiguous and overflow names, not a single resource. Each account and exporter instance remains independent; overlapping replicas must not be added together. Counter rates reflect delivery, including catch-up, and handle observed resets but omit first-seen values. Gauges are latest source bucket observations, not range maxima or averages; stale observations may persist after errors. Missing/unavailable data is not zero or proof of source or storage coverage. Queue gauges are per-queue provider averages; other is their maximum, not an account-wide average. ",
+          "id": 2680,
+          "links": [],
+          "title": "Queue backlog messages by queue",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2681": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_queues_backlog_max_queue_avg_bytes{service_name=\"cf2otel\"}",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "backlog bytes {{cloudflare_account_name}} / {{cloudflare_queues_queue_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Bounded resolved resource names, never source IDs; 49 named attribute sets plus other per base metric. Counters SUM within each name/other; gauges MAX within each name/other from the globally latest complete five-minute bucket. other includes unresolved, invalid, ambiguous and overflow names, not a single resource. Each account and exporter instance remains independent; overlapping replicas must not be added together. Counter rates reflect delivery, including catch-up, and handle observed resets but omit first-seen values. Gauges are latest source bucket observations, not range maxima or averages; stale observations may persist after errors. Missing/unavailable data is not zero or proof of source or storage coverage. Queue gauges are per-queue provider averages; other is their maximum, not an account-wide average. ",
+          "id": 2681,
+          "links": [],
+          "title": "Queue backlog bytes by queue",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "bytes"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2682": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_queues_consumer_max_queue_avg_concurrency{service_name=\"cf2otel\"}",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "concurrency {{cloudflare_account_name}} / {{cloudflare_queues_queue_name}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Bounded resolved resource names, never source IDs; 49 named attribute sets plus other per base metric. Counters SUM within each name/other; gauges MAX within each name/other from the globally latest complete five-minute bucket. other includes unresolved, invalid, ambiguous and overflow names, not a single resource. Each account and exporter instance remains independent; overlapping replicas must not be added together. Counter rates reflect delivery, including catch-up, and handle observed resets but omit first-seen values. Gauges are latest source bucket observations, not range maxima or averages; stale observations may persist after errors. Missing/unavailable data is not zero or proof of source or storage coverage. Queue gauges are per-queue provider averages; other is their maximum, not an account-wide average. ",
+          "id": 2682,
+          "links": [],
+          "title": "Queue consumer concurrency by queue",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2683": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_r2_requests_total{service_name=\"cf2otel\",cloudflare_r2_bucket_name=~\"$bucket\"}[$__rate_interval])",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cloudflare_account_name}} / {{cloudflare_r2_bucket_name}} / {{cloudflare_r2_action_type}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Advertised action type and optional bounded bucket name; 49 named bucket/action tuples plus an all-other remainder. Counter sums are conserved in other, not split back into actions. Missing action/bucket dimensions stay absent. Each account/exporter instance remains independent. Rates reflect delivery including catch-up; observed resets are handled, but first-seen counter values are omitted. Unavailable data is not zero or source/storage proof.",
+          "id": 2683,
+          "links": [],
+          "title": "R2 requests by bucket and action",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "reqps"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2684": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_dex_http_fetch_time_milliseconds{service_name=\"cf2otel\"}",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cloudflare_dex_test_name}} / {{cloudflare_dex_test_kind}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "dex.tests is opt-in and disabled by default; fixture-only evidence, unpopulated live source not verified. Values are provider requested-interval averages, not instantaneous probes or source percentiles. Configured test name and kind are bounded; no test/device ID or target address. other is the exporter arithmetic mean of available per-test provider averages for that signal/kind, not pooled/device-weighted latency or overall availability. Each exporter instance is independent. Missing optional results are omitted, never zero-filled; real zero is retained. Snapshots may persist after failures until configured expiry; these panels do not prove source/storage coverage. ",
+          "id": 2684,
+          "links": [],
+          "title": "DEX HTTP fetch time",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "ms"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2685": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_dex_traceroute_rtt_milliseconds{service_name=\"cf2otel\"}",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cloudflare_dex_test_name}} / {{cloudflare_dex_test_kind}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "dex.tests is opt-in and disabled by default; fixture-only evidence, unpopulated live source not verified. Values are provider requested-interval averages, not instantaneous probes or source percentiles. Configured test name and kind are bounded; no test/device ID or target address. other is the exporter arithmetic mean of available per-test provider averages for that signal/kind, not pooled/device-weighted latency or overall availability. Each exporter instance is independent. Missing optional results are omitted, never zero-filled; real zero is retained. Snapshots may persist after failures until configured expiry; these panels do not prove source/storage coverage. ",
+          "id": 2685,
+          "links": [],
+          "title": "DEX traceroute RTT",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "ms"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2686": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_dex_traceroute_hops{service_name=\"cf2otel\"}",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cloudflare_dex_test_name}} / {{cloudflare_dex_test_kind}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "dex.tests is opt-in and disabled by default; fixture-only evidence, unpopulated live source not verified. Values are provider requested-interval averages, not instantaneous probes or source percentiles. Configured test name and kind are bounded; no test/device ID or target address. other is the exporter arithmetic mean of available per-test provider averages for that signal/kind, not pooled/device-weighted latency or overall availability. Each exporter instance is independent. Missing optional results are omitted, never zero-filled; real zero is retained. Snapshots may persist after failures until configured expiry; these panels do not prove source/storage coverage. ",
+          "id": 2686,
+          "links": [],
+          "title": "DEX traceroute hops",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "suffix: hops"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2687": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_dex_packet_loss_percent{service_name=\"cf2otel\"}",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cloudflare_dex_test_name}} / {{cloudflare_dex_test_kind}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "dex.tests is opt-in and disabled by default; fixture-only evidence, unpopulated live source not verified. Values are provider requested-interval averages, not instantaneous probes or source percentiles. Configured test name and kind are bounded; no test/device ID or target address. other is the exporter arithmetic mean of available per-test provider averages for that signal/kind, not pooled/device-weighted latency or overall availability. Each exporter instance is independent. Missing optional results are omitted, never zero-filled; real zero is retained. Snapshots may persist after failures until configured expiry; these panels do not prove source/storage coverage. ",
+          "id": 2687,
+          "links": [],
+          "title": "DEX packet loss",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "percent"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2688": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_dex_availability_percent{service_name=\"cf2otel\"}",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cloudflare_dex_test_name}} / {{cloudflare_dex_test_kind}} / {{instance}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "dex.tests is opt-in and disabled by default; fixture-only evidence, unpopulated live source not verified. Values are provider requested-interval averages, not instantaneous probes or source percentiles. Configured test name and kind are bounded; no test/device ID or target address. other is the exporter arithmetic mean of available per-test provider averages for that signal/kind, not pooled/device-weighted latency or overall availability. Each exporter instance is independent. Missing optional results are omitted, never zero-filled; real zero is retained. Snapshots may persist after failures until configured expiry; these panels do not prove source/storage coverage. ",
+          "id": 2688,
+          "links": [],
+          "title": "DEX availability by test and kind",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "Unavailable",
+                  "unit": "percent"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "sortBy": "Max",
+                  "sortDesc": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
       "panel-2701": {
         "kind": "Panel",
         "spec": {
@@ -28260,6 +30126,268 @@
                           }
                         },
                         "title": "Workers AI (opt-in account aggregates)"
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "collapse": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2671"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2672"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 12,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2673"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 8
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2674"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 12,
+                                  "y": 8
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2675"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 16
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2676"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 12,
+                                  "y": 16
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2677"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 24
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2678"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 12,
+                                  "y": 24
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2679"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 32
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2680"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 12,
+                                  "y": 32
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2681"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 40
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2682"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 12,
+                                  "y": 40
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2683"
+                                  },
+                                  "height": 8,
+                                  "width": 24,
+                                  "x": 0,
+                                  "y": 48
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "title": "Resolved platform resources and R2 actions"
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "collapse": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2684"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2685"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 12,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2686"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 8
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2687"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 12,
+                                  "y": 8
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2688"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 16
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "title": "DEX test results (opt-in provider averages)"
                       }
                     }
                   ]

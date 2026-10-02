@@ -1340,6 +1340,87 @@ def platform_tab(d: Dashboard) -> dict:
         [prom(f'sum by (instance) (rate(cloudflare_workers_ai_inference_time_seconds_total{{{S}}}[$__rate_interval]))',
               "inference time {{instance}}")], unit="suffix: inference-seconds/s")
 
+    resource_context = (
+        "Bounded resolved resource names, never source IDs; 49 named attribute sets plus other per base metric. "
+        "Counters SUM within each name/other; gauges MAX within each name/other from the globally latest complete five-minute bucket. "
+        "other includes unresolved, invalid, ambiguous and overflow names, not a single resource. "
+        "Each account and exporter instance remains independent; overlapping replicas must not be added together. "
+        "Counter rates reflect delivery, including catch-up, and handle observed resets but omit first-seen values. "
+        "Gauges are latest source bucket observations, not range maxima or averages; stale observations may persist after errors. "
+        "Missing/unavailable data is not zero or proof of source or storage coverage. "
+    )
+    # Add resource views rather than changing established aggregates, script/depth
+    # quantiles, or any alert-referenced panel. Raw series preserve the full tuple.
+    resource_panels = (
+        (2671, "D1 query rates by database", "cloudflare_d1_database_name", "reqps", (
+            ("cloudflare_d1_read_queries_total", "reads"), ("cloudflare_d1_write_queries_total", "writes"),
+            ("cloudflare_d1_queries_total", "queries"))),
+        (2672, "D1 storage by database", "cloudflare_d1_database_name", "bytes", (
+            ("cloudflare_d1_storage_max_database_bytes", "storage"),)),
+        (2673, "KV requests by namespace", "cloudflare_kv_namespace_name", "reqps", (
+            ("cloudflare_kv_requests_total", "requests"),)),
+        (2674, "KV storage bytes by namespace", "cloudflare_kv_namespace_name", "bytes", (
+            ("cloudflare_kv_storage_max_namespace_bytes", "storage"),)),
+        (2675, "KV keys by namespace", "cloudflare_kv_namespace_name", "short", (
+            ("cloudflare_kv_storage_max_namespace_keys", "keys"),)),
+        (2676, "Durable Objects requests by namespace", "cloudflare_durableobjects_namespace_name", "reqps", (
+            ("cloudflare_durableobjects_requests_total", "requests"),
+            ("cloudflare_durableobjects_subrequests_total", "subrequests"))),
+        (2677, "Durable Objects body traffic by namespace", "cloudflare_durableobjects_namespace_name", "Bps", (
+            ("cloudflare_durableobjects_subrequests_request_body_bytes_total", "request body"),)),
+        (2678, "Durable Objects SQL storage by namespace", "cloudflare_durableobjects_namespace_name", "bytes", (
+            ("cloudflare_durableobjects_sql_storage_max_namespace_bytes", "storage"),)),
+        (2679, "Queue operations by queue", "cloudflare_queues_queue_name", "reqps", (
+            ("cloudflare_queues_message_operations_total", "operations"),
+            ("cloudflare_queues_message_billable_operations_total", "billable operations"))),
+        (2680, "Queue backlog messages by queue", "cloudflare_queues_queue_name", "short", (
+            ("cloudflare_queues_backlog_max_queue_avg_messages", "backlog"),
+            ("cloudflare_queues_delayed_backlog_max_queue_avg_messages", "delayed backlog"))),
+        (2681, "Queue backlog bytes by queue", "cloudflare_queues_queue_name", "bytes", (
+            ("cloudflare_queues_backlog_max_queue_avg_bytes", "backlog bytes"),)),
+        (2682, "Queue consumer concurrency by queue", "cloudflare_queues_queue_name", "short", (
+            ("cloudflare_queues_consumer_max_queue_avg_concurrency", "concurrency"),)),
+    )
+    for pid, title, label, unit, metrics in resource_panels:
+        queries = []
+        for index, (metric, legend) in enumerate(metrics):
+            series = f'{metric}{{{S}}}'
+            expr = f'rate({series}[$__rate_interval])' if metric.endswith("_total") else series
+            queries.append(prom(expr, legend + " {{cloudflare_account_name}} / {{" + label + "}} / {{instance}}",
+                                ref=chr(ord("A") + index)))
+        queue_context = "Queue gauges are per-queue provider averages; other is their maximum, not an account-wide average. " if pid in (2680, 2681, 2682) else ""
+        d.ts(pid, title, resource_context + queue_context, queries, unit=unit, legend="table", no_value="Unavailable")
+    d.ts(2683, "R2 requests by bucket and action",
+        "Advertised action type and optional bounded bucket name; 49 named bucket/action tuples plus an all-other remainder. "
+        "Counter sums are conserved in other, not split back into actions. Missing action/bucket dimensions stay absent. "
+        "Each account/exporter instance remains independent. Rates reflect delivery including catch-up; observed resets are handled, "
+        "but first-seen counter values are omitted. Unavailable data is not zero or source/storage proof.",
+        [prom(f'rate(cloudflare_r2_requests_total{{{R2}}}[$__rate_interval])',
+              "{{cloudflare_account_name}} / {{cloudflare_r2_bucket_name}} / {{cloudflare_r2_action_type}} / {{instance}}")],
+        unit="reqps", legend="table", no_value="Unavailable")
+
+    dex_context = (
+        "dex.tests is opt-in and disabled by default; fixture-only evidence, unpopulated live source not verified. "
+        "Values are provider requested-interval averages, not instantaneous probes or source percentiles. "
+        "Configured test name and kind are bounded; no test/device ID or target address. "
+        "other is the exporter arithmetic mean of available per-test provider averages for that signal/kind, "
+        "not pooled/device-weighted latency or overall availability. Each exporter instance is independent. "
+        "Missing optional results are omitted, never zero-filled; real zero is retained. "
+        "Snapshots may persist after failures until configured expiry; these panels do not prove source/storage coverage. "
+    )
+    # Pinned otlptranslator: ms -> milliseconds, % -> percent, {hop} omitted.
+    dex_panels = (
+        (2684, "DEX HTTP fetch time", "cloudflare_dex_http_fetch_time_milliseconds", "ms"),
+        (2685, "DEX traceroute RTT", "cloudflare_dex_traceroute_rtt_milliseconds", "ms"),
+        (2686, "DEX traceroute hops", "cloudflare_dex_traceroute_hops", "suffix: hops"),
+        (2687, "DEX packet loss", "cloudflare_dex_packet_loss_percent", "percent"),
+        (2688, "DEX availability by test and kind", "cloudflare_dex_availability_percent", "percent"),
+    )
+    for pid, title, metric, unit in dex_panels:
+        d.ts(pid, title, dex_context, [prom(f'{metric}{{{S}}}',
+             "{{cloudflare_dex_test_name}} / {{cloudflare_dex_test_kind}} / {{instance}}")],
+             unit=unit, legend="table", no_value="Unavailable")
+
     return tab(TAB_PLATFORM, [
         row("At a glance", [(pid, 3, 4) for pid, *_ in glance]),
         row("Workers", [(501, 16, 9), (2611, 8, 9)]),
@@ -1357,6 +1438,8 @@ def platform_tab(d: Dashboard) -> dict:
         row("Turnstile, Logpush and Email", [(502, 8, 7), (503, 8, 7), (2621, 8, 7)]),
         row("Workers AI (opt-in account aggregates)", [(2665, 8, 4), (2666, 8, 4), (2667, 8, 4),
                                                      (2668, 8, 8), (2669, 8, 8), (2670, 8, 8)]),
+        row("Resolved platform resources and R2 actions", [(pid, 12, 8) for pid, *_ in resource_panels] + [(2683, 24, 8)]),
+        row("DEX test results (opt-in provider averages)", [(pid, 12, 8) for pid, *_ in dex_panels]),
     ])
 
 
