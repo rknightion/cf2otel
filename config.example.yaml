@@ -1,5 +1,8 @@
 # Secrets are environment-only: CF2OTEL_CLOUDFLARE__API_TOKEN and
 # CF2OTEL_OTLP__GRAFANA_CLOUD__TOKEN.
+prometheus:
+  enabled: false # Scheduled mode only; OTLP remains required and active.
+  listen: 127.0.0.1:9465 # Unauthenticated /metrics; restrict access before widening.
 cloudflare:
   account_id: ""
   zones: []

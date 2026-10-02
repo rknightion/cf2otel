@@ -28,6 +28,7 @@ import (
 	"github.com/rknightion/cf2otel/internal/config"
 	"github.com/rknightion/cf2otel/internal/health"
 	"github.com/rknightion/cf2otel/internal/identity"
+	"github.com/rknightion/cf2otel/internal/promexport"
 	"github.com/rknightion/cf2otel/internal/semconv"
 	"github.com/rknightion/cf2otel/internal/telemetry"
 )
@@ -90,6 +91,14 @@ func run(args []string) error {
 	var providers *telemetry.Providers
 	var emitter telemetry.Emitter
 	var dryEmitter *dryRunEmitter
+	var pull *promexport.Exporter
+	scheduled := !opts.Once && opts.Since.IsZero() && opts.Before.IsZero() && opts.Explore == ""
+	if cfg.Prometheus.Enabled && scheduled && !opts.DryRun {
+		pull, err = promexport.New()
+		if err != nil {
+			return fmt.Errorf("prometheus exporter: %w", err)
+		}
+	}
 	if opts.DryRun {
 		dryEmitter = &dryRunEmitter{writer: os.Stdout, counts: make(map[string]dryRunCounts)}
 		emitter = dryEmitter
@@ -98,7 +107,11 @@ func run(args []string) error {
 		if cardinalityLimit == 0 {
 			cardinalityLimit = -1 // Config zero means unlimited, unlike ProviderOptions zero.
 		}
-		providers, err = telemetry.NewProviders(ctx, telemetry.ProviderOptions{MetricDenylist: cfg.OTLP.MetricDenylist, AttributeDenylist: cfg.OTLP.AttributeDenylist, CardinalityLimit: cardinalityLimit, Endpoint: cfg.OTLP.Endpoint, Protocol: cfg.OTLP.Protocol, InstanceID: cfg.OTLP.GrafanaCloud.InstanceID, Token: cfg.OTLP.GrafanaCloud.Token.Value(), ServiceVersion: version, InstanceUUID: hostname(), Headers: cfg.OTLP.Headers})
+		providerOptions := telemetry.ProviderOptions{MetricDenylist: cfg.OTLP.MetricDenylist, AttributeDenylist: cfg.OTLP.AttributeDenylist, CardinalityLimit: cardinalityLimit, Endpoint: cfg.OTLP.Endpoint, Protocol: cfg.OTLP.Protocol, InstanceID: cfg.OTLP.GrafanaCloud.InstanceID, Token: cfg.OTLP.GrafanaCloud.Token.Value(), ServiceVersion: version, InstanceUUID: hostname(), Headers: cfg.OTLP.Headers}
+		if pull != nil {
+			providerOptions.PrometheusReader = pull.Reader
+		}
+		providers, err = telemetry.NewProviders(ctx, providerOptions)
 		if err != nil {
 			return err
 		}
@@ -202,6 +215,24 @@ func run(args []string) error {
 	if opts.Once || !opts.Since.IsZero() || !opts.Before.IsZero() {
 		return runOnce(ctx, scheduler, opts, dryEmitter)
 	}
+	var pullDone chan error
+	if pull != nil {
+		server, listenErr := pull.Listen(cfg.Prometheus.Listen)
+		if listenErr != nil {
+			return fmt.Errorf("prometheus listener: %w", listenErr)
+		}
+		defer func() { _ = server.Close() }()
+		slog.Warn("Prometheus metrics endpoint is unauthenticated; signal attributes may be sensitive", "listen", cfg.Prometheus.Listen)
+		pullDone = make(chan error, 1)
+		go func() {
+			serveErr := server.Run(ctx)
+			pullDone <- serveErr
+			if serveErr != nil {
+				slog.Error("Prometheus server failed", "error", serveErr)
+				stop()
+			}
+		}()
+	}
 	go func() {
 		if e := health.Serve(ctx, cfg); e != nil {
 			slog.Error("health server failed", "error", e)
@@ -209,6 +240,11 @@ func run(args []string) error {
 		}
 	}()
 	scheduler.Run(ctx)
+	if pullDone != nil {
+		if serveErr := <-pullDone; serveErr != nil {
+			return fmt.Errorf("prometheus server: %w", serveErr)
+		}
+	}
 	return nil
 }
 func hostname() string { h, _ := os.Hostname(); return h }

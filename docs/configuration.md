@@ -12,6 +12,7 @@ Settings load in this order: built-in defaults, YAML, then `CF2OTEL_` environmen
 | `platform` | `max_metric_series_per_window` defaults to 500 per collector window. Excess series are dropped in sorted-name order with a count-only warning; source resource IDs never become metric attributes. |
 | `ai_gateway` | Select `gateways`, opt in to `capture_bodies`, cap each body with `max_body_bytes`, and link caller traces when headers allow. |
 | `otlp` | `endpoint`, `protocol` (`http` or `grpc`), Grafana Cloud instance ID and environment-only token or headers. |
+| `prometheus` | Optional `enabled` (default `false`) and `listen` (default `127.0.0.1:9465`) for unauthenticated `/metrics` alongside OTLP. |
 | `state` | Persistent checkpoint directory; default `/var/lib/cf2otel`. |
 | `health`, `log` | Loopback health listener and application logging. |
 | `firewall` | `rule_dimensions` defaults to false; `max_metric_series_per_window` is a positive total cap, default 500. |
@@ -83,6 +84,38 @@ the **last input point** on a collision, never a sum or average. Snapshot filter
 happens before retention, preserves paired atomic publication, and does not
 refresh stale TTLs. A dry-run counts only measurements that survive filtering.
 These settings are startup-only; no reload is supported.
+
+## Optional Prometheus pull endpoint
+
+Set `prometheus.enabled: true` or `CF2OTEL_PROMETHEUS__ENABLED=true` to serve
+`/metrics` in scheduled, non-dry-run mode. `--once`, bounded time-range runs,
+exploration, validation and effective-config printing do not start the listener or
+register its reader. `CF2OTEL_PROMETHEUS__LISTEN` overrides the YAML address;
+use a host and numeric port from 1 to 65535. The default is `127.0.0.1:9465`,
+separate from health. An occupied port fails startup rather than selecting another.
+
+OTLP configuration is still required. The same SDK instruments and snapshot
+callbacks feed both readers; scraping does not poll Cloudflare, trigger an OTLP
+flush or change logs and traces. Prometheus names escape dots to underscores and
+add standard unit and counter suffixes (for example, `cf2otel.api.requests` becomes
+`cf2otel_api_requests_total`). OTLP names stay unchanged. The private registry does
+not add Go/process metrics, `target_info`, scope metadata or resource labels.
+Configure scrape job/instance identity in the scraper. The exporter dependency is
+experimental (`go.opentelemetry.io/otel/exporters/prometheus` v0.68.0).
+
+The endpoint has **no authentication or TLS** and exposes existing signal attributes,
+which may be sensitive. Restrict access with network policy or an authenticated
+reverse proxy before explicitly configuring a non-loopback address such as `:9465`.
+No deployment or network opening is implied by these examples.
+
+Helm renders the settings through `config.prometheus`; for pod-IP scraping use
+`--set config.prometheus.enabled=true --set-string config.prometheus.listen=:9465`.
+The chart creates no metrics Service and does not publish a port by default.
+For compose, explicitly set `CF2OTEL_PROMETHEUS__ENABLED=true` and
+`CF2OTEL_PROMETHEUS__LISTEN=:9465` in the environment; both variables have named
+entries in `deploy/docker-compose.yaml`. Only if host access is needed, uncomment
+the example port mapping after restricting access. The default remains disabled
+with no published port.
 
 ## Firewall metric dimensions
 

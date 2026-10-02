@@ -33,6 +33,9 @@ type ProviderOptions struct {
 	// negative disables the limit, and positive sets the global SDK limit.
 	CardinalityLimit                  int
 	MetricDenylist, AttributeDenylist []string
+	// PrometheusReader adds pull export alongside the unchanged OTLP reader.
+	// Once registered, its shutdown is owned by this provider.
+	PrometheusReader sdkmetric.Reader
 }
 type Providers struct {
 	Emitter Emitter
@@ -43,6 +46,14 @@ type Providers struct {
 }
 
 func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
+	readerOwned := o.PrometheusReader != nil
+	defer func() {
+		if readerOwned {
+			cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = o.PrometheusReader.Shutdown(cleanup)
+		}
+	}()
 	for _, name := range o.MetricDenylist {
 		if _, ok := semconv.Metric(name); !ok {
 			return nil, fmt.Errorf("unknown metric deny key %q", name)
@@ -128,10 +139,14 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 	lx = newBoundedLogExporter(lx)
 	tx = observedTraceExporter{SpanExporter: tx, hook: hook}
 	metricOptions := []sdkmetric.Option{sdkmetric.WithResource(res), sdkmetric.WithReader(sdkmetric.NewPeriodicReader(mx, sdkmetric.WithInterval(o.Interval)))}
+	if o.PrometheusReader != nil {
+		metricOptions = append(metricOptions, sdkmetric.WithReader(o.PrometheusReader))
+	}
 	if o.CardinalityLimit != 0 {
 		metricOptions = append(metricOptions, sdkmetric.WithCardinalityLimit(o.CardinalityLimit))
 	}
 	mp := sdkmetric.NewMeterProvider(metricOptions...)
+	readerOwned = false // The SDK now owns reader shutdown, including errors below.
 	spec, _ := semconv.Metric(semconv.MetricCardinalityOverflows)
 	if !policy.metric(semconv.MetricCardinalityOverflows) {
 		counter, err := mp.Meter(semconv.ServiceName).Int64Counter(semconv.MetricCardinalityOverflows, metric.WithUnit(spec.Unit), metric.WithDescription(spec.Description))

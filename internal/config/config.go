@@ -41,8 +41,14 @@ type ZonesConfig struct {
 	Exclude []string `yaml:"exclude" json:"exclude"`
 }
 
+type PrometheusConfig struct {
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Listen  string `yaml:"listen" json:"listen"`
+}
+
 type Config struct {
 	WARP       WARPConfig                 `yaml:"warp" json:"warp"`
+	Prometheus PrometheusConfig           `yaml:"prometheus" json:"prometheus"`
 	Firewall   FirewallConfig             `yaml:"firewall" json:"firewall"`
 	Cloudflare CloudflareConfig           `yaml:"cloudflare" json:"cloudflare"`
 	Collectors map[string]CollectorConfig `yaml:"collectors" json:"collectors"`
@@ -169,6 +175,7 @@ func Default() Config {
 	c.WARP = WARPConfig{LastSeenWindow: 15 * time.Minute, MaxMetricSeries: 500}
 	c.OTLP.MetricDenylist = []string{}
 	c.OTLP.AttributeDenylist = []string{}
+	c.Prometheus = PrometheusConfig{Listen: "127.0.0.1:9465"}
 	c.Firewall = FirewallConfig{MaxMetricSeriesPerWindow: 500}
 	for _, name := range collectorNames {
 		c.Collectors[name] = CollectorConfig{Enabled: true, Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
@@ -375,6 +382,9 @@ func (c Config) Validate() error {
 	add(c.Identity.MatchWindow > 0, "identity.match_window must be positive")
 	add(c.Identity.MaxCandidates > 0, "identity.max_candidates must be positive")
 	add(c.AIGateway.MaxBodyBytes > 0, "ai_gateway.max_body_bytes must be positive")
+	_, port, listenErr := net.SplitHostPort(c.Prometheus.Listen)
+	portNumber, portErr := strconv.Atoi(port)
+	add(listenErr == nil && portErr == nil && strings.Trim(port, "0123456789") == "" && portNumber >= 1 && portNumber <= 65535 && !strings.ContainsAny(c.Prometheus.Listen, "/@"), "prometheus.listen must be a host:port with numeric port 1..65535")
 	add(c.State.Dir != "", "state.dir is required")
 	add(strings.HasPrefix(c.Health.Listen, "127.0.0.1:") || strings.HasPrefix(c.Health.Listen, "localhost:"), "health.listen must bind loopback")
 	for name, v := range c.Collectors {

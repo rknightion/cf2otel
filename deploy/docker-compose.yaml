@@ -13,7 +13,12 @@ services:
     labels:
       com.centurylinklabs.watchtower.scope: fastlane
     command: ["-config", "/etc/cf2otel/config.yaml"]
+    # Optional host publication when enabled (restrict access before uncommenting):
+    # ports: ["9465:9465"]
     environment:
+      CF2OTEL_PROMETHEUS__ENABLED: ${CF2OTEL_PROMETHEUS__ENABLED:-false}
+      # Explicit wildcard opt-in for scraping from outside the container.
+      CF2OTEL_PROMETHEUS__LISTEN: ${CF2OTEL_PROMETHEUS__LISTEN:-127.0.0.1:9465}
       CF2OTEL_CLOUDFLARE__API_TOKEN: ${CF2OTEL_CLOUDFLARE__API_TOKEN:-}
       CF2OTEL_OTLP__GRAFANA_CLOUD__INSTANCE_ID: ${CF2OTEL_OTLP__GRAFANA_CLOUD__INSTANCE_ID:-}
       CF2OTEL_OTLP__GRAFANA_CLOUD__TOKEN: ${CF2OTEL_OTLP__GRAFANA_CLOUD__TOKEN:-}

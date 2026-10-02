@@ -4,6 +4,16 @@ cf2otel's Cloudflare client is read-only by construction: REST `GET` and GraphQL
 
 Cloudflare and Grafana Cloud tokens must be supplied through environment variables. Configuration rejects `cloudflare.api_token`, `otlp.grafana_cloud.token`, and `otlp.headers.*` in YAML. Keep the configuration and state volume accessible only to the container user and administrators. Avoid printing the environment or copying token values into issue reports.
 
+## Prometheus endpoint
+
+The optional `/metrics` listener is disabled by default and binds `127.0.0.1:9465`
+when enabled. It has no authentication or TLS. Existing metric attributes can expose
+sensitive operational information; explicitly binding `:9465` makes that information
+reachable on every interface. Restrict scraping with network policy or an authenticated
+reverse proxy before widening the bind or publishing a container port. The endpoint
+exports only the existing metrics, not logs, traces, resource metadata or Go/process
+metrics. OTLP remains required and active. See [configuration](configuration.md#optional-prometheus-pull-endpoint).
+
 ## Cloudflare permission groups
 
 The table maps every configured collector name to its expected read group. For GraphQL collectors, use `Account Analytics Read` for account datasets and `Analytics Read` for zone datasets. Scope each token to only the account and zones it needs. These group names follow Cloudflare's [API token permissions](https://developers.cloudflare.com/fundamentals/api/reference/permissions/), [GraphQL Analytics token setup](https://developers.cloudflare.com/analytics/graphql-api/getting-started/authentication/api-token-auth/), and the [Audit Logs v2 endpoint](https://developers.cloudflare.com/api/resources/accounts/subresources/logs/subresources/audit/methods/list/).
