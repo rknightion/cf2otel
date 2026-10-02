@@ -501,6 +501,11 @@ func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 			return from, err
 		}
 		breakdownPoints = append(breakdownPoints, points...)
+		points, err = c.collectHighCardinality(ctx, zone, from, to)
+		if err != nil {
+			return from, err
+		}
+		breakdownPoints = append(breakdownPoints, points...)
 		fields, settings, err := httpGroupQueryFields(ctx, c.api, zone.ID)
 		if err != nil {
 			return from, err

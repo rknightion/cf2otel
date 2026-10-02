@@ -17,6 +17,10 @@ http:
   zones: []
   max_metric_hosts_per_zone: 1000
   max_metric_series_per_window: 10000
+  # Opt in by adding colo, asn or error_path to breakdowns; default features stay unchanged.
+  high_cardinality_limit: 500 # Normal groups per metric/zone, plus at most one remainder.
+  high_cardinality_hosts: [] # Exact lowercase bare DNS names; only these new features.
+  error_path_routes: null # Safe name -> canonical template, e.g. item: /items/:number.
 firewall:
   rule_dimensions: false # Opt in to rule ID/description, host and country metrics when advertised.
   max_metric_series_per_window: 500 # Positive total cap, including the all-other remainder.

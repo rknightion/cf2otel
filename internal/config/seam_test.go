@@ -60,7 +60,7 @@ func TestSeamLoadAndValidation(t *testing.T) {
 		{"invalid source", "http:\n  request_source: internal\n", "http.request_source"},
 		{"empty breakdowns", "http:\n  breakdowns: []\n", ""},
 		{"all breakdowns", "http:\n  breakdowns: [status, origin_status, country, protocol, tls_protocol, method, content_type]\n", ""},
-		{"invalid breakdown", "http:\n  breakdowns: [country, colo]\n", "http.breakdowns"},
+		{"invalid breakdown", "http:\n  breakdowns: [country, unsupported]\n", "http.breakdowns"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.yaml")

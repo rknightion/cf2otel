@@ -67,6 +67,10 @@ config:
     zones: []
     max_metric_hosts_per_zone: 1000
     max_metric_series_per_window: 10000
+    # Optional colo/asn/error_path breakdowns are absent by default.
+    high_cardinality_limit: 500
+    high_cardinality_hosts: []
+    error_path_routes: null
   firewall:
     rule_dimensions: false
     max_metric_series_per_window: 500

@@ -607,3 +607,25 @@ These labels apply only to collector scrape errors, not export errors or scrape
 duration/success metrics. Existing aggregate queries can continue to sum scrape
 errors across classes. This is the code/documentation portion of CFO-0051.03
 (classify collector errors); the dashboard panel is delivered separately.
+
+## Opt-in HTTP colo, ASN and safe error routes
+
+| Name | Kind / unit | Attributes |
+| --- | --- | --- |
+| `cloudflare.http.requests.by_colo` | Counter / `{request}` | `cloudflare.http.zone`, `cloudflare.http.colo`, remainder. |
+| `cloudflare.http.requests.by_asn` | Counter / `{request}` | Zone, string ASN, string ASN description, remainder. Both ASN fields must be advertised; live-verified on the eligible HTTP Groups zone, not universally available. |
+| `cloudflare.http.errors.by_route` | Counter / `{request}` | Zone, configured safe route name, status class, remainder. Counts only 4xx/5xx groups; paths are internal lookup inputs, never attributes. |
+
+| Attribute | String value contract |
+| --- | --- |
+| `cloudflare.http.client.asn` | Advertised source ASN string, without numeric coercion; `other` in the remainder. |
+| `cloudflare.http.client.asn_description` | Advertised source organization-description string; `other` in the remainder. |
+| `cloudflare.http.route.name` | Validated configured safe name; `other` for unmatched and overflow counts. Never a raw or normalized path. |
+| `cloudflare.http.status_class` | `4xx`, `5xx`; `other` in the remainder. |
+| `cloudflare.http.breakdown.remainder` | `false` for normal tuples; `true` for the single all-other tuple. A real source colo/ASN named `other` remains distinct via `false`. |
+
+All three toggles are absent by default. Per-feature/zone lexical caps conserve counts in
+one remainder, and every point counts against the existing complete-window HTTP cap.
+An optional exact host allowlist filters only these features and adds no host label.
+See [configuration](configuration.md#opt-in-high-cardinality-http-breakdowns) for limits,
+normalizer behavior and failure semantics. Dashboard delivery is a separate signal batch.

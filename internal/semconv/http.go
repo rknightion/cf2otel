@@ -1,6 +1,14 @@
 package semconv
 
 const (
+	MetricHTTPRequestsByColo            = "cloudflare.http.requests.by_colo"
+	MetricHTTPRequestsByASN             = "cloudflare.http.requests.by_asn"
+	MetricHTTPErrorsByRoute             = "cloudflare.http.errors.by_route"
+	AttrHTTPClientASN                   = "cloudflare.http.client.asn"
+	AttrHTTPClientASNDescription        = "cloudflare.http.client.asn_description"
+	AttrHTTPRouteName                   = "cloudflare.http.route.name"
+	AttrHTTPStatusClass                 = "cloudflare.http.status_class"
+	AttrHTTPBreakdownRemainder          = "cloudflare.http.breakdown.remainder"
 	MetricHTTPVisits                    = "cloudflare.http.visits"
 	MetricHTTPThreats                   = "cloudflare.http.threats"
 	MetricHTTPAccountTransferMTD        = "cloudflare.http.account.transfer.month_to_date"

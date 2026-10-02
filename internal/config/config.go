@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/knadh/koanf/parsers/yaml"
@@ -79,6 +82,10 @@ type HTTPConfig struct {
 	Zones                    []string `yaml:"zones" json:"zones"`
 	MaxMetricHostsPerZone    int      `yaml:"max_metric_hosts_per_zone" json:"max_metric_hosts_per_zone"`
 	MaxMetricSeriesPerWindow int      `yaml:"max_metric_series_per_window" json:"max_metric_series_per_window"`
+
+	HighCardinalityLimit int               `yaml:"high_cardinality_limit" json:"high_cardinality_limit"`
+	HighCardinalityHosts []string          `yaml:"high_cardinality_hosts" json:"high_cardinality_hosts"`
+	ErrorPathRoutes      map[string]string `yaml:"error_path_routes" json:"error_path_routes"`
 }
 type FirewallConfig struct {
 	RuleDimensions           bool `yaml:"rule_dimensions" json:"rule_dimensions"`
@@ -154,6 +161,8 @@ var disabledCollectorNames = []string{"aigateway.coverage", "logpush.failures", 
 
 func Default() Config {
 	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{RequestSource: "eyeball", Breakdowns: []string{"status", "origin_status", "country", "protocol", "tls_protocol", "method", "content_type"}, Scope: "access_protected", MaxMetricHostsPerZone: 1000, MaxMetricSeriesPerWindow: 10000}, Platform: PlatformConfig{MaxMetricSeriesPerWindow: 500}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{MetricCardinalityLimit: 10000, Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
+	c.HTTP.HighCardinalityLimit = 500
+	c.HTTP.HighCardinalityHosts = []string{}
 	c.WARP = WARPConfig{LastSeenWindow: 15 * time.Minute, MaxMetricSeries: 500}
 	c.Firewall = FirewallConfig{MaxMetricSeriesPerWindow: 500}
 	for _, name := range collectorNames {
@@ -213,7 +222,7 @@ func Load(path string) (*Config, error) {
 			return "", nil
 		}
 		name := strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(key, EnvPrefix)), "__", ".")
-		if name == "http.breakdowns" || name == "zones.exclude" {
+		if name == "http.breakdowns" || name == "http.high_cardinality_hosts" || name == "zones.exclude" {
 			if value == "" {
 				return name, []string{}
 			}
@@ -296,10 +305,26 @@ func (c Config) Validate() error {
 	add(c.HTTP.RequestSource == "eyeball" || c.HTTP.RequestSource == "all", "http.request_source must be eyeball or all")
 	for _, breakdown := range c.HTTP.Breakdowns {
 		switch breakdown {
-		case "status", "origin_status", "country", "protocol", "tls_protocol", "method", "content_type":
+		case "status", "origin_status", "country", "protocol", "tls_protocol", "method", "content_type", "colo", "asn", "error_path":
 		default:
 			issues = append(issues, "http.breakdowns contains invalid value: "+breakdown)
 		}
+	}
+	add(c.HTTP.HighCardinalityLimit >= 1 && c.HTTP.HighCardinalityLimit <= 5000, "http.high_cardinality_limit must be between 1 and 5000")
+	add(len(c.HTTP.HighCardinalityHosts) <= 50, "http.high_cardinality_hosts allows at most 50 hosts")
+	for _, host := range c.HTTP.HighCardinalityHosts {
+		add(validHighCardinalityHost(host), "http.high_cardinality_hosts requires lowercase bare ASCII DNS names")
+	}
+	add(len(c.HTTP.ErrorPathRoutes) <= 5000, "http.error_path_routes allows at most 5000 routes")
+	templates := map[string]bool{}
+	for name, template := range c.HTTP.ErrorPathRoutes {
+		add(httpRouteName.MatchString(name) && name != "other" && name != "unknown" && !httpHexSegment.MatchString(name), "http.error_path_routes has an invalid safe route name")
+		add(validHTTPRouteTemplate(template), "http.error_path_routes requires canonical normalized absolute path templates")
+		add(!templates[template], "http.error_path_routes contains duplicate templates")
+		templates[template] = true
+	}
+	for _, feature := range c.HTTP.Breakdowns {
+		add(feature != "error_path" || len(c.HTTP.ErrorPathRoutes) > 0, "http.error_path_routes is required for error_path")
 	}
 	add(c.HTTP.Scope == "access_protected" || c.HTTP.Scope == "hosts" || c.HTTP.Scope == "all", "http.scope is invalid")
 	add(c.HTTP.MetricsScope == "" || c.HTTP.MetricsScope == "access_protected" || c.HTTP.MetricsScope == "hosts" || c.HTTP.MetricsScope == "all", "http.metrics_scope is invalid")
@@ -331,6 +356,49 @@ func (c Config) Validate() error {
 	sort.Strings(issues)
 	return errors.New(strings.Join(issues, "; "))
 }
+
+var (
+	httpRouteName      = regexp.MustCompile(`^[A-Za-z][A-Za-z_-]{0,63}$`)
+	httpHexSegment     = regexp.MustCompile(`^[A-Fa-f0-9]{8,}$`)
+	httpNumericSegment = regexp.MustCompile(`^[0-9]+$`)
+	httpUUIDSegment    = regexp.MustCompile(`^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}$`)
+	httpDNSLabel       = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
+)
+
+func validHighCardinalityHost(host string) bool {
+	if len(host) == 0 || len(host) > 253 || net.ParseIP(host) != nil {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if !httpDNSLabel.MatchString(label) {
+			return false
+		}
+	}
+	return true
+}
+
+// Templates never leave the route lookup. Reject rather than normalize config,
+// so two names cannot ambiguously refer to one source route.
+func validHTTPRouteTemplate(template string) bool {
+	if !strings.HasPrefix(template, "/") || strings.HasPrefix(template, "//") || len(template) > 4096 || !utf8.ValidString(template) || strings.ContainsAny(template, "%?#\\\\*[]{}()|^$+") {
+		return false
+	}
+	for _, r := range template {
+		if r <= ' ' || r == 127 {
+			return false
+		}
+	}
+	for _, part := range strings.Split(template[1:], "/") {
+		if part == ":number" || part == ":uuid" || part == ":hex" {
+			continue
+		}
+		if strings.Contains(part, ":") || part == "." || part == ".." || httpNumericSegment.MatchString(part) || httpUUIDSegment.MatchString(part) || httpHexSegment.MatchString(part) {
+			return false
+		}
+	}
+	return true
+}
+
 func (c Config) RedactedJSON() ([]byte, error) { return json.MarshalIndent(c, "", "  ") }
 func (c Config) String() string                { b, _ := c.RedactedJSON(); return string(b) }
 func (c Config) WriteRedacted(f *os.File) error {

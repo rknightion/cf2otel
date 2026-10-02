@@ -79,7 +79,9 @@
         "quantiles_originResponseDurationMsP50",
         "quantiles_originResponseDurationMsP95",
         "quantiles_originResponseDurationMsP99",
-        "sum_visits"
+        "sum_visits",
+        "dimensions_coloCode",
+        "dimensions_clientRequestPath"
       ],
       "minimum_max_duration_seconds": 2592000,
       "minimum_not_older_than_seconds": 2678400

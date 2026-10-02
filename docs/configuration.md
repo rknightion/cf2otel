@@ -113,3 +113,54 @@ cf2otel also emits two span families. Deduplicate the AI Gateway request span by
 `cloudflare.ai_gateway.gateway.name` and `cloudflare.ai_gateway.log.id`. Deduplicate the
 `cf2otel.api.request` span by its OpenTelemetry `trace_id` and `span_id`; each observed API call is a
 separate span.
+
+## Opt-in high-cardinality HTTP breakdowns
+
+Add `colo`, `asn` and/or `error_path` to `http.breakdowns`. None is in the default list;
+existing low-cardinality breakdowns are unchanged. These counters use adaptive **Groups counts**,
+not event-row counts, and follow `http.request_source`. Each zone selects a feature only when
+all its required fields fit the advertised field budget. ASN requires both string `clientAsn`
+and `clientASNDescription`; current live verification found both on one eligible zone, not on
+all Free zones (API reference section 18). Missing entitlement skips that feature, not base metrics.
+
+| Key | Default | Contract |
+| --- | --- | --- |
+| `http.high_cardinality_limit` | `500` | Integer `1..5000` normal groups per new metric and zone, plus at most one count-preserving remainder. |
+| `http.high_cardinality_hosts` | `[]` | At most 50 lowercase bare ASCII DNS names. Exact case-insensitive source-host match; no ports, URLs or wildcards. Only the three new features are filtered; existing `http.hosts`, base totals and low-cardinality metrics are unchanged. Hosts are never added to these new metric labels. |
+| `http.error_path_routes` | unset | Safe configured route name to canonical normalized path template. Required and nonempty when `error_path` is enabled; at most 5000 unique templates. |
+
+Environment keys are `CF2OTEL_HTTP__HIGH_CARDINALITY_LIMIT`,
+`CF2OTEL_HTTP__HIGH_CARDINALITY_HOSTS` (comma-separated; empty clears it),
+and nested `CF2OTEL_HTTP__ERROR_PATH_ROUTES__<NAME>` entries. Route names must match
+`^[A-Za-z][A-Za-z_-]{0,63}$`; `other`, `unknown` and all-hex names of eight or more characters
+are reserved/rejected. Names cannot be paths or identifiers. For example:
+
+```yaml
+http:
+  breakdowns: [colo, asn, error_path]
+  error_path_routes:
+    item: /items/:number
+```
+
+Templates are absolute paths, already normalized, with only `:number`, `:uuid` and `:hex`
+placeholders. Raw numeric/UUID/hex segments, query strings, fragments, percent escapes,
+URLs, dot segments, wildcards and regex syntax are rejected in config. Duplicate templates
+are an error, never first-map-entry wins. Runtime paths have query/fragment removed and
+are percent-decoded once as valid UTF-8, then full numeric, UUID and hex (eight or more
+ASCII hex characters) segments normalize internally. Exact template matches yield only the
+configured safe **name**, never the raw or normalized path. Unmatched/invalid/nonabsolute
+paths and paths longer than 4096 bytes contribute to the remainder.
+
+Counts are summed across disjoint duration periods and repeated groups before emitting.
+Normal tuples are kept in lexical order up to the per-feature limit; all unmatched routes
+and excess tuples become one all-other tuple with remainder `true`. Normal points have
+remainder `false`. Error routes count only integer statuses 400..599, with `4xx`/`5xx` classes;
+the remainder's status class is `other`. Host-filtered counts are excluded, not put in the remainder.
+
+These points still count toward the unchanged **total** `http.max_metric_series_per_window`.
+With all three enabled at limit 500, a zone can add up to 1503 points; a large fleet can
+legitimately fail the total budget. Source/shape/cancellation failures, source arrays or
+assembled feature windows reaching 10000 rows, count overflow and a total-budget breach
+fail the complete window before metric publication or checkpoint advance. Source paging
+is not assumed complete at a saturated limit. The SDK's cumulative lifetime cardinality
+limit is independent; a per-window bound does not cap series accumulated across windows.

@@ -82,3 +82,23 @@ HTTP events have no native Access user identity. cf2otel can match a recent logi
 When body capture is enabled, each available request or response body also reaches the configured OTLP destination as a span-correlated log body. Restrict destination access and retention for stored prompts and completions. The log body is capped by `ai_gateway.max_body_bytes`; content stays out of diagnostic logs.
 
 Cloudflare's native AI Gateway trace export can coexist during a comparison, but that duplicates GenAI spans and can duplicate content. After proving cf2otel's mapping, disable only the gateway's native trace export if a single source is required. Workers' other OTLP destinations are a separate setting.
+
+## Opt-in HTTP metric enrichment
+
+`colo`, `asn` and `error_path` breakdowns are off by default and use the existing zone
+Analytics Read permission and `httpRequestsAdaptiveGroups` dataset. No additional REST
+lookup or permission is required. Each feature selects only its complete advertised field
+set within the zone's field budget. ASN and its organization description were live-verified
+as strings on one eligible HTTP Groups zone (API reference section 18); unavailable ASN
+fields skip that feature without selecting unentitled fields or suppressing base metrics.
+
+ASN descriptions are organization metadata, not Access identity. Review their content and
+the configured safe route names before enabling export. An optional host allowlist restricts
+only the three new features, not the base HTTP scope. New labels never include a host,
+request path, query, IP, user agent, ray ID or resource identifier. Paths are decoded and
+normalized only for exact internal template lookup, then discarded; only a validated
+configured name is emitted. Invalid/unmatched paths retain counts in a safe `other` bucket.
+Validation errors do not echo configured route templates, names or hosts. Per-window caps
+and one count-preserving remainder bound these metrics; they do not bound cumulative SDK
+series growth across windows. Dashboard/UI and live-counter verification are separate from
+local source validation.
