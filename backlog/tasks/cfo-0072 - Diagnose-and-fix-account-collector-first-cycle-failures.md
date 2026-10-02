@@ -1,10 +1,11 @@
 ---
 id: CFO-0072
 title: Diagnose and fix account collector first-cycle failures
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@loop16-root'
 created_date: '2026-10-02 13:52'
-updated_date: '2026-10-02 14:19'
+updated_date: '2026-10-02 19:23'
 labels: []
 dependencies: []
 priority: high
@@ -31,6 +32,12 @@ After the running release started, 27 account-scoped GraphQL collectors each fai
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Loop16 BOOT follows the retained aligned-cursor diagnosis. Use existing WindowLagAt on the twelve affected collector implementations to align ten-minute holdback to closed five-minute boundaries. Through the real scheduler, HTTP collaborator and reopened FileStore, an aligned retained cursor before the next closed bucket is a safe no-query skip; next complete bucket is collected and checkpoint advances. No error-string matching, skipped data or core scheduler weakening. Source owns only mapped Lag implementations plus the scheduler boundary test; live criterion parks behind failed deploy kit.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 

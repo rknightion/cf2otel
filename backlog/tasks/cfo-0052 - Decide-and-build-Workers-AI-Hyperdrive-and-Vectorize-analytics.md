@@ -1,11 +1,11 @@
 ---
 id: CFO-0052
 title: 'Decide and build Workers AI, Hyperdrive and Vectorize analytics'
-status: In Progress
+status: Done
 assignee:
   - '@loop16-root'
 created_date: '2026-09-30 21:17'
-updated_date: '2026-10-02 16:50'
+updated_date: '2026-10-02 19:35'
 labels:
   - platform
 dependencies: []
@@ -25,7 +25,7 @@ Newer developer-platform products have GraphQL datasets no comparable exporter c
 - [x] #1 A per-dataset build/skip decision with reason is recorded
 - [x] #2 Chosen datasets are built
 - [x] #3 A new dataset or endpoint has a live-verified entry in doc-0003 and an API drift canary probe
-- [ ] #4 Every new signal and attribute is declared in internal/semconv, listed in docs/signals.md, and has a panel in grafana/build_dashboard.py
+- [x] #4 Every new signal and attribute is declared in internal/semconv, listed in docs/signals.md, and has a panel in grafana/build_dashboard.py
 <!-- AC:END -->
 
 ## Definition of Done
@@ -49,4 +49,6 @@ AC1 decided from one settings read and seven-day limit-one existence queries per
 Loop16 Workers AI source accepted on exact REV PASS 6783cb01fcf788bedaeac57d8818aab1bb21a312, cherry-picked identically as bb1ba00, pushed d997015505c8b73a97affe9a7bef5c8509d3d312. Public boundary red/candidate, CodeRabbit all14paths and integrated gate passed. Pre-land live contract canary matched; R0 run 37036301862 and landing CI pending. AC3 doc entry/canary conclusion and AC4 dedicated panel remain open. One implementation, zero review-repair/infra. Retention minor justified by existing client gap handling; short configured-window limitation logged separately.
 
 Loop16 live-verified Workers AI field/settings entry added to doc-0003 after exact pre-land canary matched and R0 drift run 37036301862 concluded success at d997015505c8b73a97affe9a7bef5c8509d3d312. AC3 checked. AC4 dedicated Workers AI panel remains open; no new exporter deployment occurred.
+
+Loop16 Workers AI dashboard exact REV PASSb39dc8fa036266131fd953640de758b3f8454418, all four declared counters covered with correct local translation, independent instances/reset/absence semantics. Exact patch pushed65089d58a8068ea4fb7f3f22f80512489a617fc1 and grafana-sync workflow succeeded. Source AC4 checked, taskDone on source, dataset decision and live contract evidence; browser/deployed data and normalized live equality remain separately unverified. No exporter deployment or activation occurred.
 <!-- SECTION:NOTES:END -->
