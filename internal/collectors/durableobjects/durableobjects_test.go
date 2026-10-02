@@ -232,8 +232,8 @@ func TestInvocationsAggregateAccountRowsWithoutAttributes(t *testing.T) {
 	if len(emitter.metrics) != 1 || emitter.metrics[0].kind != "counter" || emitter.metrics[0].name != semconv.MetricDurableObjectsRequests || emitter.metrics[0].value != 10 {
 		t.Fatalf("account aggregate = %#v, want requests counter 10", emitter.metrics)
 	}
-	if len(emitter.metrics[0].attrs) != 0 {
-		t.Fatalf("account aggregate emitted labels: %#v", emitter.metrics[0].attrs)
+	if !expectedRemainder(emitter.metrics[0].attrs) {
+		t.Fatalf("account aggregate emitted unexpected labels: %#v", emitter.metrics[0].attrs)
 	}
 	if len(api.requests) != 1 {
 		t.Fatalf("sent %d queries, want one", len(api.requests))
@@ -278,7 +278,7 @@ func TestAllCountersRespectAccountSeriesCapAndNeverEmitResourceLabels(t *testing
 			if len(emitter.metrics) != 1 || emitter.metrics[0].kind != "counter" || emitter.metrics[0].name != test.metric || emitter.metrics[0].value != 5 {
 				t.Fatalf("account-level series = %#v, want %s counter 5", emitter.metrics, test.metric)
 			}
-			if len(emitter.metrics[0].attrs) != 0 {
+			if !expectedRemainder(emitter.metrics[0].attrs) {
 				t.Fatalf("resource/object identifiers became metric labels: %#v", emitter.metrics[0].attrs)
 			}
 		})
@@ -443,7 +443,7 @@ func TestSQLStorageUsesLatestBucketMaximumAcrossNamespaces(t *testing.T) {
 	to := from.Add(15 * time.Minute)
 	api := &durableObjectsTestAPI{
 		settings: map[string]cfapi.DatasetSettings{
-			"durableObjectsSqlStorageGroups": standardSettings("max.storedBytes", "dimensions.datetimeFiveMinutes", "dimensions.namespaceName"),
+			"durableObjectsSqlStorageGroups": standardSettings("max.storedBytes", "dimensions.datetimeFiveMinutes", "dimensions_namespaceId"),
 		},
 		rows: map[string][]map[string]any{
 			"durableObjectsSqlStorageGroups": {
@@ -462,10 +462,10 @@ func TestSQLStorageUsesLatestBucketMaximumAcrossNamespaces(t *testing.T) {
 	if len(emitter.metrics) != 1 || emitter.metrics[0].kind != "gauge" || emitter.metrics[0].name != semconv.MetricDurableObjectsSQLStorageBytes || emitter.metrics[0].value != 24 {
 		t.Fatalf("SQL storage aggregate = %#v, want latest-bucket max 24", emitter.metrics)
 	}
-	if len(emitter.metrics[0].attrs) != 0 {
+	if !expectedRemainder(emitter.metrics[0].attrs) {
 		t.Fatalf("SQL storage leaked namespace attributes: %#v", emitter.metrics[0].attrs)
 	}
-	if !containsField(api.requests[0].WantedFields, "dimensions.namespaceName") {
+	if !containsField(api.requests[0].WantedFields, "dimensions.namespaceId") {
 		t.Fatalf("advertised optional namespace grouping not selected: %v", api.requests[0].WantedFields)
 	}
 	if api.requests[0].Limit != 100 {
@@ -501,7 +501,7 @@ func TestSQLStorageFallsBackToAccountAggregationWhenOptionalFieldUnavailableOrOv
 			if containsField(api.requests[0].WantedFields, "dimensions.namespaceName") {
 				t.Fatalf("selected unavailable/over-budget optional field: %v", api.requests[0].WantedFields)
 			}
-			if len(emitter.metrics) != 1 || emitter.metrics[0].value != 14 || len(emitter.metrics[0].attrs) != 0 {
+			if len(emitter.metrics) != 1 || emitter.metrics[0].value != 14 || !expectedRemainder(emitter.metrics[0].attrs) {
 				t.Fatalf("account fallback = %#v", emitter.metrics)
 			}
 		})

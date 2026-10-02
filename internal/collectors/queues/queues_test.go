@@ -293,7 +293,7 @@ func TestGaugeDatasetsTakeMaximumQueueAverageFromLatestCompleteBucket(t *testing
 			}
 			for name, value := range test.metrics {
 				metric, ok := got[name]
-				if !ok || metric.Kind != "gauge" || metric.Value != value || len(metric.Attrs) != 0 {
+				if !ok || metric.Kind != "gauge" || metric.Value != value || !expectedRemainder(metric.Attrs) {
 					t.Errorf("metric %s = %+v, want unlabeled gauge %v from latest bucket maximum", name, metric, value)
 				}
 			}
@@ -301,7 +301,7 @@ func TestGaugeDatasetsTakeMaximumQueueAverageFromLatestCompleteBucket(t *testing
 				if metric.Name == "queueId" || strings.Contains(metric.Name, "queue-fixture") {
 					t.Errorf("queue identity leaked into metric name %q", metric.Name)
 				}
-				if len(metric.Attrs) != 0 {
+				if !expectedRemainder(metric.Attrs) {
 					t.Errorf("Queue metric has resource attributes: %+v", metric)
 				}
 			}
@@ -390,7 +390,7 @@ func TestMessageOperationsUseOptionalQueueIDAndSumOnlyCountAndBillableOperations
 	}
 	for name, value := range want {
 		metric, ok := got[name]
-		if !ok || metric.Kind != "counter" || metric.Value != value || len(metric.Attrs) != 0 {
+		if !ok || metric.Kind != "counter" || metric.Value != value || !expectedRemainder(metric.Attrs) {
 			t.Errorf("metric %s = %+v, want account-only counter %v", name, metric, value)
 		}
 	}
@@ -519,7 +519,7 @@ func TestSeriesCapRetainsSortedMetricsAndDisclosesOnlyDropCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out.Metrics) != 1 || out.Metrics[0].Name != semconv.MetricQueuesBacklogBytes || out.Metrics[0].Value != 50 || len(out.Metrics[0].Attrs) != 0 {
+	if len(out.Metrics) != 1 || out.Metrics[0].Name != semconv.MetricQueuesBacklogBytes || out.Metrics[0].Value != 50 || !expectedRemainder(out.Metrics[0].Attrs) {
 		t.Fatalf("capped metric = %+v, want first sorted unlabeled metric %s=50", out.Metrics, semconv.MetricQueuesBacklogBytes)
 	}
 	logText := logs.String()

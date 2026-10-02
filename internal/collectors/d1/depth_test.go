@@ -121,7 +121,7 @@ func TestDepthRegisterHTTP(t *testing.T) {
 			}
 			got := metricRows(out.Metrics)
 			read, readPresent := got[semconv.MetricD1ReadQueries]
-			if !readPresent || read.Kind != "counter" || read.Value != 14 || len(read.Attrs) != 0 {
+			if !readPresent || read.Kind != "counter" || read.Value != 14 || !expectedRemainder(read.Attrs) {
 				t.Fatalf("legacy read queries identity/value changed: %v", out.Metrics)
 			}
 			write, writePresent := got[semconv.MetricD1WriteQueries]
@@ -129,7 +129,7 @@ func TestDepthRegisterHTTP(t *testing.T) {
 				if writePresent {
 					t.Fatalf("old one-series cap selection changed: %v", out.Metrics)
 				}
-			} else if !writePresent || write.Kind != "counter" || write.Value != 4 || len(write.Attrs) != 0 {
+			} else if !writePresent || write.Kind != "counter" || write.Value != 4 || !expectedRemainder(write.Attrs) {
 				t.Fatalf("legacy write queries identity/value changed: %v", out.Metrics)
 			}
 			if !checkpoint.Equal(from.Add(10 * time.Minute)) {
@@ -169,7 +169,7 @@ func TestDepthRegisterHTTP(t *testing.T) {
 			}
 			for _, m := range out.Metrics {
 				for _, a := range m.Attrs {
-					if a.Key != semconv.AttrStatistic {
+					if a.Key != semconv.AttrStatistic && (a.Key != semconv.AttrD1DatabaseName || a.Value != "other") {
 						t.Fatalf("resource attribute leaked: %v", m)
 					}
 				}

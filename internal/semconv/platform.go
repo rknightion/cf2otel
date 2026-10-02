@@ -63,4 +63,10 @@ const (
 	AttrR2BucketName           = "cloudflare.r2.bucket_name"
 	AttrR2CatalogNamespaceName = "cloudflare.r2.catalog.namespace_name"
 	AttrR2SQLBucketName        = "cloudflare.r2sql.bucket_name"
+
+	AttrD1DatabaseName              = "cloudflare.d1.database_name"
+	AttrKVNamespaceName             = "cloudflare.kv.namespace_name"
+	AttrQueuesQueueName             = "cloudflare.queues.queue_name"
+	AttrDurableObjectsNamespaceName = "cloudflare.durableobjects.namespace_name"
+	AttrR2ActionType                = "cloudflare.r2.action_type"
 )

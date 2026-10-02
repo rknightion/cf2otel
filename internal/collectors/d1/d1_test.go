@@ -190,7 +190,7 @@ func TestAnalyticsUsesAccountOnlyRequiredFieldsAndSumsGroups(t *testing.T) {
 		t.Fatalf("account aggregates = %+v, want read=4 and write=6", got)
 	}
 	for _, metric := range out.Metrics {
-		if metric.Kind != "counter" || len(metric.Attrs) != 0 {
+		if metric.Kind != "counter" || !expectedRemainder(metric.Attrs) {
 			t.Errorf("metric has unexpected kind or resource attributes: %+v", metric)
 		}
 	}
@@ -265,7 +265,7 @@ func TestStorageUsesLatestCompleteBucketAndMaximumAcrossRows(t *testing.T) {
 	if err != nil || !mark.Equal(to) {
 		t.Fatalf("mark=%s error=%v", mark, err)
 	}
-	if len(out.Metrics) != 1 || out.Metrics[0].Kind != "gauge" || out.Metrics[0].Name != semconv.MetricD1StorageBytes || out.Metrics[0].Value != 17 || len(out.Metrics[0].Attrs) != 0 {
+	if len(out.Metrics) != 1 || out.Metrics[0].Kind != "gauge" || out.Metrics[0].Name != semconv.MetricD1StorageBytes || out.Metrics[0].Value != 17 || !expectedRemainder(out.Metrics[0].Attrs) {
 		t.Fatalf("storage gauge = %+v, want latest complete bucket max 17 without attributes", out.Metrics)
 	}
 	if len(api.requests) != 1 || fmt.Sprint(api.requests[0].WantedFields) != fmt.Sprint([]string{"max.databaseSizeBytes", "dimensions.datetimeFiveMinutes"}) {
@@ -303,7 +303,7 @@ func TestAdjacentWindowsOwnFiveMinuteBoundaryOnce(t *testing.T) {
 		t.Fatalf("D1 query selection = %+v, want count and timestamp only", api.requests)
 	}
 	for _, metric := range append(first.Metrics, second.Metrics...) {
-		if len(metric.Attrs) != 0 {
+		if !expectedRemainder(metric.Attrs) {
 			t.Errorf("D1 query metric emitted forbidden attributes: %+v", metric.Attrs)
 		}
 	}
@@ -374,7 +374,7 @@ func TestMoreThan500SyntheticResourcesCollapseToFrozenAccountSeries(t *testing.T
 		t.Fatalf("501 resource rows did not collapse to the two account series: %+v", got)
 	}
 	for _, metric := range out.Metrics {
-		if len(metric.Attrs) != 0 {
+		if !expectedRemainder(metric.Attrs) {
 			t.Errorf("resource attribute escaped account aggregation: %+v", metric.Attrs)
 		}
 	}

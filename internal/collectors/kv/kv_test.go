@@ -174,7 +174,7 @@ func TestOperationsUsesAccountOnlyRequiredFieldsAndSumsGroups(t *testing.T) {
 	if fmt.Sprint(request.WantedFields) != fmt.Sprint(wantFields) {
 		t.Fatalf("wanted fields = %v, want %v", request.WantedFields, wantFields)
 	}
-	if len(out.Metrics) != 1 || out.Metrics[0].Kind != "counter" || out.Metrics[0].Name != semconv.MetricKVRequests || out.Metrics[0].Value != 8 || len(out.Metrics[0].Attrs) != 0 {
+	if len(out.Metrics) != 1 || out.Metrics[0].Kind != "counter" || out.Metrics[0].Name != semconv.MetricKVRequests || out.Metrics[0].Value != 8 || !expectedRemainder(out.Metrics[0].Attrs) {
 		t.Fatalf("account requests metric = %+v, want count 8 and no attributes", out.Metrics)
 	}
 }
@@ -204,7 +204,7 @@ func TestStorageUsesLatestCompleteBucketMaximumAcrossNamespaces(t *testing.T) {
 		t.Fatalf("KV storage gauges = %+v, want latest complete bucket maxima 17 bytes and 3 keys", got)
 	}
 	for _, metric := range out.Metrics {
-		if len(metric.Attrs) != 0 {
+		if !expectedRemainder(metric.Attrs) {
 			t.Errorf("resource attribute escaped account aggregation: %+v", metric.Attrs)
 		}
 	}
@@ -247,7 +247,7 @@ func TestMoreThan500SyntheticNamespacesCollapseToFrozenAccountSeries(t *testing.
 	if err != nil || !mark.Equal(fixtureFrom.Add(5*time.Minute)) {
 		t.Fatalf("mark=%s error=%v", mark, err)
 	}
-	if len(out.Metrics) != 1 || out.Metrics[0].Name != semconv.MetricKVRequests || out.Metrics[0].Value != 501 || len(out.Metrics[0].Attrs) != 0 {
+	if len(out.Metrics) != 1 || out.Metrics[0].Name != semconv.MetricKVRequests || out.Metrics[0].Value != 501 || !expectedRemainder(out.Metrics[0].Attrs) {
 		t.Fatalf("501 resource rows did not collapse to one account series: %+v", out.Metrics)
 	}
 	if strings.Contains(logs.String(), "dropped_series") {

@@ -65,19 +65,22 @@ type settingsReader interface {
 }
 
 type groupsCollector struct {
-	cfg  *config.Config
-	api  cfapi.Client
-	spec datasetSpec
+	cfg       *config.Config
+	api       cfapi.Client
+	spec      datasetSpec
+	names     *nameCache
+	admission nameAdmission
 }
 
 type metricValue struct {
 	name  string
 	value float64
 	kind  metricKind
+	attrs []telemetry.Attr
 }
 
 func newGroupsCollector(cfg *config.Config, api cfapi.Client, spec datasetSpec) *groupsCollector {
-	return &groupsCollector{cfg: cfg, api: api, spec: spec}
+	return &groupsCollector{cfg: cfg, api: api, spec: spec, names: newNameCache()}
 }
 
 func (c *groupsCollector) Name() string                 { return c.spec.collector }
@@ -134,7 +137,7 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 	if err != nil {
 		return from, fmt.Errorf("query KV Groups dataset %s: %w", c.spec.dataset, err)
 	}
-	values, err := c.aggregate(rows, completeFrom, completeTo)
+	values, err := c.aggregateNamed(ctx, rows, completeFrom, completeTo, wanted)
 	if err != nil {
 		return from, err
 	}
@@ -145,9 +148,9 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 	for _, metric := range values {
 		var err error
 		if metric.kind == gaugeMetric {
-			err = out.Gauge(ctx, metric.name, metric.value)
+			err = out.Gauge(ctx, metric.name, metric.value, metric.attrs...)
 		} else {
-			err = out.Counter(ctx, metric.name, metric.value)
+			err = out.Counter(ctx, metric.name, metric.value, metric.attrs...)
 		}
 		if err != nil {
 			return from, err
@@ -170,8 +173,9 @@ func (c *groupsCollector) requiredFields(settings cfapi.DatasetSettings) ([]stri
 	if len(fields) > settings.MaxNumberOfFields {
 		return nil, fmt.Errorf("KV Groups dataset %s requires %d fields, limit %d", c.spec.dataset, len(fields), settings.MaxNumberOfFields)
 	}
-	// The frozen KV contract has no resource metric attribute. Do not select an
-	// optional resource dimension; all rows contribute to one account series.
+	if len(fields) < settings.MaxNumberOfFields && hasAvailableField(settings.AvailableFields, "dimensions."+resourceDimension) {
+		fields = append(fields, "dimensions."+resourceDimension)
+	}
 	return fields, nil
 }
 
@@ -352,11 +356,14 @@ func numericField(row map[string]any, field string) (float64, bool) {
 	return number, number >= 0 && !math.IsNaN(number) && !math.IsInf(number, 0)
 }
 
-// There are no KV resource metric attributes in the frozen contract, so
-// 500 synthetic namespaces still collapse to at most two account series.
-// The default 500-series drop path is therefore unreachable for these datasets.
+// Truncate deterministically by the complete emitted attribute set after
+// applying the sticky per-metric resource admission and remainder.
 func (c *groupsCollector) applySeriesCap(ctx context.Context, values []metricValue) ([]metricValue, error) {
-	sort.Slice(values, func(i, j int) bool { return values[i].name < values[j].name })
+	sort.Slice(values, func(i, j int) bool {
+		left, _ := json.Marshal([]any{values[i].name, values[i].attrs})
+		right, _ := json.Marshal([]any{values[j].name, values[j].attrs})
+		return string(left) < string(right)
+	})
 	limit := c.cfg.Platform.MaxMetricSeriesPerWindow
 	if limit <= 0 {
 		return nil, errors.New("platform metric series cap must be positive")

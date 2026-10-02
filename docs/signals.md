@@ -212,31 +212,31 @@ The seat source is `GET /accounts/{account}/access/users`. Cloudflare's [officia
 | `cloudflare.turnstile.events` | `1` | Turnstile event count from `turnstileAdaptiveGroups`, account aggregate. |
 | `cloudflare.logpush.uploads` | `1` | Logpush upload count from `logpushHealthAdaptiveGroups`, account aggregate. |
 | `cloudflare.logpush.records` | `1` | Logpush record count from `logpushHealthAdaptiveGroups`, account aggregate. |
-| `cloudflare.d1.read_queries` | `1` | D1 read query sum from `d1AnalyticsAdaptiveGroups`, account aggregate. |
-| `cloudflare.d1.write_queries` | `1` | D1 write query sum from `d1AnalyticsAdaptiveGroups`, account aggregate. |
-| `cloudflare.d1.queries` | `1` | D1 query count from `d1QueriesAdaptiveGroups`; query text is not selected. |
+| `cloudflare.d1.read_queries` | `1` | D1 read query sum from `d1AnalyticsAdaptiveGroups`, by bounded database name. |
+| `cloudflare.d1.write_queries` | `1` | D1 write query sum from `d1AnalyticsAdaptiveGroups`, by bounded database name. |
+| `cloudflare.d1.queries` | `1` | D1 query count from `d1QueriesAdaptiveGroups` by bounded database name; query text is not selected. |
 | `cloudflare.d1.storage.max_database_bytes` | `By` | Maximum D1 database size across databases in the latest complete bucket, `By`. |
-| `cloudflare.kv.requests` | `{request}` | KV operation request sum from `kvOperationsAdaptiveGroups`, account aggregate. |
+| `cloudflare.kv.requests` | `{request}` | KV operation request sum from `kvOperationsAdaptiveGroups`, by bounded namespace name. |
 | `cloudflare.kv.storage.max_namespace_bytes` | `By` | Maximum KV namespace bytes in the latest complete bucket, `By`. |
 | `cloudflare.kv.storage.max_namespace_keys` | `{key}` | Maximum KV namespace key count in the latest complete bucket. |
 | `cloudflare.r2.bandwidth.download.bytes` | `By` | R2 download byte sum, optionally by bounded bucket name, `By`. |
 | `cloudflare.r2.bandwidth.upload.bytes` | `By` | R2 upload byte sum, optionally by bounded bucket name, `By`. |
 | `cloudflare.r2.catalog.data.operations` | `1` | R2 catalog data operation count, optionally by bounded namespace name. |
 | `cloudflare.r2.catalog.maintenance.jobs` | `1` | R2 catalog maintenance job count, optionally by bounded namespace name. |
-| `cloudflare.r2.requests` | `{request}` | R2 operation request sum, optionally by bounded bucket name. |
+| `cloudflare.r2.requests` | `{request}` | R2 operation request sum by advertised action type and optional bucket name, bounded by complete attribute set. |
 | `cloudflare.r2.storage.payload.bytes` | `By` | R2 payload-size gauge in the latest complete bucket per bucket, `By`. |
 | `cloudflare.r2.storage.objects` | `{object}` | R2 object-count gauge in the latest complete bucket per bucket. |
 | `cloudflare.r2sql.queries` | `1` | R2 SQL query count, optionally by bounded bucket name; table names are omitted. |
-| `cloudflare.durableobjects.requests` | `{request}` | Durable Objects invocation request sum, account aggregate. |
-| `cloudflare.durableobjects.subrequests` | `{request}` | Durable Objects periodic subrequest sum, account aggregate. |
+| `cloudflare.durableobjects.requests` | `{request}` | Durable Objects invocation request sum by bounded namespace name. |
+| `cloudflare.durableobjects.subrequests` | `{request}` | Durable Objects periodic subrequest sum by bounded namespace name. |
 | `cloudflare.durableobjects.sql_storage.max_namespace_bytes` | `By` | Maximum Durable Objects SQL storage across namespaces in the latest complete bucket, `By`. |
-| `cloudflare.durableobjects.subrequests.request_body.bytes` | `By` | Durable Objects uncached request-body byte sum, account aggregate, `By`. |
+| `cloudflare.durableobjects.subrequests.request_body.bytes` | `By` | Durable Objects uncached request-body byte sum by bounded namespace name, `By`. |
 | `cloudflare.queues.backlog.max_queue_avg_messages` | `{message}` | Maximum per-queue average backlog messages in the latest complete bucket. |
 | `cloudflare.queues.backlog.max_queue_avg_bytes` | `By` | Maximum per-queue average backlog bytes in the latest complete bucket, `By`. |
 | `cloudflare.queues.consumer.max_queue_avg_concurrency` | `{consumer}` | Maximum per-queue average consumer concurrency in the latest complete bucket. |
 | `cloudflare.queues.delayed_backlog.max_queue_avg_messages` | `{message}` | Maximum per-queue average delayed backlog messages in the latest complete bucket. |
-| `cloudflare.queues.message.operations` | `1` | Queue message operation count, account aggregate. |
-| `cloudflare.queues.message.billable_operations` | `1` | Queue billable operation sum, account aggregate. |
+| `cloudflare.queues.message.operations` | `1` | Queue message operation count by bounded resolved queue name. |
+| `cloudflare.queues.message.billable_operations` | `1` | Queue billable operation sum by bounded resolved queue name. |
 | `cloudflare.email.routing.events` | `1` | Email Routing Groups count summed across account-owned zones, account aggregate. |
 | `cloudflare.email.sending.events` | `1` | Email Sending Groups count summed across account-owned zones, account aggregate. |
 | `cloudflare.ai_gateway.requests` | `{request}` | AI Gateway request count. |
@@ -273,7 +273,7 @@ The seat source is `GET /accounts/{account}/access/users`. Cloudflare's [officia
 | `cf2otel.window.commit_failures` | `1` | Failed window commits by retry or dropped outcome. |
 | `cf2otel.window.catchup_windows` | `1` | Additional bounded collector windows committed in one scheduler tick. |
 
-Platform gauges select the latest complete five-minute source bucket and emit at export time. The emitter attaches the listed UCUM units to OTLP instruments. RUM timing values are converted from source microseconds to seconds before recording. The GenAI operation histogram and poller API/scrape histograms use explicit second-based buckets, including sub-second boundaries. Queue IDs are used only inside source aggregation and are never metric attributes.
+Platform gauges select the latest complete five-minute source bucket and emit at export time. D1, KV, Durable Objects and Queue base gauges use the globally latest bucket across resources, then MAX within each resolved name or remainder; older resource buckets are not carried forward. R2 keeps its per-resource latest-bucket behavior. Base counters SUM within each resolved name or remainder. Queue averages still require the advertised queue ID for correct per-queue statistics; missing required fields fail before query, emission or checkpoint advancement. The emitter attaches the listed UCUM units to OTLP instruments. RUM timing values are converted from source microseconds to seconds before recording. The GenAI operation histogram and poller API/scrape histograms use explicit second-based buckets, including sub-second boundaries. Queue IDs are used only inside source aggregation and are never metric attributes.
 
 Prometheus compatibility naming adds `_seconds` for `s` when the base name lacks it and `_ratio` for dimensionless gauges. Names already ending in `_bytes` retain that suffix, and annotated `{token}` and `{request}` units add no suffix. The generated Grafana dashboard (`dashboards/cf2otel.json`, built by `grafana/build_dashboard.py`) queries only the suffixed names.
 
@@ -301,9 +301,15 @@ The retired AI Gateway dashboard's **Data boundaries** panel was static provenan
 | DNS | `cloudflare.dns.*` attributes are listed individually below; query name, IPs and `cloudflare.dns.colo` are log only. |
 | Gateway DNS | `cloudflare.gateway.dns.query.type`, `cloudflare.gateway.dns.decision`, `cloudflare.gateway.dns.country`; only bounded metric dimensions. |
 | Platform resource names | `cloudflare.workers.script_name`, `cloudflare.r2.bucket_name`, `cloudflare.r2.catalog.namespace_name`, `cloudflare.r2sql.bucket_name`; bounded names only. |
+| Platform resolved names | `cloudflare.d1.database_name`, `cloudflare.kv.namespace_name`, `cloudflare.queues.queue_name`, `cloudflare.durableobjects.namespace_name`; string names, never source IDs. |
+| R2 operations | `cloudflare.r2.action_type`; string action type, selected only when advertised. |
 | RUM | `cloudflare.rum.country`, `cloudflare.rum.device_type`, `cloudflare.rum.site_tag`; gauges use device and optional site tag. Web-vitals quantiles that are absent, null or negative emit no point, including when a previous window had a value; genuine zero measurements remain zero. |
 | Window delivery | `cf2otel.window.*` describes retention gaps and commit outcomes. |
 | Poller | `cf2otel.collector`, `cf2otel.version`, `cf2otel.commit`, `cf2otel.export.signal`, `cf2otel.build.version`, `cf2otel.build.commit` |
+
+D1/KV/Queue/Durable Objects base metrics resolve IDs through read-only account list endpoints. Successful and failed name lookups are cached for one hour, shared within each domain. Requests start at 50 rows per page and follow server-capped page sizes, up to 100 pages and 5000 rows. Only a complete, consistent list is published; a later-page or refresh failure replaces any expired mapping with a failed state, yielding `other` for one hour rather than retaining stale names indefinitely. Blank, invalid UTF-8, over-128-character, reserved `other`, unknown and ambiguous names yield `other`; IDs never become a fallback label. Optional unavailable grouping fields yield a safe remainder; required Queue statistics fields remain mandatory.
+
+Each affected base metric admits 49 normal complete attribute sets for the collector lifetime plus one reserved `other` set (50 total). Admission stays sticky across windows, bounding cumulative SDK series growth until restart. R2 operations count the bucket/action pair, so different actions on one bucket remain distinct until capped; the canonical remainder sets every present resource/action dimension to `other` and conserves counter sums (gauge remainder is MAX). The existing total platform per-window cap defaults to 500 and applies deterministic full-attribute ordering when truncation is necessary. Existing metric names, units and depth quantile selections are unchanged; percentiles are never averaged. Operator-defined resource names may be sensitive: review them before export. Dashboard panels and live/canary entitlement proof are separate root-owned work.
 
 Only bounded attributes should be used to group metrics. `cloudflare.access.identity.inferred=true` means a time, host and IP correlation, not a Cloudflare-provided identity on the HTTP event.
 
@@ -410,6 +416,11 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cloudflare.r2sql.queries` |
 | Metric | `cloudflare.turnstile.events` |
 | Metric | `cloudflare.workers.requests` |
+| Attribute | `cloudflare.d1.database_name` |
+| Attribute | `cloudflare.kv.namespace_name` |
+| Attribute | `cloudflare.queues.queue_name` |
+| Attribute | `cloudflare.durableobjects.namespace_name` |
+| Attribute | `cloudflare.r2.action_type` |
 | Attribute | `cloudflare.r2.bucket_name` |
 | Attribute | `cloudflare.r2.catalog.namespace_name` |
 | Attribute | `cloudflare.r2sql.bucket_name` |

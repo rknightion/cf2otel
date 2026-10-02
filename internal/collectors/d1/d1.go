@@ -70,9 +70,11 @@ type settingsReader interface {
 }
 
 type groupsCollector struct {
-	cfg  *config.Config
-	api  cfapi.Client
-	spec datasetSpec
+	cfg       *config.Config
+	api       cfapi.Client
+	spec      datasetSpec
+	names     *nameCache
+	admission nameAdmission
 }
 
 type metricValue struct {
@@ -83,7 +85,7 @@ type metricValue struct {
 }
 
 func newGroupsCollector(cfg *config.Config, api cfapi.Client, spec datasetSpec) *groupsCollector {
-	return &groupsCollector{cfg: cfg, api: api, spec: spec}
+	return &groupsCollector{cfg: cfg, api: api, spec: spec, names: newNameCache()}
 }
 
 func (c *groupsCollector) Name() string                 { return c.spec.collector }
@@ -140,7 +142,7 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 	if err != nil {
 		return from, fmt.Errorf("query D1 Groups dataset %s: %w", c.spec.dataset, err)
 	}
-	values, err := c.aggregate(rows, completeFrom, completeTo)
+	values, err := c.aggregateNamed(ctx, rows, completeFrom, completeTo, wanted)
 	if err != nil {
 		return from, err
 	}
@@ -188,8 +190,9 @@ func (c *groupsCollector) requiredFields(settings cfapi.DatasetSettings) ([]stri
 	if len(fields) > settings.MaxNumberOfFields {
 		return nil, fmt.Errorf("D1 Groups dataset %s requires %d fields, limit %d", c.spec.dataset, len(fields), settings.MaxNumberOfFields)
 	}
-	// The frozen D1 contract has no resource metric attribute. Do not select an
-	// optional resource dimension; all rows contribute to one account series.
+	if len(fields) < settings.MaxNumberOfFields && hasAvailableField(settings.AvailableFields, "dimensions."+resourceDimension) {
+		fields = append(fields, "dimensions."+resourceDimension)
+	}
 	return fields, nil
 }
 
@@ -381,7 +384,7 @@ func numericField(row map[string]any, field string) (float64, bool) {
 
 // Account/statistic series never carry database identifiers.
 func (c *groupsCollector) applySeriesCap(ctx context.Context, values []metricValue) ([]metricValue, error) {
-	sort.Slice(values, func(i, j int) bool { return values[i].name < values[j].name })
+	sort.Slice(values, func(i, j int) bool { return metricValueKey(values[i]) < metricValueKey(values[j]) })
 	limit := c.cfg.Platform.MaxMetricSeriesPerWindow
 	if limit <= 0 {
 		return nil, errors.New("platform metric series cap must be positive")

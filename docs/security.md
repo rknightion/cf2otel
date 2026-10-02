@@ -40,31 +40,35 @@ The table maps every configured collector name to its expected read group. For G
 | `workers.invocations` | `Account Analytics Read` (Account) | Unverified |
 | `turnstile.events` | `Account Analytics Read` (Account) | Unverified |
 | `logpush.health` | `Account Analytics Read` (Account) | Unverified |
-| `d1.analytics` | `Account Analytics Read` (Account) | Unverified |
-| `d1.queries` | `Account Analytics Read` (Account) | Unverified |
-| `d1.storage` | `Account Analytics Read` (Account) | Unverified |
-| `kv.operations` | `Account Analytics Read` (Account) | Unverified |
-| `kv.storage` | `Account Analytics Read` (Account) | Unverified |
+| `d1.analytics` | `Account Analytics Read` (Account); additional database-list read entitlement unknown | Runtime list returned 200 in root preparation; least privilege and canary-token entitlement unverified |
+| `d1.queries` | `Account Analytics Read` (Account); additional database-list read entitlement unknown | Same read-only D1 name lookup; least privilege and canary-token entitlement unverified |
+| `d1.storage` | `Account Analytics Read` (Account); additional database-list read entitlement unknown | Same read-only D1 name lookup; least privilege and canary-token entitlement unverified |
+| `kv.operations` | `Account Analytics Read` (Account); additional namespace-list read entitlement unknown | Runtime list returned 200 in root preparation; least privilege and canary-token entitlement unverified |
+| `kv.storage` | `Account Analytics Read` (Account); additional namespace-list read entitlement unknown | Same read-only KV name lookup; least privilege and canary-token entitlement unverified |
 | `r2.bandwidth` | `Account Analytics Read` (Account) | Unverified |
 | `r2.catalog_data` | `Account Analytics Read` (Account) | Unverified |
 | `r2.catalog_maintenance` | `Account Analytics Read` (Account) | Unverified |
 | `r2.operations` | `Account Analytics Read` (Account) | Unverified |
 | `r2.storage` | `Account Analytics Read` (Account) | Unverified |
 | `r2.sql` | `Account Analytics Read` (Account) | Unverified |
-| `durableobjects.invocations` | `Account Analytics Read` (Account) | Unverified |
-| `durableobjects.periodic` | `Account Analytics Read` (Account) | Unverified |
-| `durableobjects.sql_storage` | `Account Analytics Read` (Account) | Unverified |
-| `durableobjects.subrequests` | `Account Analytics Read` (Account) | Unverified |
-| `queues.backlog` | `Account Analytics Read` (Account) | Unverified |
-| `queues.consumer` | `Account Analytics Read` (Account) | Unverified |
-| `queues.delayed_backlog` | `Account Analytics Read` (Account) | Unverified |
-| `queues.message_operations` | `Account Analytics Read` (Account) | Unverified |
+| `durableobjects.invocations` | `Account Analytics Read` (Account); additional namespace-list read entitlement unknown | Runtime list returned 200 in root preparation; least privilege and canary-token entitlement unverified |
+| `durableobjects.periodic` | `Account Analytics Read` (Account); additional namespace-list read entitlement unknown | Same read-only Durable Objects name lookup; least privilege and canary-token entitlement unverified |
+| `durableobjects.sql_storage` | `Account Analytics Read` (Account); additional namespace-list read entitlement unknown | Same read-only Durable Objects name lookup; least privilege and canary-token entitlement unverified |
+| `durableobjects.subrequests` | `Account Analytics Read` (Account); additional namespace-list read entitlement unknown | Same read-only Durable Objects name lookup; least privilege and canary-token entitlement unverified |
+| `queues.backlog` | `Account Analytics Read` (Account); additional queue-list read entitlement unknown | Runtime list returned 200 in root preparation; least privilege and canary-token entitlement unverified |
+| `queues.consumer` | `Account Analytics Read` (Account); additional queue-list read entitlement unknown | Same read-only Queue name lookup; least privilege and canary-token entitlement unverified |
+| `queues.delayed_backlog` | `Account Analytics Read` (Account); additional queue-list read entitlement unknown | Same read-only Queue name lookup; least privilege and canary-token entitlement unverified |
+| `queues.message_operations` | `Account Analytics Read` (Account); additional queue-list read entitlement unknown | Same read-only Queue name lookup; least privilege and canary-token entitlement unverified |
 | `email.routing` | `Analytics Read` (Zone) | Unverified |
 | `email.sending` | `Analytics Read` (Zone) | Unverified |
 | `certs.packs` | `SSL and Certificates Read` (Zone) | Live-verified in the loop 14 endpoint schema; disabled by default |
 | `selfobs` | None; this collector reads local process state only | Not applicable |
 
 The expected groups for other collectors are candidates based on their API surface and GraphQL dataset scope. Verify them against the target account before enabling a collector; Cloudflare can require dataset-specific entitlements in addition to the base analytics group.
+
+## Platform resource-name boundaries
+
+Name enrichment uses only GET `/accounts/{account}/d1/database`, `/accounts/{account}/storage/kv/namespaces`, `/accounts/{account}/queues` and `/accounts/{account}/workers/durable_objects/namespaces`. Root preparation verified runtime-token access (200), not the minimal permission group or the canary token's access. No new permission name is asserted and no Write grant is recommended. A failed lookup preserves metric counts in `other` and is cached for one hour, replacing expired names. Only complete lists within 100 pages/5000 rows are published. Source IDs remain internal and never enter metric labels or fallback values. Resolved names are limited to 128 characters and 49 sticky normal complete attribute sets plus one remainder per metric; R2 action/bucket pairs share this cap. Resource names can contain operator-defined sensitive content; assess them and destination access before export. Existing depth quantile selections are unchanged.
 
 ## Personal data in signals
 

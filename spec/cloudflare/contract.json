@@ -232,7 +232,8 @@
         "quantiles_queryBatchResponseBytesP75",
         "quantiles_queryBatchResponseBytesP99",
         "quantiles_queryBatchResponseBytesP999",
-        "dimensions_datetimeFiveMinutes"
+        "dimensions_datetimeFiveMinutes",
+        "dimensions_databaseId"
       ],
       "minimum_max_duration_seconds": 3600,
       "minimum_not_older_than_seconds": 2678400
@@ -242,7 +243,8 @@
       "dataset": "d1QueriesAdaptiveGroups",
       "required_fields": [
         "count",
-        "dimensions_datetimeFiveMinutes"
+        "dimensions_datetimeFiveMinutes",
+        "dimensions_databaseId"
       ],
       "minimum_max_duration_seconds": 3600,
       "minimum_not_older_than_seconds": 2678400
@@ -252,7 +254,8 @@
       "dataset": "d1StorageAdaptiveGroups",
       "required_fields": [
         "max_databaseSizeBytes",
-        "dimensions_datetimeFiveMinutes"
+        "dimensions_datetimeFiveMinutes",
+        "dimensions_databaseId"
       ],
       "minimum_max_duration_seconds": 3600,
       "minimum_not_older_than_seconds": 2678400
@@ -272,7 +275,8 @@
       "dataset": "kvOperationsAdaptiveGroups",
       "required_fields": [
         "sum_requests",
-        "dimensions_datetimeFiveMinutes"
+        "dimensions_datetimeFiveMinutes",
+        "dimensions_namespaceId"
       ],
       "minimum_max_duration_seconds": 3600,
       "minimum_not_older_than_seconds": 2678400
@@ -283,7 +287,8 @@
       "required_fields": [
         "max_byteCount",
         "max_keyCount",
-        "dimensions_datetimeFiveMinutes"
+        "dimensions_datetimeFiveMinutes",
+        "dimensions_namespaceId"
       ],
       "minimum_max_duration_seconds": 3600,
       "minimum_not_older_than_seconds": 2678400
@@ -324,7 +329,8 @@
       "dataset": "r2OperationsAdaptiveGroups",
       "required_fields": [
         "sum_requests",
-        "dimensions_datetimeFiveMinutes"
+        "dimensions_datetimeFiveMinutes",
+        "dimensions_actionType"
       ],
       "minimum_max_duration_seconds": 3600,
       "minimum_not_older_than_seconds": 2678400
@@ -365,7 +371,8 @@
         "quantiles_responseBodySizeP75",
         "quantiles_responseBodySizeP99",
         "quantiles_responseBodySizeP999",
-        "dimensions_datetimeFiveMinutes"
+        "dimensions_datetimeFiveMinutes",
+        "dimensions_namespaceId"
       ],
       "minimum_max_duration_seconds": 3600,
       "minimum_not_older_than_seconds": 7776000
@@ -375,7 +382,8 @@
       "dataset": "durableObjectsPeriodicGroups",
       "required_fields": [
         "sum_subrequests",
-        "dimensions_datetimeFiveMinutes"
+        "dimensions_datetimeFiveMinutes",
+        "dimensions_namespaceId"
       ],
       "minimum_max_duration_seconds": 3600,
       "minimum_not_older_than_seconds": 7776000
@@ -385,7 +393,8 @@
       "dataset": "durableObjectsSqlStorageGroups",
       "required_fields": [
         "max_storedBytes",
-        "dimensions_datetimeFiveMinutes"
+        "dimensions_datetimeFiveMinutes",
+        "dimensions_namespaceId"
       ],
       "minimum_max_duration_seconds": 3600,
       "minimum_not_older_than_seconds": 7776000
@@ -395,7 +404,8 @@
       "dataset": "durableObjectsSubrequestsAdaptiveGroups",
       "required_fields": [
         "sum_requestBodySizeUncached",
-        "dimensions_datetimeFiveMinutes"
+        "dimensions_datetimeFiveMinutes",
+        "dimensions_namespaceId"
       ],
       "minimum_max_duration_seconds": 3600,
       "minimum_not_older_than_seconds": 7776000
@@ -500,6 +510,38 @@
     }
   ],
   "rest": [
+    {
+      "name": "d1-databases",
+      "scope": "account",
+      "path": "/accounts/{account}/d1/database",
+      "required_fields": ["uuid", "name"],
+      "check_all_rows": true,
+      "allow_empty": true
+    },
+    {
+      "name": "kv-namespaces",
+      "scope": "account",
+      "path": "/accounts/{account}/storage/kv/namespaces",
+      "required_fields": ["id", "title"],
+      "check_all_rows": true,
+      "allow_empty": true
+    },
+    {
+      "name": "queues-list",
+      "scope": "account",
+      "path": "/accounts/{account}/queues",
+      "required_fields": ["queue_id", "queue_name"],
+      "check_all_rows": true,
+      "allow_empty": true
+    },
+    {
+      "name": "do-namespaces",
+      "scope": "account",
+      "path": "/accounts/{account}/workers/durable_objects/namespaces",
+      "required_fields": ["id", "name"],
+      "check_all_rows": true,
+      "allow_empty": true
+    },
     {
       "name": "firewall-rulesets",
       "scope": "zone",

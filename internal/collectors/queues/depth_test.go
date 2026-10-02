@@ -62,6 +62,11 @@ func TestDepthRegisterHTTP(t *testing.T) {
 								retries = j * 2
 							}
 							row := map[string]any{"dimensions": map[string]any{"datetimeFiveMinutes": at.Format(time.RFC3339), "queueId": []string{"invented-q-a", "invented-q-b"}[j], "actionType": "ReadMessage", "consumerType": "worker", "outcome": "success"}, "count": 7, "sum": map[string]any{"billableOperations": 11}, "avg": map[string]any{"lagTime": lag, "retryCount": retries}}
+							// Grouping the same fixture by queue must conserve its account totals.
+							if strings.Contains(q, "queueId") && !strings.Contains(q, "consumerType") && !strings.Contains(q, "lagTime") {
+								row["count"] = 3 + j
+								row["sum"] = map[string]any{"billableOperations": 5 + j}
+							}
 							if strings.Contains(q, "consumerType") {
 								row["sum"] = map[string]any{"billableOperations": 8}
 								row["dimensions"].(map[string]any)["outcome"] = "none"
@@ -136,7 +141,7 @@ func TestDepthRegisterHTTP(t *testing.T) {
 			}
 			got := queueMetrics(out.Metrics)
 			billable, billablePresent := got[semconv.MetricQueuesBillableOperations]
-			if !billablePresent || billable.Kind != "counter" || billable.Value != 22 || len(billable.Attrs) != 0 {
+			if !billablePresent || billable.Kind != "counter" || billable.Value != 22 || !expectedRemainder(billable.Attrs) {
 				t.Fatalf("legacy billable operations identity/value changed: %v", out.Metrics)
 			}
 			operations, operationsPresent := got[semconv.MetricQueuesMessageOperations]
@@ -144,7 +149,7 @@ func TestDepthRegisterHTTP(t *testing.T) {
 				if operationsPresent {
 					t.Fatalf("old one-series cap selection changed: %v", out.Metrics)
 				}
-			} else if !operationsPresent || operations.Kind != "counter" || operations.Value != 14 || len(operations.Attrs) != 0 {
+			} else if !operationsPresent || operations.Kind != "counter" || operations.Value != 14 || !expectedRemainder(operations.Attrs) {
 				t.Fatalf("legacy message operations identity/value changed: %v", out.Metrics)
 			}
 			if !checkpoint.Equal(from.Add(10 * time.Minute)) {
@@ -194,7 +199,7 @@ func TestDepthRegisterHTTP(t *testing.T) {
 			}
 			for _, m := range out.Metrics {
 				for _, a := range m.Attrs {
-					if a.Key != semconv.AttrQueuesActionType && a.Key != semconv.AttrQueuesConsumerType && a.Key != semconv.AttrQueuesOutcome {
+					if a.Key != semconv.AttrQueuesActionType && a.Key != semconv.AttrQueuesConsumerType && a.Key != semconv.AttrQueuesOutcome && (a.Key != semconv.AttrQueuesQueueName || a.Value != "other") {
 						t.Fatalf("queue identifier leaked: %v", m)
 					}
 				}

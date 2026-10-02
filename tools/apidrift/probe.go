@@ -90,6 +90,10 @@ type pageProbeAPI interface {
 var fieldName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$`)
 var datasetName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 var restPaths = map[string]string{
+	"d1-databases":            "/accounts/{account}/d1/database",
+	"kv-namespaces":           "/accounts/{account}/storage/kv/namespaces",
+	"queues-list":             "/accounts/{account}/queues",
+	"do-namespaces":           "/accounts/{account}/workers/durable_objects/namespaces",
 	"warp-devices":            "/accounts/{account}/dex/fleet-status/devices",
 	"zone-list":               "/zones",
 	"access-apps":             "/accounts/{account}/access/apps",

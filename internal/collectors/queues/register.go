@@ -85,9 +85,11 @@ type settingsReader interface {
 }
 
 type groupsCollector struct {
-	cfg  *config.Config
-	api  cfapi.Client
-	spec datasetSpec
+	cfg       *config.Config
+	api       cfapi.Client
+	spec      datasetSpec
+	names     *nameCache
+	admission nameAdmission
 }
 
 type queryPlan struct {
@@ -107,16 +109,19 @@ func Register(deps collector.Deps) {
 	if deps.Config == nil || deps.Registry == nil {
 		return
 	}
+	names := newNameCache()
 	for _, spec := range datasets {
 		cfg := deps.Config.Collector(spec.collector)
 		if cfg.Enabled {
-			deps.Registry.RegisterWindow(newGroupsCollector(deps.Config, deps.API, spec), cfg.Interval, cfg.InitialLookback, cfg.MaxWindow)
+			c := newGroupsCollector(deps.Config, deps.API, spec)
+			c.names = names
+			deps.Registry.RegisterWindow(c, cfg.Interval, cfg.InitialLookback, cfg.MaxWindow)
 		}
 	}
 }
 
 func newGroupsCollector(cfg *config.Config, api cfapi.Client, spec datasetSpec) *groupsCollector {
-	return &groupsCollector{cfg: cfg, api: api, spec: spec}
+	return &groupsCollector{cfg: cfg, api: api, spec: spec, names: newNameCache()}
 }
 
 func (c *groupsCollector) Name() string                 { return c.spec.collector }
@@ -164,7 +169,7 @@ func (c *groupsCollector) CollectWindow(ctx context.Context, from, to time.Time,
 	if err != nil {
 		return from, fmt.Errorf("query Queue Groups dataset %s: %w", c.spec.dataset, err)
 	}
-	values, err := c.aggregate(rows, completeFrom, completeTo)
+	values, err := c.aggregateNamed(ctx, rows, completeFrom, completeTo, plan.fields)
 	if err != nil {
 		return from, err
 	}
@@ -231,6 +236,8 @@ func buildQueryPlan(spec datasetSpec, settings cfapi.DatasetSettings) (queryPlan
 		if !availableField(settings.AvailableFields, queueIDField) {
 			return queryPlan{}, fmt.Errorf("queue Groups dataset %s is missing required field %s", spec.dataset, queueIDField)
 		}
+		fields = append(fields, queueIDField)
+	} else if len(fields) < settings.MaxNumberOfFields && availableField(settings.AvailableFields, queueIDField) {
 		fields = append(fields, queueIDField)
 	}
 	if len(fields) > settings.MaxNumberOfFields {
@@ -497,7 +504,7 @@ func capSeries(collectorName string, values []metricValue, limit int) []metricVa
 	if limit <= 0 {
 		limit = queueDefaultSeriesLimit
 	}
-	sort.Slice(values, func(i, j int) bool { return values[i].name < values[j].name })
+	sort.Slice(values, func(i, j int) bool { return metricValueKey(values[i]) < metricValueKey(values[j]) })
 	dropped := len(values) - limit
 	if dropped > 0 {
 		values = values[:limit]

@@ -75,13 +75,15 @@ type datasetSettingsReader interface {
 }
 
 type datasetCollector struct {
-	cfg  *config.Config
-	api  cfapi.Client
-	spec datasetSpec
+	cfg       *config.Config
+	api       cfapi.Client
+	spec      datasetSpec
+	names     *nameCache
+	admission nameAdmission
 }
 
 func newDatasetCollector(cfg *config.Config, api cfapi.Client, spec datasetSpec) *datasetCollector {
-	return &datasetCollector{cfg: cfg, api: api, spec: spec}
+	return &datasetCollector{cfg: cfg, api: api, spec: spec, names: newNameCache()}
 }
 
 func (c *datasetCollector) Name() string                 { return c.spec.name }
@@ -142,8 +144,8 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 	if len(fields) > settings.MaxNumberOfFields {
 		return from, fmt.Errorf("durable objects dataset %s needs %d required fields, limit %d", c.spec.dataset, len(fields), settings.MaxNumberOfFields)
 	}
-	if c.spec.optionalNamespace && len(fields) < settings.MaxNumberOfFields && availableField(settings.AvailableFields, "dimensions.namespaceName") {
-		fields = append(fields, "dimensions.namespaceName")
+	if len(fields) < settings.MaxNumberOfFields && availableField(settings.AvailableFields, "dimensions."+resourceDimension) {
+		fields = append(fields, "dimensions."+resourceDimension)
 	}
 	limit := settings.MaxPageSize
 	if limit > durableObjectsQueryLimit {
@@ -171,7 +173,7 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 	if err != nil {
 		return from, fmt.Errorf("query %s: %w", c.spec.dataset, err)
 	}
-	value, found, err := c.aggregate(rows, completeFrom, completeTo)
+	points, err := c.aggregateNamed(ctx, rows, completeFrom, completeTo, fields)
 	if err != nil {
 		return from, fmt.Errorf("aggregate %s: %w", c.spec.dataset, err)
 	}
@@ -179,10 +181,7 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 	if err != nil {
 		return from, err
 	}
-	var points []metricPoint
-	if found {
-		points = append(points, metricPoint{name: c.spec.metric, kind: c.spec.kind, value: value})
-	}
+
 	// Preserve the legacy cap selection before admitting optional depth series.
 	points = capMetricSeries(c.spec.name, points, seriesLimit, slog.Default())
 	remaining := seriesLimit - len(points)
@@ -400,7 +399,7 @@ func ceilBucket(value time.Time) time.Time {
 }
 
 func capMetricSeries(collectorName string, points []metricPoint, limit int, logger *slog.Logger) []metricPoint {
-	sort.Slice(points, func(i, j int) bool { return points[i].name < points[j].name })
+	sort.Slice(points, func(i, j int) bool { return metricPointKey(points[i]) < metricPointKey(points[j]) })
 	if len(points) <= limit {
 		return points
 	}

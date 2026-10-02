@@ -8,11 +8,14 @@ func Register(deps collector.Deps) {
 	if deps.Config == nil || deps.Registry == nil {
 		return
 	}
+	names := newNameCache()
 	for _, spec := range durableObjectsDatasets {
 		settings := deps.Config.Collector(spec.name)
 		if !settings.Enabled {
 			continue
 		}
-		deps.Registry.RegisterWindow(newDatasetCollector(deps.Config, deps.API, spec), settings.Interval, settings.InitialLookback, settings.MaxWindow)
+		c := newDatasetCollector(deps.Config, deps.API, spec)
+		c.names = names
+		deps.Registry.RegisterWindow(c, settings.Interval, settings.InitialLookback, settings.MaxWindow)
 	}
 }

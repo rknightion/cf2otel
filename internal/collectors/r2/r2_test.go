@@ -414,14 +414,14 @@ func TestRequiredFieldsFailClosedAndOptionalNamesBecomeAccountAggregate(t *testi
 			if !mark.Equal(to) || len(api.calls) != 1 || !equalR2Strings(api.calls[0].request.WantedFields, tc.wantFields) {
 				t.Fatalf("query fields = %v, want %v", api.calls[0].request.WantedFields, tc.wantFields)
 			}
-			if len(out.Metrics) != 1 || out.Metrics[0].Value != 12 || len(out.Metrics[0].Attrs) != 0 {
+			if len(out.Metrics) != 1 || out.Metrics[0].Value != 12 || len(out.Metrics[0].Attrs) != 2 || r2MetricAttrs(out.Metrics[0].Attrs)[semconv.AttrR2BucketName] != "other" || r2MetricAttrs(out.Metrics[0].Attrs)[semconv.AttrR2ActionType] != "other" {
 				t.Fatalf("optional field absence did not produce an account aggregate: %#v", out.Metrics)
 			}
 		})
 	}
 }
 
-func TestInvalidResourceNamesFoldIntoUnlabeledAggregate(t *testing.T) {
+func TestInvalidResourceNamesFoldIntoOtherRemainder(t *testing.T) {
 	from := r2UTC(10, 0)
 	to := from.Add(20 * time.Minute)
 	api := newR2TestAPI(testOperationsDataset)
@@ -445,7 +445,7 @@ func TestInvalidResourceNamesFoldIntoUnlabeledAggregate(t *testing.T) {
 	for _, metric := range out.Metrics {
 		attrs := r2MetricAttrs(metric.Attrs)
 		switch {
-		case len(attrs) == 0 && metric.Value == 6:
+		case len(attrs) == 2 && attrs[semconv.AttrR2BucketName] == "other" && attrs[semconv.AttrR2ActionType] == "other" && metric.Value == 6:
 		case len(attrs) == 1 && attrs[semconv.AttrR2BucketName] == "valid-bucket" && metric.Value == 4:
 		default:
 			t.Errorf("unexpected folded metric: %#v", metric)

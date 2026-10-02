@@ -9,6 +9,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -95,9 +96,11 @@ type r2DatasetSettingsReader interface {
 }
 
 type datasetCollector struct {
-	cfg  *config.Config
-	api  cfapi.Client
-	spec r2DatasetSpec
+	cfg         *config.Config
+	api         cfapi.Client
+	spec        r2DatasetSpec
+	admissionMu sync.Mutex
+	admitted    map[r2SeriesKey]bool
 }
 
 func (c *datasetCollector) Name() string                 { return c.spec.collector }
@@ -108,11 +111,13 @@ type r2QueryPlan struct {
 	fields           []string
 	limit            int
 	resourceSelected bool
+	actionSelected   bool
 }
 
 type r2SeriesKey struct {
 	metric   string
 	resource string
+	action   string
 }
 
 type r2MetricPoint struct {
@@ -122,6 +127,7 @@ type r2MetricPoint struct {
 	sourceTime  time.Time
 	resourceKey string
 	resource    string
+	action      string
 }
 
 func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time, out telemetry.Emitter) (time.Time, error) {
@@ -168,6 +174,7 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 		return from, err
 	}
 
+	points = c.capResources(points)
 	limit := c.cfg.Platform.MaxMetricSeriesPerWindow
 	if limit <= 0 {
 		limit = r2DefaultSeriesLimit
@@ -180,7 +187,10 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 		if keys[i].metric != keys[j].metric {
 			return keys[i].metric < keys[j].metric
 		}
-		return keys[i].resource < keys[j].resource
+		if keys[i].resource != keys[j].resource {
+			return keys[i].resource < keys[j].resource
+		}
+		return keys[i].action < keys[j].action
 	})
 	dropped := len(keys) - limit
 	if dropped > 0 {
@@ -192,6 +202,9 @@ func (c *datasetCollector) CollectWindow(ctx context.Context, from, to time.Time
 		var attrs []telemetry.Attr
 		if point.resourceKey != "" && point.resource != "" {
 			attrs = []telemetry.Attr{{Key: point.resourceKey, Value: point.resource}}
+		}
+		if point.action != "" {
+			attrs = append(attrs, telemetry.Attr{Key: semconv.AttrR2ActionType, Value: point.action})
 		}
 		var emitErr error
 		if point.gauge {
@@ -241,6 +254,10 @@ func buildR2QueryPlan(spec r2DatasetSpec, settings cfapi.DatasetSettings) (r2Que
 	if spec.resource.field != "" && len(plan.fields) < settings.MaxNumberOfFields && r2FieldAvailable(settings.AvailableFields, spec.resource.field) {
 		plan.fields = append(plan.fields, spec.resource.field)
 		plan.resourceSelected = true
+	}
+	if spec.collector == "r2.operations" && len(plan.fields) < settings.MaxNumberOfFields && r2FieldAvailable(settings.AvailableFields, "dimensions.actionType") {
+		plan.fields = append(plan.fields, "dimensions.actionType")
+		plan.actionSelected = true
 	}
 	return plan, nil
 }
@@ -330,6 +347,12 @@ func (c *datasetCollector) aggregateRows(rows []map[string]any, from, to time.Ti
 			resource = boundedR2Name(name)
 		}
 
+		action := ""
+		if plan.actionSelected {
+			raw, _ := r2FieldValue(row, "dimensions.actionType")
+			text, _ := raw.(string)
+			action = boundedR2Name(text)
+		}
 		for _, definition := range c.spec.metrics {
 			raw, ok := r2FieldValue(row, definition.field)
 			if !ok {
@@ -339,10 +362,10 @@ func (c *datasetCollector) aggregateRows(rows []map[string]any, from, to time.Ti
 			if !ok || value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
 				return nil, fmt.Errorf("R2 Groups dataset %s row has an invalid value for %s", c.spec.dataset, definition.field)
 			}
-			key := r2SeriesKey{metric: definition.name, resource: resource}
+			key := r2SeriesKey{metric: definition.name, resource: resource, action: action}
 			point := points[key]
 			if point == nil {
-				point = &r2MetricPoint{name: definition.name, gauge: definition.gauge, resourceKey: c.spec.resource.key, resource: resource}
+				point = &r2MetricPoint{name: definition.name, gauge: definition.gauge, resourceKey: c.spec.resource.key, resource: resource, action: action}
 				points[key] = point
 			}
 			if definition.gauge {
@@ -421,8 +444,8 @@ func r2Number(value any) (float64, bool) {
 }
 
 func boundedR2Name(value string) string {
-	if strings.TrimSpace(value) == "" || utf8.RuneCountInString(value) > r2MaxResourceNameChars {
-		return ""
+	if strings.TrimSpace(value) == "" || !utf8.ValidString(value) || utf8.RuneCountInString(value) > r2MaxResourceNameChars {
+		return "other"
 	}
 	return value
 }

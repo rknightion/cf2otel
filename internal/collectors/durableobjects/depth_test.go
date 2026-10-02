@@ -135,7 +135,7 @@ func TestDepthRegisterHTTP(t *testing.T) {
 				got[m.Name] = m
 			}
 			requests, requestsPresent := got[semconv.MetricDurableObjectsRequests]
-			if !requestsPresent || requests.Kind != "counter" || requests.Value != float64(14*scriptCount) || len(requests.Attrs) != 0 {
+			if !requestsPresent || requests.Kind != "counter" || requests.Value != float64(14*scriptCount) || !expectedRemainder(requests.Attrs) {
 				t.Fatalf("legacy requests identity/value changed: %v", out.Metrics)
 			}
 			if !checkpoint.Equal(from.Add(10 * time.Minute)) {
