@@ -1,9 +1,10 @@
 ---
 id: CFO-0064
 title: Assert retained YAML values for the frozen analytics configuration
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-01 07:32'
+updated_date: '2026-10-02 05:44'
 labels:
   - config
 dependencies: []
@@ -30,3 +31,9 @@ Loop14 seam review passed the configuration contract but identified a regression
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Test-only admission after core writer completion and prior core publication park. Extend existing YAML integration cases with retained zero-cardinality, all-request-source and explicit-empty-breakdown assertions. Prove a deliberately ignored YAML-value mutation fails those assertions for the correct reason in isolated scratch; restore production code unchanged. No production config, source defaults or policy changes. Source base d08; E51F review is read-only in separate scratch, so config test ownership no longer overlaps an active source writer.
+<!-- SECTION:PLAN:END -->
