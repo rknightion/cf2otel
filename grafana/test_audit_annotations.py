@@ -5,6 +5,7 @@ spread at the root) and Loki's annotationQuery (templates read row.labels).
 It is local contract evidence, not an execution of Grafana or Loki.
 """
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -70,6 +71,62 @@ class AuditAnnotationsTest(unittest.TestCase):
             for value in row_labels.values():
                 if value:
                     self.assertIn(value, " ".join(rendered))
+
+
+class AccessSeatsTest(unittest.TestCase):
+    def generate(self, interval=None):
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "grafana" / "build_dashboard.py"
+            script.parent.mkdir()
+            script.write_bytes((ROOT / "grafana/build_dashboard.py").read_bytes())
+            env = dict(os.environ)
+            env.pop("GRAFANA_ACCESS_SEATS_INTERVAL_SECONDS", None)
+            if interval is not None:
+                env["GRAFANA_ACCESS_SEATS_INTERVAL_SECONDS"] = interval
+            result = subprocess.run([sys.executable, str(script)], env=env,
+                                    capture_output=True, text=True, timeout=30)
+            output = script.parent.parent / "dashboards/cf2otel.json"
+            return result, json.loads(output.read_text()) if output.exists() else None
+
+    def test_latest_independent_seats_have_per_instance_freshness(self):
+        for setting, threshold in ((None, 2700), ("60", 180)):
+            with self.subTest(setting=setting):
+                result, dashboard = self.generate(setting)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                panels = [p["spec"] for p in dashboard["spec"]["elements"].values()
+                          if p["spec"]["title"] == "Access and Gateway seats"]
+                self.assertEqual(len(panels), 1, "independent seats panel must be generated")
+                panel = panels[0]
+                queries = panel["data"]["spec"]["queries"]
+                self.assertEqual(len(queries), 2)
+                for query, seat_type, legend in zip(queries, ("access", "gateway"), ("Access", "Gateway")):
+                    data = query["spec"]["query"]
+                    self.assertEqual(data["group"], "prometheus")
+                    self.assertEqual(data["datasource"]["name"], "${ds_prometheus}")
+                    target = data["spec"]
+                    self.assertIs(target["instant"], True)
+                    self.assertIs(target["range"], False)
+                    self.assertEqual(target["legendFormat"], legend)
+                    expected = ('max by (cloudflare_access_seat_type) ('
+                                'cloudflare_access_seats_ratio{service_name="cf2otel",'
+                                f'cloudflare_access_seat_type="{seat_type}"}} and on (instance) '
+                                '(time() - max by (instance) ('
+                                'cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",'
+                                f'cf2otel_collector="access.seats"}}) < {threshold}))')
+                    self.assertEqual(target["expr"], expected,
+                                     "filter stale instances before max; retain genuine zero; never fill absent data")
+                defaults = panel["vizConfig"]["spec"]["fieldConfig"]["defaults"]
+                self.assertEqual(defaults["unit"], "none")
+                self.assertEqual(defaults["noValue"], "No data")
+                self.assertEqual(defaults["mappings"], [])
+
+    def test_invalid_generator_intervals_fail_without_output(self):
+        for setting in ("0", "-1", "1.5", "invalid", "", "１２"):
+            with self.subTest(setting=setting):
+                result, dashboard = self.generate(setting)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("GRAFANA_ACCESS_SEATS_INTERVAL_SECONDS must be a positive integer in seconds", result.stderr)
+                self.assertIsNone(dashboard)
 
 
 if __name__ == "__main__":

@@ -46,6 +46,25 @@ def certs_packs_interval_seconds() -> int:
     return interval
 
 
+def access_seats_interval_seconds() -> int:
+    """Deployment generator setting, not an observed runtime polling interval."""
+    key = "GRAFANA_ACCESS_SEATS_INTERVAL_SECONDS"
+    value = os.environ.get(key, "900")
+    if not value.isascii() or not value.isdecimal():
+        raise SystemExit(f"{key} must be a positive integer in seconds")
+    try:
+        interval = int(value)
+    except ValueError:
+        raise SystemExit(f"{key} must be a positive integer in seconds") from None
+    if interval <= 0:
+        raise SystemExit(f"{key} must be a positive integer in seconds")
+    return interval
+
+
+ACCESS_SEATS_INTERVAL_SECONDS = access_seats_interval_seconds()
+ACCESS_SEATS_FRESHNESS_SECONDS = 3 * ACCESS_SEATS_INTERVAL_SECONDS
+ACCESS_SEATS_FRESH = '(time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="access.seats"}) < ' + str(ACCESS_SEATS_FRESHNESS_SECONDS) + ')'
+
 CERTS_PACKS_INTERVAL_SECONDS = certs_packs_interval_seconds()
 CERTS_PACKS_FRESHNESS_SECONDS = 3 * CERTS_PACKS_INTERVAL_SECONDS
 # OTLP service.instance.id translates to the Prometheus instance label.
@@ -815,12 +834,26 @@ def access_tab(d: Dashboard) -> dict:
         f'{LOG} | event_name="cloudflare.access.login"')
     d.logs(2342, "SCIM update events", "Access SCIM update log entries.", f'{LOG} | event_name="cloudflare.access.scim_update"')
 
+    d.stat(2324, "Access and Gateway seats", "Last observed seat counts from independent Access and Gateway flags; a user may count in both. "
+        "These are not additive unique billing users, capacity or entitlement. Maximum across fresh instances avoids summing duplicate pollers; "
+        "use for one deployment/account, not a mixed-interval fleet. Missing or stale data is unknown, not zero. "
+        f"Requires per-instance last success less than {ACCESS_SEATS_FRESHNESS_SECONDS} seconds old (three generator-configured polling intervals). "
+        "If access.seats uses a non-default interval, regenerate with GRAFANA_ACCESS_SEATS_INTERVAL_SECONDS matching the selected deployment "
+        "(default 900 seconds). This is not an observed runtime interval or active/health indicator: disabling after a successful poll may leave "
+        "last observed counts visible until the freshness threshold.",
+        [prom(f'max by (cloudflare_access_seat_type) (cloudflare_access_seats_ratio{{{S},cloudflare_access_seat_type="access"}} '
+              f'and on (instance) {ACCESS_SEATS_FRESH})', "Access", instant=True),
+         prom(f'max by (cloudflare_access_seat_type) (cloudflare_access_seats_ratio{{{S},cloudflare_access_seat_type="gateway"}} '
+              f'and on (instance) {ACCESS_SEATS_FRESH})', "Gateway", ref="B", instant=True)],
+        unit="none", decimals=0, text_mode="value_and_name", no_value="No data")
+
     return tab(TAB_ACCESS, [
         row("Summary", [(2301, 4, 4), (2302, 4, 4), (2303, 4, 4), (2304, 4, 4), (2305, 4, 4), (2306, 4, 4)]),
         row("Logins", [(103, 12, 9), (102, 12, 9), (2311, 12, 9), (101, 12, 9)]),
         row("Inventory and provisioning", [(2321, 6, 9), (2322, 10, 9), (2323, 8, 9)]),
         row("Identity inference", [(2331, 12, 7), (202, 12, 7)]),
         row("Access logs", [(2341, 24, 12), (2342, 24, 8)], collapse=True),
+        row("Seat inventory", [(2324, 24, 4)]),
     ])
 
 

@@ -9524,6 +9524,116 @@
           }
         }
       },
+      "panel-2324": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "max by (cloudflare_access_seat_type) (cloudflare_access_seats_ratio{service_name=\"cf2otel\",cloudflare_access_seat_type=\"access\"} and on (instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"access.seats\"}) < 2700))",
+                        "format": "time_series",
+                        "instant": true,
+                        "legendFormat": "Access",
+                        "range": false,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "max by (cloudflare_access_seat_type) (cloudflare_access_seats_ratio{service_name=\"cf2otel\",cloudflare_access_seat_type=\"gateway\"} and on (instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"access.seats\"}) < 2700))",
+                        "format": "time_series",
+                        "instant": true,
+                        "legendFormat": "Gateway",
+                        "range": false,
+                        "refId": "B"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "B"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Last observed seat counts from independent Access and Gateway flags; a user may count in both. These are not additive unique billing users, capacity or entitlement. Maximum across fresh instances avoids summing duplicate pollers; use for one deployment/account, not a mixed-interval fleet. Missing or stale data is unknown, not zero. Requires per-instance last success less than 2700 seconds old (three generator-configured polling intervals). If access.seats uses a non-default interval, regenerate with GRAFANA_ACCESS_SEATS_INTERVAL_SECONDS matching the selected deployment (default 900 seconds). This is not an observed runtime interval or active/health indicator: disabling after a successful poll may leave last observed counts visible until the freshness threshold.",
+          "id": 2324,
+          "links": [],
+          "title": "Access and Gateway seats",
+          "vizConfig": {
+            "group": "stat",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "decimals": 0,
+                  "mappings": [],
+                  "noValue": "No data",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "blue",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "none"
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "none",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "value_and_name",
+                "wideLayout": true
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
       "panel-2331": {
         "kind": "Panel",
         "spec": {
@@ -24890,6 +25000,33 @@
                           }
                         },
                         "title": "Access logs"
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "collapse": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2324"
+                                  },
+                                  "height": 4,
+                                  "width": 24,
+                                  "x": 0,
+                                  "y": 0
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "title": "Seat inventory"
                       }
                     }
                   ]
