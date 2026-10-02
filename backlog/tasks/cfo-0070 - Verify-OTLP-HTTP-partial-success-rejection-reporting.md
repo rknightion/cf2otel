@@ -1,11 +1,11 @@
 ---
 id: CFO-0070
 title: Verify OTLP HTTP partial-success rejection reporting
-status: In Progress
+status: Done
 assignee:
   - '@loop16-root'
 created_date: '2026-10-02 11:24'
-updated_date: '2026-10-02 13:52'
+updated_date: '2026-10-02 14:58'
 labels: []
 dependencies: []
 priority: high
@@ -21,14 +21,14 @@ Loop15 source review of the pinned OpenTelemetry Go HTTP metrics exporter v1.46.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 An offline reproduction against the pinned SDK establishes whether a valid OTLP partial-success response with rejected metric datapoints is reported as an error, with a fully accepted response as control; any new check is observed failing for the intended reason before a correction
-- [ ] #2 The verified SDK behavior and its consequence for cf2otel export-success and runtime absence-proof claims are documented without treating HTTP 200 or missing diagnostic series as complete acceptance
-- [ ] #3 If a defect is confirmed, the proposed upstream fix or dependency change identifies the exact corrected contract and local validation needed before a separately authorized rollout; otherwise the non-defect conclusion includes the reproduction evidence
+- [x] #1 An offline reproduction against the pinned SDK establishes whether a valid OTLP partial-success response with rejected metric datapoints is reported as an error, with a fully accepted response as control; any new check is observed failing for the intended reason before a correction
+- [x] #2 The verified SDK behavior and its consequence for cf2otel export-success and runtime absence-proof claims are documented without treating HTTP 200 or missing diagnostic series as complete acceptance
+- [x] #3 If a defect is confirmed, the proposed upstream fix or dependency change identifies the exact corrected contract and local validation needed before a separately authorized rollout; otherwise the non-defect conclusion includes the reproduction evidence
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
+- [x] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
@@ -38,3 +38,9 @@ Loop15 source review of the pinned OpenTelemetry Go HTTP metrics exporter v1.46.
 <!-- SECTION:PLAN:BEGIN -->
 Loop 16 S70 drives the pinned real exporter through cf2otel using full-acceptance and partial-success HTTP responses, records the observed reporting contract, and documents the consequence without changing dependencies.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Loop16 S70-I1 implementation count 1, review-repair count 0, infrastructure retries 0. REV-S70 PASS 75e552f193d9c6b52911b3c27a35acb7916054a2; exact patch cherry-picked as 2d04726 and pushed in 4f14d92189703ab26752f663d5c6b3502e0e2da4. Valid protobuf metric partial rejection reaches caller and observer error and failure outcome; no defect reproduced. Deliberate contrary hypothesis failed by assertion, control and candidate passed; this is a spike, not repaired production code. CodeRabbit zero findings and integrated just check passed. No dependency change or backend storage claim. Landing CI pending watcher.
+<!-- SECTION:NOTES:END -->
