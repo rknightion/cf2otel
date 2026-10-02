@@ -59,7 +59,7 @@ func NewObserved(cfg config.CloudflareConfig, obs Observer) *HTTPClient {
 	if cfg.MaxResponseBytes <= 0 {
 		cfg.MaxResponseBytes = 16 << 20
 	}
-	return &HTTPClient{base: strings.TrimRight(cfg.APIBase, "/"), token: cfg.APIToken.Value(), client: &http.Client{Timeout: cfg.Timeout, Transport: observedTransport{next: http.DefaultTransport, observer: obs}}, cap: cfg.MaxResponseBytes, observer: obs, settings: make(map[string]cachedSettings)}
+	return &HTTPClient{base: strings.TrimRight(cfg.APIBase, "/"), token: cfg.APIToken.Value(), client: &http.Client{Timeout: cfg.Timeout, Transport: observedTransport{next: http.DefaultTransport, observer: obs}, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}, cap: cfg.MaxResponseBytes, observer: obs, settings: make(map[string]cachedSettings)}
 }
 func (c *HTTPClient) do(ctx context.Context, method, path string, query url.Values, body []byte) ([]byte, error) {
 	// Guard before URL processing or any I/O.
@@ -90,7 +90,7 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, query url.Valu
 		if body != nil {
 			req.Header.Set("Content-Type", "application/json")
 		}
-		resp, err := c.client.Do(req)
+		resp, err := c.doRedirects(req)
 		status := 0
 		if resp != nil {
 			status = resp.StatusCode
@@ -139,6 +139,82 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, query url.Valu
 	}
 	return nil, errors.New("cloudflare retries exhausted")
 }
+
+// Each redirect is a separate timed HTTP exchange. Keeping the standard client
+// timeout on every hop bounds headers and body reads, while quota waits happen
+// before Do starts that timer. The original caller context bounds the whole chain.
+func (c *HTTPClient) doRedirects(req *http.Request) (*http.Response, error) {
+	for hops := 0; ; hops++ {
+		if err := processBudget.acquire(req.Context()); err != nil {
+			if req.Body != nil {
+				_ = req.Body.Close()
+			}
+			return nil, err
+		}
+		resp, err := c.client.Do(req)
+		if err != nil {
+			return resp, err
+		}
+		method := req.Method
+		replay := true
+		switch resp.StatusCode {
+		case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther:
+			replay = false
+		case http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+		default:
+			return resp, nil
+		}
+		// GraphQL POST is read-only only at its original endpoint. Neither
+		// converting it to GET nor replaying it elsewhere preserves that
+		// contract. Let the public caller report the original HTTP status.
+		if method != http.MethodGet && method != http.MethodHead {
+			return resp, nil
+		}
+		location := resp.Header.Get("Location")
+		if location == "" {
+			return resp, nil
+		}
+		// Bound draining even for a hostile redirect response, and release the
+		// per-hop timeout before waiting for the next quota token.
+		_, _ = io.CopyN(io.Discard, resp.Body, 2048)
+		_ = resp.Body.Close()
+		if hops >= 9 {
+			return nil, errors.New("cloudflare stopped after 10 redirects")
+		}
+		nextURL, err := req.URL.Parse(location)
+		if err != nil {
+			return nil, err
+		}
+		var body io.ReadCloser
+		if replay && req.GetBody != nil {
+			body, err = req.GetBody()
+			if err != nil {
+				return nil, err
+			}
+		}
+		next, err := http.NewRequestWithContext(req.Context(), method, nextURL.String(), body)
+		if err != nil {
+			if body != nil {
+				_ = body.Close()
+			}
+			return nil, err
+		}
+		next.Header = req.Header.Clone()
+		// Never forward credentials to a different origin, including a downgrade.
+		if req.URL.Scheme != nextURL.Scheme || req.URL.Host != nextURL.Host {
+			next.Header.Del("Authorization")
+			next.Header.Del("Cookie")
+		}
+		if replay {
+			next.GetBody, next.ContentLength = req.GetBody, req.ContentLength
+		} else {
+			next.Header.Del("Content-Type")
+			next.Header.Del("Content-Length")
+		}
+		req = next
+	}
+}
+
 func safeError(raw []byte) string {
 	if code := errorCode(raw); code != 0 {
 		return fmt.Sprintf("code %d", code)

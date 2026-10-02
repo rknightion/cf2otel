@@ -19,6 +19,15 @@ import (
 	"github.com/rknightion/cf2otel/internal/config"
 )
 
+func TestMain(m *testing.M) {
+	// Catalog HTTP fixtures retain caller deadlines with explicit process pacing.
+	if err := cfapi.ConfigureProcessRateLimit(config.RateLimitConfig{RequestsPerSecond: 10000, Burst: 1}); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
+
 type fakeAPI struct {
 	contract        contract
 	broken          string

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"regexp"
@@ -64,13 +65,29 @@ type Config struct {
 	Log        LogConfig                  `yaml:"log" json:"log"`
 	Zones      ZonesConfig                `yaml:"zones" json:"zones"`
 }
+type RateLimitConfig struct {
+	RequestsPerSecond float64 `yaml:"requests_per_second" json:"requests_per_second"`
+	Burst             int     `yaml:"burst" json:"burst"`
+}
+
+func (c RateLimitConfig) Validate() error {
+	if math.IsNaN(c.RequestsPerSecond) || math.IsInf(c.RequestsPerSecond, 0) || c.RequestsPerSecond <= 0 {
+		return errors.New("cloudflare.rate_limit.requests_per_second must be finite and positive")
+	}
+	if c.Burst < 1 {
+		return errors.New("cloudflare.rate_limit.burst must be at least 1")
+	}
+	return nil
+}
+
 type CloudflareConfig struct {
-	APIToken         Secret        `yaml:"api_token" json:"api_token"`
-	AccountID        string        `yaml:"account_id" json:"account_id"`
-	Zones            []string      `yaml:"zones" json:"zones"`
-	APIBase          string        `yaml:"api_base" json:"api_base"`
-	Timeout          time.Duration `yaml:"timeout" json:"timeout"`
-	MaxResponseBytes int64         `yaml:"max_response_bytes" json:"max_response_bytes"`
+	RateLimit        RateLimitConfig `yaml:"rate_limit" json:"rate_limit"`
+	APIToken         Secret          `yaml:"api_token" json:"api_token"`
+	AccountID        string          `yaml:"account_id" json:"account_id"`
+	Zones            []string        `yaml:"zones" json:"zones"`
+	APIBase          string          `yaml:"api_base" json:"api_base"`
+	Timeout          time.Duration   `yaml:"timeout" json:"timeout"`
+	MaxResponseBytes int64           `yaml:"max_response_bytes" json:"max_response_bytes"`
 }
 type CollectorConfig struct {
 	Enabled         bool          `yaml:"enabled" json:"enabled"`
@@ -177,6 +194,7 @@ var disabledCollectorNames = []string{"aigateway.coverage", "logpush.failures", 
 
 func Default() Config {
 	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{RequestSource: "eyeball", Breakdowns: []string{"status", "origin_status", "country", "protocol", "tls_protocol", "method", "content_type"}, Scope: "access_protected", MaxMetricHostsPerZone: 1000, MaxMetricSeriesPerWindow: 10000}, Platform: PlatformConfig{MaxMetricSeriesPerWindow: 500}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{MetricCardinalityLimit: 10000, Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
+	c.Cloudflare.RateLimit = RateLimitConfig{RequestsPerSecond: 0.5, Burst: 1}
 	c.HTTP.HighCardinalityLimit = 500
 	c.HTTP.HighCardinalityHosts = []string{}
 	c.DEX = DEXConfig{ResultWindow: time.Hour, MaxTests: 1000, MaxMetricSeries: 500}
@@ -348,6 +366,9 @@ func (c Config) Validate() error {
 	}
 	add(c.Cloudflare.APIToken != "", "cloudflare.api_token is required")
 	add(c.Cloudflare.AccountID != "", "cloudflare.account_id is required")
+	if err := c.Cloudflare.RateLimit.Validate(); err != nil {
+		issues = append(issues, err.Error())
+	}
 	add(c.Cloudflare.Timeout > 0, "cloudflare.timeout must be positive")
 	add(c.Cloudflare.MaxResponseBytes > 0, "cloudflare.max_response_bytes must be positive")
 	add(c.OTLP.Endpoint != "", "otlp.endpoint is required")

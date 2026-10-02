@@ -9,6 +9,9 @@ cloudflare:
   api_base: https://api.cloudflare.com/client/v4
   timeout: 30s
   max_response_bytes: 16777216
+  rate_limit:
+    requests_per_second: 0.5
+    burst: 1
 access:
   include_service_tokens: false
 http:

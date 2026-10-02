@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -26,6 +27,15 @@ import (
 	"github.com/rknightion/cf2otel/internal/semconv"
 	"github.com/rknightion/cf2otel/internal/telemetry"
 )
+
+func TestMain(m *testing.M) {
+	// Real loopback fixtures retain caller deadlines, using explicit process pacing.
+	if err := cfapi.ConfigureProcessRateLimit(config.RateLimitConfig{RequestsPerSecond: 10000, Burst: 1}); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
 
 func TestRegisterCapsWindowForBoundedExport(t *testing.T) {
 	for _, tc := range []struct {

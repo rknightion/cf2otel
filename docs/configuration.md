@@ -16,6 +16,7 @@ Settings load in this order: built-in defaults, YAML, then `CF2OTEL_` environmen
 | `state` | Persistent checkpoint directory; default `/var/lib/cf2otel`. |
 | `health`, `log` | Loopback health listener and application logging. |
 | `firewall` | `rule_dimensions` defaults to false; `max_metric_series_per_window` is a positive total cap, default 500. |
+| `cloudflare.rate_limit` | `requests_per_second` defaults to `0.5` (finite and positive); `burst` defaults to `1` (integer, at least 1). One process-wide token bucket covers all Cloudflare clients, accounts, REST and GraphQL requests, pagination, retries and redirect hops. |
 
 Collector keys are `access.logins`, `access.login_metrics`, `access.scim`, `access.seats`, `inventory.access`, `httpreq.events`, `httpreq.metrics`, `aigateway.logs`, `aigateway.metrics`, `aigateway.coverage`, `audit.logs`, `firewall.events`, `firewall.metrics`, `dns.events`, `dns.metrics`, `rum.pageloads`, `rum.web_vitals`, `gateway.dns`, `workers.overview`, `workers.invocations`, `turnstile.events`, `logpush.health`, `d1.analytics`, `d1.queries`, `d1.storage`, `kv.operations`, `kv.storage`, `r2.bandwidth`, `r2.catalog_data`, `r2.catalog_maintenance`, `r2.operations`, `r2.storage`, `r2.sql`, `durableobjects.invocations`, `durableobjects.periodic`, `durableobjects.sql_storage`, `durableobjects.subrequests`, `queues.backlog`, `queues.consumer`, `queues.delayed_backlog`, `queues.message_operations`, `email.routing`, `email.sending`, `selfobs`, `certs.packs`, and `tunnels.status`. Enabled collectors default to five-minute intervals. `access.seats` is enabled by default and polls every 15 minutes as a snapshot, without windows or checkpoints. It counts the independent `access_seat` and `gateway_seat` user flags across the complete paginated Access users list, emitting only the bounded seat-type attribute. Both flags may be true for one user; do not sum the two series as a unique billing-user total. An empty list publishes two zeros; missing, null or nonboolean flags, HTTP errors and incomplete pagination fail the scrape without publishing partial counts. To disable it, set `CF2OTEL_COLLECTORS__ACCESS_SEATS__ENABLED=false`; to override its interval, set `CF2OTEL_COLLECTORS__ACCESS_SEATS__INTERVAL=30m`. The email collectors sum Groups counts across account-owned zones over complete five-minute buckets; they emit no zone metric attributes. DMARC is excluded. `aigateway.metrics` is disabled and unscheduled because its GraphQL Groups ingestion lag is not bounded; `aigateway.logs` emits the AI Gateway metrics from REST rows. The default initial lookback is 30 minutes and maximum window is one hour. `aigateway.coverage` is present but disabled by default. The scheduler advances a checkpoint after a successful window or after it drops a window following three payload rejections.
 
@@ -24,6 +25,24 @@ The Access REST log has only about a day's observed reach. Keep its polling inte
 `httpRequestsAdaptive` event rows are sampled. Use the companion `httpreq.metrics` collector for corrected aggregate counts; do not count event rows to calculate a request rate.
 
 See [Security and PII](security.md) before enabling AI Gateway body capture or wider HTTP scope.
+
+## Cloudflare request pacing
+
+Override the process budget with `CF2OTEL_CLOUDFLARE__RATE_LIMIT__REQUESTS_PER_SECOND`
+and `CF2OTEL_CLOUDFLARE__RATE_LIMIT__BURST`, or the corresponding YAML keys.
+The default sustained rate is 150 calls per five minutes, below the documented
+GraphQL limit of 300 queries per five minutes. Other applications using the same
+upstream quota are not coordinated by this process-local budget.
+
+Quota waiting happens before each HTTP exchange starts its `cloudflare.timeout`,
+including every redirect hop. The timeout still bounds network headers and body
+reads. The caller's context deadline bounds the entire queue, redirects, retries
+and network operation; a cancelled queued call never reaches the network.
+The application configures the budget once before Cloudflare traffic begins.
+Package users constructing clients directly must call `cfapi.ConfigureProcessRateLimit`
+before traffic to override the default; `New` and `NewObserved` share the same
+budget and never reset it. Reapplying identical configuration is a no-op, even after
+traffic; changing configuration after the first acquisition is rejected.
 
 ## Workers AI metrics
 

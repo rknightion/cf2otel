@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -21,6 +22,15 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 )
+
+func TestMain(m *testing.M) {
+	// Real loopback fixtures retain caller deadlines, using explicit process pacing.
+	if err := cfapi.ConfigureProcessRateLimit(config.RateLimitConfig{RequestsPerSecond: 10000, Burst: 1}); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
 
 // Literal names keep the base witness compilable with only an inert domain seam.
 func setup(t *testing.T, h http.HandlerFunc, interval time.Duration, cap int) (collector.SnapshotCollector, telemetry.Emitter, *sdkmetric.ManualReader) {

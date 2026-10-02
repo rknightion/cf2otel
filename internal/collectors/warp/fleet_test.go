@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -23,6 +24,15 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 )
+
+func TestMain(m *testing.M) {
+	// Real loopback fixtures retain caller deadlines, using explicit process pacing.
+	if err := cfapi.ConfigureProcessRateLimit(config.RateLimitConfig{RequestsPerSecond: 10000, Burst: 1}); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
 
 func row(id, status string) string {
 	b, _ := json.Marshal(map[string]string{"deviceId": id, "timestamp": "opaque-time", "status": status, "platform": "fixture-platform", "version": "fixture-version", "mode": "fixture-mode", "colo": "fixture-colo"})

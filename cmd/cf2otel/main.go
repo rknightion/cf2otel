@@ -146,6 +146,9 @@ func run(args []string) error {
 			_ = emitter.Counter(ctx, semconv.MetricAPIRetries, 1, attrs...)
 		}
 	}
+	if err := cfapi.ConfigureProcessRateLimit(cfg.Cloudflare.RateLimit); err != nil {
+		return err
+	}
 	api := cfapi.NewObserved(cfg.Cloudflare, observer)
 	if opts.Explore != "" {
 		return explore(ctx, api, cfg, opts.Explore)
