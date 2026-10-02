@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-10-02 07:55'
+updated_date: '2026-10-02 08:13'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -305,3 +305,14 @@ Other dimensions include string region, lbName, selectedPoolName, selectedOrigin
 The sum object exposes ruleMatches and totalRequestsWithRule (uint64), explicitly weighted by sample interval and requiring ruleName grouping. The ratio object's ruleMatchPercentage (float64, 0–100) also requires ruleName. Omitting ruleName produces incorrect cross-rule totals or percentages. These fields do not establish a general request-total or weighted-RTT aggregation contract. The standalone count description is insufficient proof of sampling treatment.
 
 Load-balancer source admission remains parked pending origin RTT units, valid traffic selectors and sampling/aggregation semantics. The current successful empty account pool list does not prove entitlement to populated health or traffic rows. No pool, origin, monitor or load balancer was created and no permission or credential was changed.
+
+
+## 18. Current zone settings and populated HTTP ASN shape (2026-10-02)
+
+Read-only current settings at 08:03 UTC covered 23 zones. HTTP groups were enabled on all 23. Colo, HTTP host, request path and edge status dimensions were advertised on all; clientAsn and clientASNDescription were advertised on one enabled zone. Constraints were maxDuration 2592000 seconds, notOlderThan 2678400 seconds, field cap 40, page limit 10000.
+
+A separate exact selection on the eligible zone's httpRequestsAdaptiveGroups returned HTTP 200, no GraphQL errors and five populated rows at 08:07 UTC. clientAsn, clientASNDescription, coloCode, clientRequestHTTPHost and clientRequestPath were strings, edgeResponseStatus was integer, and all five ASN descriptions were non-empty. The one-hour query used a two-minute holdback and limit five. This clears the HTTP ASN-description live-value prerequisite only. It does not establish complete paging, counter behavior, host filtering or normalized-path export privacy. No actual field values are reproduced here; raw paths and private identifiers must never become metric attributes.
+
+Firewall groups were enabled on one zone. None of the enabled zones advertised botScore, botScoreBucketBy10 or botScoreSrcName, despite those fields existing globally. Global schema presence is not entitlement and must not trigger selecting them or suppressing the base firewall metric.
+
+Load-balancing groups were enabled on one zone. Its settings advertised the selected-pool timing/health and regional/name dimensions noted in section17. This does not resolve origin REST RTT units or the request sampling/aggregation contract. No data selection, resource creation or permission change was made for load balancing.
