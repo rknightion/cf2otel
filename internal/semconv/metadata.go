@@ -13,6 +13,7 @@ var genAIOperationDurationBuckets = []float64{0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1
 var pollerDurationBuckets = []float64{0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 7.5, 10, 15, 20, 30, 45, 60, 90, 120}
 
 var metricSpecs = map[string]MetricSpec{
+	MetricLBPoolHealth:                     {Unit: "1", Description: "Unattributed provider-reported health flag: true=1, false=0, unknown omitted; not regional aggregate pool availability. Other is the minimum of known flags, not complete fleet coverage."},
 	MetricDEXHTTPFetchTime:                 {Unit: "ms", Description: "Provider requested-interval average HTTP resource fetch time; other is the arithmetic mean of per-test averages."},
 	MetricDEXTracerouteRTT:                 {Unit: "ms", Description: "Provider requested-interval average traceroute round-trip time; other is the arithmetic mean of per-test averages."},
 	MetricDEXTracerouteHops:                {Unit: "{hop}", Description: "Provider requested-interval average traceroute hop count; other is the arithmetic mean of per-test averages."},

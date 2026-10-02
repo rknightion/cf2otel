@@ -9,6 +9,7 @@ func IsAttribute(name string) bool {
 }
 
 var denyAttributes = map[string]struct{}{
+	AttrLBPoolName:                       {},
 	AttrDEXTestName:                      {},
 	AttrDEXTestKind:                      {},
 	AttrStatistic:                        {},

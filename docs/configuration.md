@@ -310,3 +310,27 @@ assembled feature windows reaching 10000 rows, count overflow and a total-budget
 fail the complete window before metric publication or checkpoint advance. Source paging
 is not assumed complete at a saturated limit. The SDK's cumulative lifetime cardinality
 limit is independent; a per-window bound does not cap series accumulated across windows.
+
+## Load balancer health snapshots
+
+`loadbalancers.health` is disabled by default, with interval `5m`. Opt in using
+`CF2OTEL_COLLECTORS__LOADBALANCERS_HEALTH__ENABLED=true`; change the interval with
+`CF2OTEL_COLLECTORS__LOADBALANCERS_HEALTH__INTERVAL`. It is a snapshot collector,
+not a window collector, and needs no new configuration group or checkpoint.
+
+It reuses `platform.max_metric_series_per_window` (default 500) as the cap for
+this single gauge, reserving one `other` slot, leaving 499 sticky named identities
+at the default. A cap of 1 permits only `other`; admission persists until restart.
+The configured names must be nonempty, at most 128 UTF-8 bytes without controls;
+ambiguous duplicate names or IDs fail the whole catalog without publication.
+The unexported catalog bound is 1000: reaching it fails closed, never silently
+truncates. The documented pool-list GET has no pagination query; the collector
+adds none. See [health semantics](signals.md#load-balancer-provider-health-flag).
+
+Snapshots expire after three configured intervals. Successful valid subsets
+replace prior values atomically; failed-only fetches retain the original expiry.
+An all-unknown valid detail response publishes no measurements and returns an
+unknown-coverage error, so stale known health is not refreshed as current health.
+An empty valid pool list is an error-free clear with no detail requests. Detail
+shapes are doc-derived and fixture-tested only; do not interpret this signal as
+regional pool availability or complete fleet coverage.

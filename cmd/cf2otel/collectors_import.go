@@ -17,6 +17,7 @@ import (
 	"github.com/rknightion/cf2otel/internal/collectors/httpreq"
 	"github.com/rknightion/cf2otel/internal/collectors/inventory"
 	"github.com/rknightion/cf2otel/internal/collectors/kv"
+	"github.com/rknightion/cf2otel/internal/collectors/loadbalancers"
 	"github.com/rknightion/cf2otel/internal/collectors/logpush"
 	"github.com/rknightion/cf2otel/internal/collectors/queues"
 	"github.com/rknightion/cf2otel/internal/collectors/r2"
@@ -57,4 +58,5 @@ func registerCollectors(deps collector.Deps) {
 	warp.Register(deps)
 	workersai.Register(deps)
 	dex.Register(deps)
+	loadbalancers.Register(deps)
 }

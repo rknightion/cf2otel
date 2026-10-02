@@ -65,6 +65,9 @@ log:
 # Collector names are fixed by the domain registry. AI Gateway metrics come
 # from aigateway.logs while GraphQL Groups ingestion lag remains unbounded.
 collectors:
+  loadbalancers.health: # Fixture-only unattributed provider flag, not regional pool availability.
+    enabled: false
+    interval: 5m
   dex.tests: # Fixture-only DEX result snapshots; explicit opt-in to bounded test-name labels.
     enabled: false
     interval: 5m

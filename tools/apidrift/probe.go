@@ -96,6 +96,8 @@ var restPaths = map[string]string{
 	"kv-namespaces":           "/accounts/{account}/storage/kv/namespaces",
 	"queues-list":             "/accounts/{account}/queues",
 	"do-namespaces":           "/accounts/{account}/workers/durable_objects/namespaces",
+	"load-balancer-pools":     "/accounts/{account}/load_balancers/pools",
+	"lb-pool-health":          "/accounts/{account}/load_balancers/pools/{pool}/health",
 	"dex-tests-overview":      "/accounts/{account}/dex/tests/overview",
 	"dex-http-results":        "/accounts/{account}/dex/http-tests/{test}",
 	"dex-traceroute-results":  "/accounts/{account}/dex/traceroute-tests/{test}",
@@ -194,9 +196,9 @@ func validateContract(c contract) error {
 	return nil
 }
 
-// Only these two explicitly granted, fixture-only DEX paths may be unprobed.
+// Only the explicitly granted fixture-only DEX and pool health detail paths may be unprobed.
 func validDEXProbeMode(r restContract) bool {
-	detail := r.Name == "dex-http-results" || r.Name == "dex-traceroute-results"
+	detail := r.Name == "dex-http-results" || r.Name == "dex-traceroute-results" || r.Name == "lb-pool-health"
 	if r.ProbeMode == "" {
 		return !detail && r.DocumentedReason == ""
 	}
@@ -527,6 +529,8 @@ func restProbeQuery(name string, now time.Time) url.Values {
 	from := now.Add(-time.Hour).Format(time.RFC3339Nano)
 	to := now.Format(time.RFC3339Nano)
 	switch name {
+	case "load-balancer-pools", "lb-pool-health":
+		return nil
 	case "d1-databases", "kv-namespaces", "queues-list", "do-namespaces":
 		return url.Values{"page": {"1"}, "per_page": {"50"}}
 	case "warp-devices":

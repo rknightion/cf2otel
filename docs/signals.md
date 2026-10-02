@@ -734,3 +734,32 @@ one remainder, and every point counts against the existing complete-window HTTP 
 An optional exact host allowlist filters only these features and adds no host label.
 See [configuration](configuration.md#opt-in-high-cardinality-http-breakdowns) for limits,
 normalizer behavior and failure semantics. Dashboard delivery is a separate signal batch.
+
+## Load balancer provider health flag
+
+| Signal | Type | Unit | Attributes |
+|---|---|---|---|
+| `cloudflare.loadbalancers.pool.health` | Gauge | `1` | `cloudflare.loadbalancers.pool.name` |
+
+The opt-in `loadbalancers.health` snapshot reads only the documented direct optional
+`result.pop_health.healthy` property of the [pool health method](https://developers.cloudflare.com/api/resources/load_balancers/subresources/pools/subresources/health/methods/get/).
+This is an **unattributed provider-reported health flag**, not regional aggregate
+pool availability: true maps to 1, false to 0, absent/null is unknown and omitted.
+No region, origin health, origin RTT, traffic counts, weights or rule totals are
+inferred. In particular, origin RTT is a string with no established unit.
+
+Configured pool names are the only labels, bounded to 128 UTF-8 bytes with no
+controls. Internal pool IDs are request-only; no identifier/address fallback.
+The existing platform series cap reserves one `other` slot and sticky named
+admission until restart. `other` is the **minimum of known flags** among excluded
+pools (any observed unhealthy flag yields 0), excluding unknowns; it is not a
+complete fleet health guarantee. Failures and unknown flags can leave coverage incomplete.
+Snapshots expire after three poll intervals. A valid empty catalog clears them;
+a valid subset atomically replaces them, omitting unknown and failed pools. All
+failed reads retain original expiry. An all-unknown valid response clears prior
+known values and returns an unknown-coverage error, never a healthy classification.
+
+The pool catalog is live-probed by the drift canary and allows empty accounts.
+Health detail is explicitly `documented_only`, fixture-only and **unprobed** because
+root preparation observed no live pools. Populated runtime health and regional/origin
+joins remain unverified. Dashboard delivery and the remaining task signals are separate.

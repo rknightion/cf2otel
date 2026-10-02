@@ -740,6 +740,23 @@
       "allow_empty": true
     },
     {
+      "name": "load-balancer-pools",
+      "scope": "account",
+      "path": "/accounts/{account}/load_balancers/pools",
+      "required_fields": ["id", "name"],
+      "check_all_rows": true,
+      "allow_empty": true
+    },
+    {
+      "name": "lb-pool-health",
+      "scope": "account",
+      "path": "/accounts/{account}/load_balancers/pools/{pool}/health",
+      "required_fields": ["pop_health"],
+      "single": true,
+      "probe_mode": "documented_only",
+      "documented_reason": "Fixture-only; no live load balancer pools observed. Direct optional pop_health.healthy is documented but detail remains unprobed."
+    },
+    {
       "name": "dex-tests-overview",
       "scope": "account",
       "path": "/accounts/{account}/dex/tests/overview",

@@ -181,6 +181,7 @@ func Default() Config {
 	c.HTTP.HighCardinalityHosts = []string{}
 	c.DEX = DEXConfig{ResultWindow: time.Hour, MaxTests: 1000, MaxMetricSeries: 500}
 	c.Collectors[semconv.CollectorNameDEXTests] = CollectorConfig{Interval: 5 * time.Minute}
+	c.Collectors[semconv.CollectorNameLBHealth] = CollectorConfig{Interval: 5 * time.Minute}
 	c.WARP = WARPConfig{LastSeenWindow: 15 * time.Minute, MaxMetricSeries: 500}
 	c.OTLP.MetricDenylist = []string{}
 	c.OTLP.AttributeDenylist = []string{}
@@ -403,7 +404,7 @@ func (c Config) Validate() error {
 		if v.Enabled {
 			add(v.Interval > 0, name+".interval must be positive")
 			add(v.InitialLookback >= 0, name+".initial_lookback must be nonnegative")
-			if name != "certs.packs" && name != "tunnels.status" && name != "httpreq.transfer" && name != "access.seats" && name != "warp.fleet" && name != semconv.CollectorNameDEXTests {
+			if name != "certs.packs" && name != "tunnels.status" && name != "httpreq.transfer" && name != "access.seats" && name != "warp.fleet" && name != semconv.CollectorNameDEXTests && name != semconv.CollectorNameLBHealth {
 				add(v.MaxWindow > 0, name+".max_window must be positive")
 			}
 		}

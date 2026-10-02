@@ -41,7 +41,9 @@ func TestDEXDocumentedOnlyValidationAndSkip(t *testing.T) {
 		t.Fatal("documented-only detail issued network request")
 	}
 	reports := documentedRESTReports(c)
-	if len(reports) != 2 || !strings.Contains(reports[0], "documented_only, unprobed") {
+	// The new pool-health contract adds one explicitly unprobed detail; both
+	// DEX paths must remain reported as before.
+	if len(reports) != 3 || !strings.Contains(strings.Join(reports, "\n"), "REST dex-http-results: documented_only, unprobed") || !strings.Contains(strings.Join(reports, "\n"), "REST dex-traceroute-results: documented_only, unprobed") || !strings.Contains(strings.Join(reports, "\n"), "REST lb-pool-health: documented_only, unprobed") {
 		t.Fatalf("documented-only coverage not reported: %v", reports)
 	}
 	for _, mutate := range []func(*restContract){

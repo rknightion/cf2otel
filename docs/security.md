@@ -22,6 +22,7 @@ The table maps every configured collector name to its expected read group. For G
 
 | Collector | Cloudflare permission group(s) | Evidence |
 | --- | --- | --- |
+| `loadbalancers.health` | `Load Balancing: Monitors and Pools Read` (Account) | Doc-derived permission accepted from the official [pool source](https://developers.cloudflare.com/api/resources/load_balancers/subresources/pools/methods/list/). Disabled by default; populated health detail and live least-privilege token verification remain unproved. No Write grant needed. |
 | `dex.tests` | `Cloudflare DEX Read` (Account) | Doc-derived read permission accepted from official [HTTP results](https://developers.cloudflare.com/api/resources/zero_trust/subresources/dex/subresources/http_tests/methods/get/) and [traceroute results](https://developers.cloudflare.com/api/resources/zero_trust/subresources/dex/subresources/traceroute_tests/methods/get/) sources; no live least-privilege grant or populated detail verification. Disabled by default; do not grant a Write permission for this read-only collector. |
 | `access.logins` | `Access: Audit Logs Read` (Account) | Unverified |
 | `access.login_metrics` | `Account Analytics Read` (Account) | Unverified |
@@ -128,3 +129,9 @@ Validation errors do not echo configured route templates, names or hosts. Per-wi
 and one count-preserving remainder bound these metrics; they do not bound cumulative SDK
 series growth across windows. Dashboard/UI and live-counter verification are separate from
 local source validation.
+
+`loadbalancers.health` emits only bounded configured pool names. Pool/account IDs
+are internal GET path inputs, never labels, errors or fallback names; origin addresses
+and RTT strings are not emitted. Ambiguous names fail safely. `other` reports the
+minimum of known excluded flags, not complete fleet availability. No resource is
+created and health detail is explicitly fixture-only/unprobed in the canary.
