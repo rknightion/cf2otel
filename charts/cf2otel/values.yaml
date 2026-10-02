@@ -70,11 +70,17 @@ config:
   firewall:
     rule_dimensions: false
     max_metric_series_per_window: 500
+  warp:
+    last_seen_window: 15m
+    max_metric_series: 500
   platform:
     max_metric_series_per_window: 500
   # Escape the dot in a collector key when overriding it with Helm --set, e.g.
   # --set 'config.collectors.audit\.logs.enabled=false'.
   collectors:
+    warp.fleet:
+      enabled: false
+      interval: 5m
     access.logins:
       enabled: true
     access.login_metrics:

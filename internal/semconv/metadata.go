@@ -13,6 +13,7 @@ var genAIOperationDurationBuckets = []float64{0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1
 var pollerDurationBuckets = []float64{0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 7.5, 10, 15, 20, 30, 45, 60, 90, 120}
 
 var metricSpecs = map[string]MetricSpec{
+	MetricWARPDevices:                      {Unit: "1", Description: "Unique recently seen WARP devices by observed network status, platform, client version, mode and colo; bounded remainder preserves the total, without device/user identity."},
 	MetricLogpushFailedUploads:             {Unit: "{upload}", Description: "Failed upload count by account/zone scope, zone name, job ID, destination type, status code and final attempt; explicit high-cardinality opt-in."},
 	MetricHTTPVisits:                       {Unit: "{visit}", Description: "Additive visit sum by zone from adaptive Groups, following the configured request-source policy."},
 	MetricHTTPThreats:                      {Unit: "{request}", Description: "Threat sum by zone from complete UTC-hour rollups held back at least ten minutes; not assumed eyeball-filterable."},

@@ -21,6 +21,41 @@ counts remaining eligible zones not queried. No zone name or ID is a gauge label
 Every successful complete poll emits zero for absent reason series. Failed polls
 retain the existing no-partial-output behavior and do not refresh these gauges.
 
+## WARP recently seen fleet
+
+`cloudflare.warp.devices` is a Gauge with unit `1`, from account-scoped
+`GET /accounts/{account}/dex/fleet-status/devices`, source `last_seen`. It counts
+unique devices within `warp.last_seen_window` (default 15 minutes, maximum 60),
+not the total physical or licensed fleet. Network status strings are preserved
+as observed; there is no documented connected/active Boolean classification.
+
+Its five string dimensions are `cloudflare.warp.status`,
+`cloudflare.warp.platform`, `cloudflare.warp.client_version`,
+`cloudflare.warp.mode`, and `cloudflare.warp.colo`. A sixth string attribute,
+`cloudflare.warp.remainder`, is `false` on normal tuples and `true` on overflow.
+Normal tuples are sorted lexically, retaining the first `warp.max_metric_series`
+(default 500); excess tuples and tuples containing a dimension longer than 256
+bytes are summed into one all-`other` remainder. This preserves the device total
+and distinguishes a real all-`other` tuple from overflow. Empty dimension strings
+remain observed empty strings. No device ID, user identity, timestamp, raw body,
+log, trace or additional metric is emitted. IDs exist only during a poll for
+identical-tuple deduplication; conflicting duplicate IDs fail the whole snapshot.
+
+Pages are fetched in ascending order, respecting a server page size at most 50,
+until a short/empty page (including an empty read after a full final page).
+Reported totals are not completion proof. Invalid/missing/null required strings,
+malformed arrays, HTTP failures, mismatched paging, stalled full pages or the
+10,000-page/100,000-unique-device safety bounds fail without partial publication
+or expiry refresh. Successful empty arrays clear previous points; successful
+snapshots expire after three actual configured collector intervals.
+
+This opt-in collector uses the existing expiring SDK snapshot batch emitter,
+never ordinary cumulative Gauge fallback. The row shape is **doc-derived** from
+the [official device method](https://developers.cloudflare.com/api/resources/zero_trust/subresources/dex/subresources/fleet_status/subresources/devices/methods/list/)
+and pinned by local fixtures. The root's current canary observed only successful
+empty rows (`doc-0003`, section 16); populated rows and real fleet pagination are
+not live-verified. Dashboard delivery is a separate pending work item.
+
 ## Logs and traces
 
 | Event or span | Source | Notes |

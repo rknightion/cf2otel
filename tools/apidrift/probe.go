@@ -90,6 +90,7 @@ type pageProbeAPI interface {
 var fieldName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$`)
 var datasetName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 var restPaths = map[string]string{
+	"warp-devices":            "/accounts/{account}/dex/fleet-status/devices",
 	"zone-list":               "/zones",
 	"access-apps":             "/accounts/{account}/access/apps",
 	"access-users":            "/accounts/{account}/access/users",
@@ -483,6 +484,8 @@ func restProbeQuery(name string, now time.Time) url.Values {
 	from := now.Add(-time.Hour).Format(time.RFC3339Nano)
 	to := now.Format(time.RFC3339Nano)
 	switch name {
+	case "warp-devices":
+		return url.Values{"page": {"1"}, "per_page": {"50"}, "source": {"last_seen"}, "from": {now.Add(-15 * time.Minute).UTC().Format("2006-01-02T15:04:05.000Z")}, "to": {now.UTC().Format("2006-01-02T15:04:05.000Z")}}
 	case "access-logins":
 		return url.Values{"since": {from}, "until": {to}, "page": {"1"}, "per_page": {"1"}}
 	case "access-scim":

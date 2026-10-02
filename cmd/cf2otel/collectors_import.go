@@ -23,6 +23,7 @@ import (
 	"github.com/rknightion/cf2otel/internal/collectors/selfobs"
 	"github.com/rknightion/cf2otel/internal/collectors/tunnels"
 	"github.com/rknightion/cf2otel/internal/collectors/turnstile"
+	"github.com/rknightion/cf2otel/internal/collectors/warp"
 	"github.com/rknightion/cf2otel/internal/collectors/workers"
 )
 
@@ -51,4 +52,5 @@ func registerCollectors(deps collector.Deps) {
 	certs.Register(deps)
 	tunnels.Register(deps)
 	healthchecks.Register(deps)
+	warp.Register(deps)
 }

@@ -38,6 +38,7 @@ type ZonesConfig struct {
 }
 
 type Config struct {
+	WARP       WARPConfig                 `yaml:"warp" json:"warp"`
 	Firewall   FirewallConfig             `yaml:"firewall" json:"firewall"`
 	Cloudflare CloudflareConfig           `yaml:"cloudflare" json:"cloudflare"`
 	Collectors map[string]CollectorConfig `yaml:"collectors" json:"collectors"`
@@ -82,6 +83,11 @@ type HTTPConfig struct {
 type FirewallConfig struct {
 	RuleDimensions           bool `yaml:"rule_dimensions" json:"rule_dimensions"`
 	MaxMetricSeriesPerWindow int  `yaml:"max_metric_series_per_window" json:"max_metric_series_per_window"`
+}
+
+type WARPConfig struct {
+	LastSeenWindow  time.Duration `yaml:"last_seen_window" json:"last_seen_window"`
+	MaxMetricSeries int           `yaml:"max_metric_series" json:"max_metric_series"`
 }
 
 type PlatformConfig struct {
@@ -148,6 +154,7 @@ var disabledCollectorNames = []string{"aigateway.coverage", "logpush.failures", 
 
 func Default() Config {
 	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{RequestSource: "eyeball", Breakdowns: []string{"status", "origin_status", "country", "protocol", "tls_protocol", "method", "content_type"}, Scope: "access_protected", MaxMetricHostsPerZone: 1000, MaxMetricSeriesPerWindow: 10000}, Platform: PlatformConfig{MaxMetricSeriesPerWindow: 500}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{MetricCardinalityLimit: 10000, Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
+	c.WARP = WARPConfig{LastSeenWindow: 15 * time.Minute, MaxMetricSeries: 500}
 	c.Firewall = FirewallConfig{MaxMetricSeriesPerWindow: 500}
 	for _, name := range collectorNames {
 		c.Collectors[name] = CollectorConfig{Enabled: true, Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
@@ -159,6 +166,7 @@ func Default() Config {
 	c.Collectors["access.seats"] = CollectorConfig{Enabled: true, Interval: 15 * time.Minute}
 	c.Collectors["certs.packs"] = CollectorConfig{Interval: time.Hour}
 	c.Collectors["tunnels.status"] = CollectorConfig{Interval: time.Minute}
+	c.Collectors["warp.fleet"] = CollectorConfig{Interval: 5 * time.Minute}
 	c.Collectors["httpreq.transfer"] = CollectorConfig{Enabled: true, Interval: time.Hour}
 	// Threat rollups use complete UTC hours; alignment and holdback belong to the collector.
 	c.Collectors["httpreq.threats"] = CollectorConfig{Enabled: true, Interval: time.Hour, InitialLookback: time.Hour, MaxWindow: time.Hour}
@@ -301,6 +309,8 @@ func (c Config) Validate() error {
 	add(c.HTTP.MaxMetricSeriesPerWindow > 0, "http.max_metric_series_per_window must be positive")
 	add(c.Firewall.MaxMetricSeriesPerWindow > 0, "firewall.max_metric_series_per_window must be positive")
 	add(c.Platform.MaxMetricSeriesPerWindow > 0, "platform.max_metric_series_per_window must be positive")
+	add(c.WARP.LastSeenWindow > 0 && c.WARP.LastSeenWindow <= time.Hour, "warp.last_seen_window must be positive and at most 60m")
+	add(c.WARP.MaxMetricSeries >= 1 && c.WARP.MaxMetricSeries <= 5000, "warp.max_metric_series must be between 1 and 5000")
 	add(c.Identity.MatchWindow > 0, "identity.match_window must be positive")
 	add(c.Identity.MaxCandidates > 0, "identity.max_candidates must be positive")
 	add(c.AIGateway.MaxBodyBytes > 0, "ai_gateway.max_body_bytes must be positive")
@@ -310,7 +320,7 @@ func (c Config) Validate() error {
 		if v.Enabled {
 			add(v.Interval > 0, name+".interval must be positive")
 			add(v.InitialLookback >= 0, name+".initial_lookback must be nonnegative")
-			if name != "certs.packs" && name != "tunnels.status" && name != "httpreq.transfer" && name != "access.seats" {
+			if name != "certs.packs" && name != "tunnels.status" && name != "httpreq.transfer" && name != "access.seats" && name != "warp.fleet" {
 				add(v.MaxWindow > 0, name+".max_window must be positive")
 			}
 		}

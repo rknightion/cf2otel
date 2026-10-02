@@ -17,6 +17,7 @@ The table maps every configured collector name to its expected read group. For G
 | `access.scim` | `Access: SCIM Logs Read` (Account) | Unverified |
 | `inventory.access` | `Access: Apps Read` and `Access: Users Read` (Account) | Unverified |
 | `access.seats` | `Access: Users Read` (Account), the same users endpoint used by `inventory.access` | User-list seat fields verified by read-only contract canary; permission name unverified |
+| `warp.fleet` | `Cloudflare DEX Read` (Account) preferred; documented alternatives `Zero Trust Read` or `Zero Trust Report` | Doc-derived [device list method](https://developers.cloudflare.com/api/resources/zero_trust/subresources/dex/subresources/fleet_status/subresources/devices/methods/list/). Root observed only successful empty rows; populated shape and least privilege remain unverified. Do not grant the documented Write alternative for this read-only source. |
 | `tunnels.status` | `Cloudflare Tunnel Read` (Account) | Loop 14 preparation verified the required group; without it the list can be an empty 200, so an empty result does not prove permission |
 | `httpreq.events` | `Analytics Read` (Zone); `Access: Apps Read` (Account) when `http.scope` is `access_protected` | Unverified |
 | `httpreq.threats` | `Analytics Read` (Zone) | Free/Pro rollup entitlement verified; least permission group unverified. (CFO-0046.05) |

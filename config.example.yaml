@@ -20,6 +20,9 @@ http:
 firewall:
   rule_dimensions: false # Opt in to rule ID/description, host and country metrics when advertised.
   max_metric_series_per_window: 500 # Positive total cap, including the all-other remainder.
+warp:
+  last_seen_window: 15m
+  max_metric_series: 500
 platform:
   max_metric_series_per_window: 500
 identity:
@@ -162,6 +165,9 @@ collectors:
   certs.packs: # Requires SSL and Certificates Read; snapshot, no checkpoint key.
     enabled: false
     interval: 1h
+  warp.fleet: # Doc-derived recently seen fleet; account DEX Read preferred.
+    enabled: false
+    interval: 5m
   tunnels.status: # Requires Cloudflare Tunnel Read; snapshot, no checkpoint key.
     enabled: false
     interval: 1m

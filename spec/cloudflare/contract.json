@@ -507,6 +507,14 @@
       "allow_empty": true
     },
     {
+      "name": "warp-devices",
+      "scope": "account",
+      "path": "/accounts/{account}/dex/fleet-status/devices",
+      "required_fields": ["colo", "deviceId", "mode", "platform", "status", "timestamp", "version"],
+      "allow_empty": true,
+      "check_all_rows": true
+    },
+    {
       "name": "cfd-tunnel-list",
       "scope": "account",
       "path": "/accounts/{account}/cfd_tunnel",

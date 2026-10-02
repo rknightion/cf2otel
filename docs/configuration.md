@@ -44,6 +44,9 @@ Set `firewall.rule_dimensions: true` (or `CF2OTEL_FIREWALL__RULE_DIMENSIONS=true
 | `httpreq.metrics` visits extension | Existing defaults unchanged | Optional advertised `sum_visits` follows the existing request-source policy; no separate collector key. All extension config and signal declarations prepare independent collector implementations, not new output in this seam-only change. (CFO-0046.05) |
 | `collectors.workers.invocations` | Enabled, `5m` interval | Aggregate Groups metrics only, with the usual lookback/window settings; no raw invocation events. (CFO-0047.01) |
 | `collectors.certs.packs` | Disabled, `1h` interval | Requires SSL and Certificates Read. Snapshot collector with no checkpoint key. Publishes only after every zone read succeeds; failed reads preserve the previous snapshot until its TTL of three intervals. Successful empty reads clear both gauges. (CFO-0050.01) |
+| `warp.last_seen_window` | `15m` | Positive, at most `60m`; bounded `last_seen` query for recently seen devices, not all physical devices. Environment: `CF2OTEL_WARP__LAST_SEEN_WINDOW`. |
+| `warp.max_metric_series` | `500` | `1..5000` normal full-dimension tuples plus at most one count-preserving remainder. Environment: `CF2OTEL_WARP__MAX_METRIC_SERIES`. |
+| `collectors.warp.fleet` | Disabled, `5m` interval | Account-level doc-derived device snapshot; no checkpoint/window buffering. Enable with `CF2OTEL_COLLECTORS__WARP_FLEET__ENABLED=true`; interval via `CF2OTEL_COLLECTORS__WARP_FLEET__INTERVAL`. Snapshot expires after three actual polling intervals, failed polls do not refresh it, and genuine empty lists clear it. |
 | `collectors.tunnels.status` | Disabled, `1m` interval | Requires Cloudflare Tunnel Read. Without permission the API returns an empty 200, not a 403. Snapshot collector with no checkpoint key; first poll after startup emits no status-change event. (CFO-0048.01) |
 
 Override these keys using `CF2OTEL_OTLP__METRIC_CARDINALITY_LIMIT`,
