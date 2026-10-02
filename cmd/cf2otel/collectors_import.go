@@ -7,6 +7,7 @@ import (
 	"github.com/rknightion/cf2otel/internal/collectors/audit"
 	"github.com/rknightion/cf2otel/internal/collectors/certs"
 	"github.com/rknightion/cf2otel/internal/collectors/d1"
+	"github.com/rknightion/cf2otel/internal/collectors/dex"
 	"github.com/rknightion/cf2otel/internal/collectors/dns"
 	"github.com/rknightion/cf2otel/internal/collectors/durableobjects"
 	"github.com/rknightion/cf2otel/internal/collectors/email"
@@ -55,4 +56,5 @@ func registerCollectors(deps collector.Deps) {
 	healthchecks.Register(deps)
 	warp.Register(deps)
 	workersai.Register(deps)
+	dex.Register(deps)
 }

@@ -738,6 +738,31 @@
         "action.result"
       ],
       "allow_empty": true
+    },
+    {
+      "name": "dex-tests-overview",
+      "scope": "account",
+      "path": "/accounts/{account}/dex/tests/overview",
+      "required_fields": ["id", "name", "kind"],
+      "allow_empty": true
+    },
+    {
+      "name": "dex-http-results",
+      "scope": "account",
+      "path": "/accounts/{account}/dex/http-tests/{test}",
+      "required_fields": ["httpStats"],
+      "single": true,
+      "probe_mode": "documented_only",
+      "documented_reason": "Fixture-only; no live DEX tests observed."
+    },
+    {
+      "name": "dex-traceroute-results",
+      "scope": "account",
+      "path": "/accounts/{account}/dex/traceroute-tests/{test}",
+      "required_fields": ["tracerouteStats"],
+      "single": true,
+      "probe_mode": "documented_only",
+      "documented_reason": "Fixture-only; no live DEX tests observed."
     }
   ]
 }

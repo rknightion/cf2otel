@@ -32,6 +32,8 @@ type graphContract struct {
 }
 
 type restContract struct {
+	ProbeMode                    string              `json:"probe_mode,omitempty"`
+	DocumentedReason             string              `json:"documented_reason,omitempty"`
 	Name                         string              `json:"name"`
 	Scope                        string              `json:"scope"`
 	Path                         string              `json:"path"`
@@ -94,6 +96,9 @@ var restPaths = map[string]string{
 	"kv-namespaces":           "/accounts/{account}/storage/kv/namespaces",
 	"queues-list":             "/accounts/{account}/queues",
 	"do-namespaces":           "/accounts/{account}/workers/durable_objects/namespaces",
+	"dex-tests-overview":      "/accounts/{account}/dex/tests/overview",
+	"dex-http-results":        "/accounts/{account}/dex/http-tests/{test}",
+	"dex-traceroute-results":  "/accounts/{account}/dex/traceroute-tests/{test}",
 	"warp-devices":            "/accounts/{account}/dex/fleet-status/devices",
 	"zone-list":               "/zones",
 	"access-apps":             "/accounts/{account}/access/apps",
@@ -158,6 +163,9 @@ func validateContract(c contract) error {
 		if r.Name == "firewall-ruleset-detail" && (!restSeen["firewall-rulesets"] || !r.Single) {
 			return errors.New("firewall ruleset list must precede single detail path")
 		}
+		if !validDEXProbeMode(r) {
+			return errors.New("invalid REST probe mode")
+		}
 		path, ok := restPaths[r.Name]
 		fieldsValid := validFields(r.RequiredFields)
 		if r.RawJSON {
@@ -184,6 +192,25 @@ func validateContract(c contract) error {
 		return errors.New("gateway log detail paths require the gateway log list")
 	}
 	return nil
+}
+
+// Only these two explicitly granted, fixture-only DEX paths may be unprobed.
+func validDEXProbeMode(r restContract) bool {
+	detail := r.Name == "dex-http-results" || r.Name == "dex-traceroute-results"
+	if r.ProbeMode == "" {
+		return !detail && r.DocumentedReason == ""
+	}
+	return r.ProbeMode == "documented_only" && detail && r.Path == restPaths[r.Name] && strings.TrimSpace(r.DocumentedReason) != "" && r.Scope == "account" && r.Single
+}
+
+func documentedRESTReports(c contract) []string {
+	var reports []string
+	for _, r := range c.REST {
+		if r.ProbeMode == "documented_only" {
+			reports = append(reports, "REST "+r.Name+": documented_only, unprobed: "+r.DocumentedReason)
+		}
+	}
+	return reports
 }
 
 func validRESTOptionalRules(r restContract) bool {
@@ -307,6 +334,9 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 	gatewayLogIDs := map[string]string{}
 	now := time.Now().UTC()
 	for _, r := range c.REST {
+		if r.ProbeMode == "documented_only" {
+			continue
+		}
 		type target struct{ account, zone, gateway, id string }
 		targets := []target{{}}
 		if r.Scope == "zone" {
@@ -372,7 +402,16 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 			}
 			var rows []map[string]any
 			var totalCount int
-			if r.Single {
+			if r.Name == "dex-tests-overview" {
+				var result struct {
+					Tests []map[string]any `json:"tests"`
+				}
+				if err := api.Get(ctx, path, query, &result); err != nil || result.Tests == nil {
+					diffs = append(diffs, label+": invalid tests overview response")
+					continue
+				}
+				rows = result.Tests
+			} else if r.Single {
 				var row map[string]any
 				if err := api.Get(ctx, path, query, &row); err != nil {
 					diffs = append(diffs, label+": read failed")

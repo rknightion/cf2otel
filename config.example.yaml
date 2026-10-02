@@ -27,6 +27,10 @@ http:
 firewall:
   rule_dimensions: false # Opt in to rule ID/description, host and country metrics when advertised.
   max_metric_series_per_window: 500 # Positive total cap, including the all-other remainder.
+dex:
+  result_window: 1h # Current provider averages; valid 1h..168h, no backfill checkpoint.
+  max_tests: 1000 # Complete catalog required; valid 1..10000.
+  max_metric_series: 500 # Total lifetime identities; six slots reserved for kind/signal remainders.
 warp:
   last_seen_window: 15m
   max_metric_series: 500
@@ -61,6 +65,9 @@ log:
 # Collector names are fixed by the domain registry. AI Gateway metrics come
 # from aigateway.logs while GraphQL Groups ingestion lag remains unbounded.
 collectors:
+  dex.tests: # Fixture-only DEX result snapshots; explicit opt-in to bounded test-name labels.
+    enabled: false
+    interval: 5m
   access.logins:
     enabled: true
   access.login_metrics:

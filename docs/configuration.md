@@ -148,6 +148,39 @@ value is comma-separated (for example `country,method`); an empty value disables
 Collector environment forms are `WORKERS_INVOCATIONS`, `CERTS_PACKS` and `TUNNELS_STATUS`.
 Snapshot collectors use the polling interval, not the window or initial lookback.
 
+## DEX test result snapshots
+
+`dex.tests` is disabled by default and polls every `5m` when enabled. Enable it with
+`CF2OTEL_COLLECTORS__DEX_TESTS__ENABLED=true`; set its polling interval with
+`CF2OTEL_COLLECTORS__DEX_TESTS__INTERVAL`. It reads current provider averages, not
+historical windows, and has no checkpoint or backfill.
+
+| Key | Default | Contract |
+| --- | --- | --- |
+| `dex.result_window` | `1h` | `1h..168h` inclusive; current UTC result window, ISO timestamps with milliseconds and `interval=minute`. Environment: `CF2OTEL_DEX__RESULT_WINDOW`. |
+| `dex.max_tests` | `1000` | `1..10000`; complete overview enumeration with `page`/`per_page=50`. Exceeding the bound or repeating a test/page fails without refreshing the prior snapshot. Environment: `CF2OTEL_DEX__MAX_TESTS`. |
+| `dex.max_metric_series` | `500` | `6..5000` total metric/name/kind identities across polls until restart. Six slots are reserved for the two HTTP and four traceroute signal/kind remainders. Environment: `CF2OTEL_DEX__MAX_METRIC_SERIES`. |
+
+Named identities are admitted in lexical test-name/kind/metric order, then remain
+sticky until restart, even when temporarily absent. New or unsafe names overflow
+to `other`, separately for each signal and kind. At cap `6` all output uses
+remainders; at cap `500` there is room for at most `494` named identities. This is
+not a test count cap: an HTTP test can contribute two identities and a traceroute
+test four. Remainders are arithmetic means of per-test provider averages, **not**
+sample- or device-weighted aggregates. Missing/null optional averages are omitted,
+not zero-filled. Review test names for sensitive content before opting in; IDs
+never become labels. See [DEX signal semantics](signals.md#dex-test-results).
+
+Each test is fetched independently through the shared retrying client. Failed
+tests do not block valid tests: their successful subset replaces all five metric
+families atomically and the poll still reports an error. If all detail requests
+fail, prior data retains its original expiry, three actual polling intervals.
+A genuinely empty complete catalog clears data; catalog failure does not. Names
+that collide for distinct test IDs of the same kind fail the catalog, without an
+ID fallback. Detail endpoints are documented-only, explicitly reported unprobed
+by the drift canary; only the overview is live-probed. No populated DEX result or
+runtime behavior has been live-verified.
+
 ## Grafana rule-generation interval alignment
 
 `GRAFANA_TUNNELS_STATUS_INTERVAL_SECONDS` is a generator-only positive integer in seconds,

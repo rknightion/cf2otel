@@ -68,6 +68,50 @@ and pinned by local fixtures. The root's current canary observed only successful
 empty rows (`doc-0003`, section 16); populated rows and real fleet pagination are
 not live-verified. Dashboard delivery is a separate pending work item.
 
+## DEX test results
+
+The opt-in `dex.tests` snapshot collector emits the following Gauges from provider
+`.avg` values. It does not recompute slot statistics or query individual hops.
+
+| Metric | Unit | Provider field |
+| --- | --- | --- |
+| `cloudflare.dex.http.fetch_time` | `ms` | `httpStats.resourceFetchTimeMs.avg` |
+| `cloudflare.dex.traceroute.rtt` | `ms` | `tracerouteStats.roundTripTimeMs.avg` |
+| `cloudflare.dex.traceroute.hops` | `{hop}` | `tracerouteStats.hopsCount.avg`; the average can be fractional |
+| `cloudflare.dex.packet_loss` | `%` | `tracerouteStats.packetLossPct.avg`; percentage, not a fraction |
+| `cloudflare.dex.availability` | `%` | `httpStats.availabilityPct.avg` or `tracerouteStats.availabilityPct.avg` |
+
+All points have only string attributes `cloudflare.dex.test.name` and
+`cloudflare.dex.test.kind` (`http` or `traceroute`). No account, device or test ID,
+URL, address, raw body, log or trace is exported. A named test must start with an
+ASCII letter and contain only ASCII letters, digits, spaces, underscores and
+hyphens, at most 128 characters; reserved `other` and other names go to the
+remainder. Operators must still avoid sensitive names. Duplicate name/kind pairs
+with distinct IDs fail catalog enumeration instead of merging or labeling by ID.
+
+`dex.max_metric_series` bounds sticky named identities plus six reserved
+signal/kind remainders across polls until restart. Overflow points have test name
+`other` and preserve test kind. Their value is the arithmetic mean of the
+available per-test provider averages for that signal/kind, not a weighted
+fleet statistic. Missing/null optional averages are omitted, not fabricated as
+zero; finite nonnegative values are required, with percentages at most 100.
+Invalid results fail only that test. See [configuration](configuration.md#dex-test-result-snapshots)
+for cap allocation, failure isolation and expiry semantics.
+
+The catalog is `GET /accounts/{account}/dex/tests/overview`, with `tests[]`
+containing `id`, `name` and `kind`, fully enumerated at 50 rows per page. Detail
+reads use `GET /accounts/{account}/dex/http-tests/{test}` or
+`GET /accounts/{account}/dex/traceroute-tests/{test}`, with UTC millisecond ISO
+`from`/`to` and `interval=minute`. The default result window is one hour, bounded
+to seven days, with no detail pagination. Provider averages keep their documented
+units exactly. Shapes come from the official [HTTP test result method](https://developers.cloudflare.com/api/resources/zero_trust/subresources/dex/subresources/http_tests/methods/get/)
+and [traceroute result method](https://developers.cloudflare.com/api/resources/zero_trust/subresources/dex/subresources/traceroute_tests/methods/get/),
+and are proved locally with fixtures, a real shared HTTP client and the SDK.
+The drift contract registers all three paths but reports both detail templates
+as `documented_only, unprobed`; no live tests exist. Only the list endpoint canary
+is live-probed. Populated/live-runtime proof and dashboard panels remain separate
+root-owned work; this source does not claim full task acceptance.
+
 ## Workers AI aggregate metrics
 
 The opt-in `workersai.metrics` collector reads account-scoped

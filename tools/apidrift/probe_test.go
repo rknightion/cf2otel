@@ -186,6 +186,13 @@ func (f fakeAPI) Get(_ context.Context, path string, query url.Values, out any) 
 	}
 	f.recordQuery(entry.Name, query)
 	rows := f.rowsFor(entry)
+	if entry.Name == "dex-tests-overview" {
+		body, err := json.Marshal(map[string]any{"tests": paginateFakeRows(rows, query, f.pageCaps[entry.Name])})
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(body, out)
+	}
 	if entry.Single {
 		if len(rows) > 0 {
 			*out.(*map[string]any) = rows[0]

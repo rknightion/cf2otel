@@ -13,6 +13,11 @@ var genAIOperationDurationBuckets = []float64{0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1
 var pollerDurationBuckets = []float64{0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 7.5, 10, 15, 20, 30, 45, 60, 90, 120}
 
 var metricSpecs = map[string]MetricSpec{
+	MetricDEXHTTPFetchTime:                 {Unit: "ms", Description: "Provider requested-interval average HTTP resource fetch time; other is the arithmetic mean of per-test averages."},
+	MetricDEXTracerouteRTT:                 {Unit: "ms", Description: "Provider requested-interval average traceroute round-trip time; other is the arithmetic mean of per-test averages."},
+	MetricDEXTracerouteHops:                {Unit: "{hop}", Description: "Provider requested-interval average traceroute hop count; other is the arithmetic mean of per-test averages."},
+	MetricDEXPacketLoss:                    {Unit: "%", Description: "Provider requested-interval average traceroute packet loss percentage; other is the arithmetic mean of per-test averages."},
+	MetricDEXAvailability:                  {Unit: "%", Description: "Provider requested-interval average availability by test kind; other is the arithmetic mean of per-test averages."},
 	MetricWorkersAIInferences:              {Unit: "1", Description: "Total number of inferences for an account from complete five-minute Groups buckets."},
 	MetricWorkersAIInputTokens:             {Unit: "{token}", Description: "Total input tokens for an account from complete five-minute Groups buckets."},
 	MetricWorkersAIOutputTokens:            {Unit: "{token}", Description: "Total output tokens for an account from complete five-minute Groups buckets."},

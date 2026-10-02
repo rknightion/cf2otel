@@ -31,6 +31,9 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	api := cfapi.New(config.CloudflareConfig{APIToken: config.Secret(token), Timeout: 10 * time.Second, MaxResponseBytes: 2 << 20})
+	for _, report := range documentedRESTReports(c) {
+		fmt.Println(report)
+	}
 	diffs := probe(ctx, api, c)
 	for _, diff := range diffs {
 		fmt.Fprintln(os.Stderr, diff)

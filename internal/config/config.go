@@ -47,6 +47,7 @@ type PrometheusConfig struct {
 }
 
 type Config struct {
+	DEX        DEXConfig                  `yaml:"dex" json:"dex"`
 	WARP       WARPConfig                 `yaml:"warp" json:"warp"`
 	Prometheus PrometheusConfig           `yaml:"prometheus" json:"prometheus"`
 	Firewall   FirewallConfig             `yaml:"firewall" json:"firewall"`
@@ -97,6 +98,12 @@ type HTTPConfig struct {
 type FirewallConfig struct {
 	RuleDimensions           bool `yaml:"rule_dimensions" json:"rule_dimensions"`
 	MaxMetricSeriesPerWindow int  `yaml:"max_metric_series_per_window" json:"max_metric_series_per_window"`
+}
+
+type DEXConfig struct {
+	ResultWindow    time.Duration `yaml:"result_window" json:"result_window"`
+	MaxTests        int           `yaml:"max_tests" json:"max_tests"`
+	MaxMetricSeries int           `yaml:"max_metric_series" json:"max_metric_series"`
 }
 
 type WARPConfig struct {
@@ -172,6 +179,8 @@ func Default() Config {
 	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{RequestSource: "eyeball", Breakdowns: []string{"status", "origin_status", "country", "protocol", "tls_protocol", "method", "content_type"}, Scope: "access_protected", MaxMetricHostsPerZone: 1000, MaxMetricSeriesPerWindow: 10000}, Platform: PlatformConfig{MaxMetricSeriesPerWindow: 500}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{MetricCardinalityLimit: 10000, Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
 	c.HTTP.HighCardinalityLimit = 500
 	c.HTTP.HighCardinalityHosts = []string{}
+	c.DEX = DEXConfig{ResultWindow: time.Hour, MaxTests: 1000, MaxMetricSeries: 500}
+	c.Collectors[semconv.CollectorNameDEXTests] = CollectorConfig{Interval: 5 * time.Minute}
 	c.WARP = WARPConfig{LastSeenWindow: 15 * time.Minute, MaxMetricSeries: 500}
 	c.OTLP.MetricDenylist = []string{}
 	c.OTLP.AttributeDenylist = []string{}
@@ -377,6 +386,9 @@ func (c Config) Validate() error {
 	add(c.HTTP.MaxMetricSeriesPerWindow > 0, "http.max_metric_series_per_window must be positive")
 	add(c.Firewall.MaxMetricSeriesPerWindow > 0, "firewall.max_metric_series_per_window must be positive")
 	add(c.Platform.MaxMetricSeriesPerWindow > 0, "platform.max_metric_series_per_window must be positive")
+	add(c.DEX.ResultWindow >= time.Hour && c.DEX.ResultWindow <= 168*time.Hour, "dex.result_window must be between 1h and 168h")
+	add(c.DEX.MaxTests >= 1 && c.DEX.MaxTests <= 10000, "dex.max_tests must be between 1 and 10000")
+	add(c.DEX.MaxMetricSeries >= 6 && c.DEX.MaxMetricSeries <= 5000, "dex.max_metric_series must be between 6 and 5000 (six remainder slots)")
 	add(c.WARP.LastSeenWindow > 0 && c.WARP.LastSeenWindow <= time.Hour, "warp.last_seen_window must be positive and at most 60m")
 	add(c.WARP.MaxMetricSeries >= 1 && c.WARP.MaxMetricSeries <= 5000, "warp.max_metric_series must be between 1 and 5000")
 	add(c.Identity.MatchWindow > 0, "identity.match_window must be positive")
@@ -391,7 +403,7 @@ func (c Config) Validate() error {
 		if v.Enabled {
 			add(v.Interval > 0, name+".interval must be positive")
 			add(v.InitialLookback >= 0, name+".initial_lookback must be nonnegative")
-			if name != "certs.packs" && name != "tunnels.status" && name != "httpreq.transfer" && name != "access.seats" && name != "warp.fleet" {
+			if name != "certs.packs" && name != "tunnels.status" && name != "httpreq.transfer" && name != "access.seats" && name != "warp.fleet" && name != semconv.CollectorNameDEXTests {
 				add(v.MaxWindow > 0, name+".max_window must be positive")
 			}
 		}
