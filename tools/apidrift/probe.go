@@ -488,6 +488,8 @@ func restProbeQuery(name string, now time.Time) url.Values {
 	from := now.Add(-time.Hour).Format(time.RFC3339Nano)
 	to := now.Format(time.RFC3339Nano)
 	switch name {
+	case "d1-databases", "kv-namespaces", "queues-list", "do-namespaces":
+		return url.Values{"page": {"1"}, "per_page": {"50"}}
 	case "warp-devices":
 		return url.Values{"page": {"1"}, "per_page": {"50"}, "source": {"last_seen"}, "from": {now.Add(-15 * time.Minute).UTC().Format("2006-01-02T15:04:05.000Z")}, "to": {now.UTC().Format("2006-01-02T15:04:05.000Z")}}
 	case "access-logins":

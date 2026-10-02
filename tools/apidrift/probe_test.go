@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,6 +16,7 @@ import (
 	"time"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
+	"github.com/rknightion/cf2otel/internal/config"
 )
 
 type fakeAPI struct {
@@ -78,6 +82,90 @@ func TestUnentitledOptionalDatasetDoesNotMaskEnabledDatasetDrift(t *testing.T) {
 	}
 	if diffs := probe(context.Background(), fakeAPI{contract: c}, changed); !strings.Contains(strings.Join(diffs, "\n"), "newField") {
 		t.Fatalf("enabled dataset drift was masked: %v", diffs)
+	}
+}
+
+func TestPlatformCatalogProbeThroughHTTP(t *testing.T) {
+	c, err := loadContract("../../spec/cloudflare/contract.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, endpoint := range []struct {
+		name  string
+		count int
+	}{
+		{"d1-databases", 6},
+		{"kv-namespaces", 3},
+		{"queues-list", 4},
+		{"do-namespaces", 18},
+	} {
+		t.Run(endpoint.name, func(t *testing.T) {
+			var entry restContract
+			for _, candidate := range c.REST {
+				if candidate.Name == endpoint.name {
+					entry = candidate
+					break
+				}
+			}
+			if entry.Name == "" || !entry.CheckAllRows {
+				t.Fatal("platform catalog must check all rows")
+			}
+			for _, scenario := range []struct {
+				name       string
+				count, cap int
+				wantDiff   string
+			}{
+				{name: "small-catalog", count: endpoint.count},
+				{name: "over-bound", count: 51, wantDiff: "checked 50 of 51 rows"},
+				{name: "server-cap", count: endpoint.count, cap: 2, wantDiff: fmt.Sprintf("checked 2 of %d rows", endpoint.count)},
+			} {
+				t.Run(scenario.name, func(t *testing.T) {
+					rows := make([]map[string]any, scenario.count)
+					for i := range rows {
+						rows[i] = map[string]any{}
+						for _, field := range entry.RequiredFields {
+							setField(rows[i], field, "opaque")
+						}
+					}
+					var catalogQueries []url.Values
+					server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						w.Header().Set("Content-Type", "application/json")
+						switch r.URL.Path {
+						case "/accounts":
+							_, _ = w.Write([]byte(`{"success":true,"result":[{"id":"opaque-account"}]}`))
+						case "/zones":
+							_, _ = w.Write([]byte(`{"success":true,"result":[{"id":"opaque-zone","account":{"id":"opaque-account"}}]}`))
+						case strings.ReplaceAll(entry.Path, "{account}", "opaque-account"):
+							query := r.URL.Query()
+							catalogQueries = append(catalogQueries, query)
+							_ = json.NewEncoder(w).Encode(map[string]any{
+								"success":     true,
+								"result":      paginateFakeRows(rows, query, scenario.cap),
+								"result_info": map[string]any{"total_count": len(rows)},
+							})
+						default:
+							t.Errorf("unexpected fixture route %s", r.URL.Path)
+							w.WriteHeader(http.StatusNotFound)
+						}
+					}))
+					defer server.Close()
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					api := cfapi.New(config.CloudflareConfig{APIBase: server.URL})
+					diffs := probe(ctx, api, contract{REST: []restContract{entry}})
+					if scenario.wantDiff == "" {
+						if len(diffs) != 0 {
+							t.Fatalf("small catalog must be fully checked: %v", diffs)
+						}
+					} else if len(diffs) != 1 || diffs[0] != "REST "+entry.Name+" scope #1: "+scenario.wantDiff {
+						t.Fatalf("incomplete coverage must remain visible: %v", diffs)
+					}
+					if len(catalogQueries) != 1 || catalogQueries[0].Get("page") != "1" || catalogQueries[0].Get("per_page") != "50" {
+						t.Fatalf("expected one bounded page=1/per_page=50 request: %v", catalogQueries)
+					}
+				})
+			}
+		})
 	}
 }
 
