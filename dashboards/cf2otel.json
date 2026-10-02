@@ -7306,6 +7306,190 @@
           }
         }
       },
+      "panel-2117": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_firewall_events_total{service_name=\"cf2otel\",cloudflare_firewall_zone=~\"$zone\",cloudflare_firewall_bot_score_bucket!=\"\"}[$__rate_interval])",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cloudflare_firewall_zone}} / {{instance}} / interval={{cloudflare_firewall_bot_score_bucket}} / score source={{cloudflare_firewall_bot_score_source}} / action={{cloudflare_firewall_action}} / engine={{cloudflare_firewall_source}} / rule={{cloudflare_firewall_rule_id}} / {{cloudflare_firewall_rule_description}} / {{cloudflare_firewall_host}} / {{cloudflare_firewall_client_country}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Firewall Groups event counter rates, not sampled logs or a latency histogram. Each zone, source tuple and exporter instance stays independent; no replica totals. Account scope is the exporter's configured account, not a multi-account aggregate. Optional enrichment is selected only when advertised and within the field budget; fallback keeps base firewall counts without inventing bot dimensions. No enabled live zone currently advertises these fields: source/fixture coverage only. Missing data can mean unadvertised, empty, failed or expired, never a fabricated healthy zero. Exporter-defined width-ten numeric bins cover 0-255 (0-9 through 250-255), not vendor human/bot classes or sentinel meanings. Score source names have 32 sticky admissions plus other. The total series cap can emit an all-other remainder across all dimensions; other is not a numeric bin or a specific source. Selecting one zone excludes that cross-zone remainder. Zone-filtered only; the HTTP host dropdown does not apply.",
+          "id": 2117,
+          "links": [],
+          "title": "Firewall events by numeric bot score interval",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "No data",
+                  "unit": "reqps"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2118": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(cloudflare_firewall_events_total{service_name=\"cf2otel\",cloudflare_firewall_zone=~\"$zone\",cloudflare_firewall_bot_score_source!=\"\"}[$__rate_interval])",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cloudflare_firewall_zone}} / {{instance}} / interval={{cloudflare_firewall_bot_score_bucket}} / score source={{cloudflare_firewall_bot_score_source}} / action={{cloudflare_firewall_action}} / engine={{cloudflare_firewall_source}} / rule={{cloudflare_firewall_rule_id}} / {{cloudflare_firewall_rule_description}} / {{cloudflare_firewall_host}} / {{cloudflare_firewall_client_country}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Firewall Groups event counter rates, not sampled logs or a latency histogram. Each zone, source tuple and exporter instance stays independent; no replica totals. Account scope is the exporter's configured account, not a multi-account aggregate. Optional enrichment is selected only when advertised and within the field budget; fallback keeps base firewall counts without inventing bot dimensions. No enabled live zone currently advertises these fields: source/fixture coverage only. Missing data can mean unadvertised, empty, failed or expired, never a fabricated healthy zero. Exporter-defined width-ten numeric bins cover 0-255 (0-9 through 250-255), not vendor human/bot classes or sentinel meanings. Score source names have 32 sticky admissions plus other. The total series cap can emit an all-other remainder across all dimensions; other is not a numeric bin or a specific source. Selecting one zone excludes that cross-zone remainder. Zone-filtered only; the HTTP host dropdown does not apply.",
+          "id": 2118,
+          "links": [],
+          "title": "Firewall events by bot score source",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "noValue": "No data",
+                  "unit": "reqps"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
       "panel-2121": {
         "kind": "Panel",
         "spec": {
@@ -18924,6 +19108,104 @@
           }
         }
       },
+      "panel-2690": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_loadbalancers_pool_health_ratio{service_name=\"cf2otel\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "",
+                        "range": false,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "organize",
+                  "spec": {
+                    "id": "organize",
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true,
+                        "service_name": true
+                      },
+                      "indexByName": {
+                        "Value": 2,
+                        "cloudflare_loadbalancers_pool_name": 1,
+                        "instance": 0
+                      },
+                      "renameByName": {
+                        "Value": "Provider flag (1/0)",
+                        "cloudflare_loadbalancers_pool_name": "Pool name",
+                        "instance": "Exporter instance"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "description": "Partial, unattributed direct provider health flag: true=1, false=0; unknown is omitted. Not regional pool availability, origin health, RTT or request analytics. Disabled by default, fixture-only; no populated live source is claimed. Account-wide within each exporter's configured account; zone and host dropdowns do not apply. Resolved pool names are capped, and exporter instances remain separate. other is the minimum of known overflow flags (including a literal pool named other), not complete fleet coverage or mixed-pool availability. No footer aggregate. Snapshots expire after three configured collector intervals; unknown/empty valid snapshots remove prior flags. No data is unknown, disabled, failed or expired, not healthy zero. The Prometheus ratio suffix is unit-1 translation, not a measured availability ratio.",
+          "id": 2690,
+          "links": [],
+          "title": "Load balancer direct provider health flags (partial)",
+          "vizConfig": {
+            "group": "table",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": false
+                  },
+                  "decimals": 0,
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "options": {
+                "cellHeight": "sm",
+                "footer": {
+                  "countRows": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "show": false
+                },
+                "showHeader": true
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
       "panel-2701": {
         "kind": "Panel",
         "spec": {
@@ -27698,6 +27980,46 @@
                         },
                         "title": "Audit logs"
                       }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "collapse": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2117"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2118"
+                                  },
+                                  "height": 8,
+                                  "width": 12,
+                                  "x": 12,
+                                  "y": 0
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "title": "Advertised bot score dimensions"
+                      }
                     }
                   ]
                 }
@@ -30388,6 +30710,33 @@
                           }
                         },
                         "title": "DEX test results (opt-in provider averages)"
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "collapse": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2690"
+                                  },
+                                  "height": 8,
+                                  "width": 24,
+                                  "x": 0,
+                                  "y": 0
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "title": "Load balancer provider flags (partial opt-in)"
                       }
                     }
                   ]

@@ -34,6 +34,29 @@ def without_resource_and_dex_additions(dashboard):
             rows.remove(row)
 
 
+def without_bot_and_lb_additions(dashboard):
+    """Exclude only DASH-4's explicit additive rows, not any earlier object."""
+    additions = {
+        "Security": ("Advertised bot score dimensions", {"panel-2117", "panel-2118"}),
+        "Workers and platform": ("Load balancer provider flags (partial opt-in)", {"panel-2690"}),
+    }
+    for tab in dashboard["spec"]["layout"]["spec"]["tabs"]:
+        addition = additions.get(tab["spec"]["title"])
+        if addition is None:
+            continue
+        title, panels = addition
+        rows = tab["spec"]["layout"]["spec"]["rows"]
+        for row in list(rows):
+            if row["spec"]["title"] == title:
+                actual = {item["spec"]["element"]["name"]
+                          for item in row["spec"]["layout"]["spec"]["items"]}
+                if actual != panels:
+                    raise AssertionError("unexpected objects in DASH-4 additive row")
+                for panel in panels:
+                    dashboard["spec"]["elements"].pop(panel)
+                rows.remove(row)
+
+
 class AuditAnnotationsTest(unittest.TestCase):
     def test_generated_layer_reaches_loki_with_audit_context(self):
         # Exercise the generator's public CLI without rewriting the tracked output.
@@ -482,6 +505,7 @@ class WARPFleetTest(unittest.TestCase):
                     asset["spec"]["elements"].pop(f"panel-{pid}")
         for asset in (dashboard, original):
             without_resource_and_dex_additions(asset)
+            without_bot_and_lb_additions(asset)
         self.assertEqual(dashboard, original, "all previous panels, layouts and dashboard settings must survive")
 
     def test_invalid_deployment_settings_fail_without_output(self):
@@ -576,6 +600,7 @@ class HTTPDimensionsTest(unittest.TestCase):
                 original["spec"]["elements"].pop(f"panel-{pid}")
         for asset in (dashboard, original):
             without_resource_and_dex_additions(asset)
+            without_bot_and_lb_additions(asset)
         self.assertEqual(dashboard, original, "only the new HTTP panels and appended row may change")
 
     def test_invalid_static_intervals_fail_without_output(self):
@@ -585,6 +610,82 @@ class HTTPDimensionsTest(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("GRAFANA_HTTP_HIGH_CARDINALITY_INTERVAL_SECONDS must be a positive integer in seconds", result.stderr)
                 self.assertIsNone(dashboard)
+
+
+class BotAndPoolPanelsTest(unittest.TestCase):
+    def dashboard(self):
+        return HTTPDimensionsTest().generate()[1]
+
+    def target(self, pid):
+        dashboard = self.dashboard()
+        self.assertIn(f"panel-{pid}", dashboard["spec"]["elements"],
+                      "landed bot dimensions and partial pool health need source panels")
+        panel = dashboard["spec"]["elements"][f"panel-{pid}"]["spec"]
+        return panel["data"]["spec"]["queries"][0]["spec"]["query"]["spec"]
+
+    def evaluate(self, series, tests):
+        fixture = {"rule_files": [], "evaluation_interval": "1m", "tests": [{
+            "interval": "1m", "input_series": series, "promql_expr_test": tests}]}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bot-pool.json"
+            path.write_text(json.dumps(fixture))
+            result = subprocess.run(["promtool", "test", "rules", str(path)],
+                                    capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_bot_queries_keep_reset_instances_numeric_bins_and_source_remainder(self):
+        metric = "cloudflare_firewall_events_total"
+        # Same tuple on independent pollers, one resetting. Source-only enrichment
+        # and base-only counts must not fabricate numeric bins or zeroes.
+        tuples = [("fixture-a", "250-255", "other", "0 60 0 60 120 180", 0.75),
+                  ("fixture-b", "250-255", "other", "0 60 120 180 240 300", 1),
+                  ("fixture-a", "0-9", "fixture-source", "0 0 0 0 0 0", 0),
+                  ("fixture-a", "", "fixture-source", "0 30 60 90 120 150", 0.5),
+                  ("fixture-a", "", "", "0 60 120 180 240 300", 1)]
+        series, samples = [], []
+        for instance, bucket, source, values, value in tuples:
+            labels = {"service_name": "cf2otel", "instance": instance,
+                      "cloudflare_firewall_zone": "fixture-zone"}
+            if bucket:
+                labels["cloudflare_firewall_bot_score_bucket"] = bucket
+            if source:
+                labels["cloudflare_firewall_bot_score_source"] = source
+            encoded = ",".join(f'{key}="{val}"' for key, val in sorted(labels.items()))
+            series.append({"series": metric + "{" + encoded + "}", "values": values})
+            samples.append({"labels": "{" + encoded + "}", "value": value})
+        for pid, field in ((2117, "cloudflare_firewall_bot_score_bucket"),
+                           (2118, "cloudflare_firewall_bot_score_source")):
+            target = self.target(pid)
+            expression = target["expr"].replace("$zone", "fixture-zone").replace("$__rate_interval", "5m")
+            expected = [s for s in samples if field + "=" in s["labels"]]
+            self.evaluate(series, [{"expr": expression, "eval_time": "5m", "exp_samples": expected},
+                                   {"expr": expression, "eval_time": "15m", "exp_samples": []}])
+
+    def test_pool_query_keeps_provider_zero_one_other_instances_and_stale_absence(self):
+        target = self.target(2690)
+        metric = "cloudflare_loadbalancers_pool_health_ratio"
+        series, samples = [], []
+        for instance, pool, value in (("fixture-a", "fixture-pool", 0),
+                                      ("fixture-b", "fixture-pool", 1),
+                                      ("fixture-a", "other", 0)):
+            labels = (f'instance="{instance}",service_name="cf2otel",'
+                      f'cloudflare_loadbalancers_pool_name="{pool}"')
+            series.append({"series": metric + "{" + labels + "}",
+                           "values": f"{value} {value} stale"})
+            samples.append({"labels": metric + "{" + labels + "}", "value": value})
+        self.evaluate(series, [{"expr": target["expr"], "eval_time": "1m", "exp_samples": samples},
+                               {"expr": target["expr"], "eval_time": "2m", "exp_samples": []}])
+
+    def test_only_explicit_bot_and_pool_additions_change_prior_objects(self):
+        dashboard = self.dashboard()
+        for pid in (2117, 2118, 2690):
+            self.assertIn(f"panel-{pid}", dashboard["spec"]["elements"])
+        baseline = subprocess.run(["git", "show", "HEAD:dashboards/cf2otel.json"], cwd=ROOT,
+                                  check=True, capture_output=True, text=True, timeout=30)
+        original = json.loads(baseline.stdout)
+        for asset in (dashboard, original):
+            without_bot_and_lb_additions(asset)
+        self.assertEqual(dashboard, original, "all old objects and layout must remain unchanged")
 
 
 if __name__ == "__main__":

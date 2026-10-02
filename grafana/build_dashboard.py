@@ -744,6 +744,30 @@ def security_tab(d: Dashboard) -> dict:
                "cloudflare_firewall_host", "cloudflare_firewall_client_country", "cloudflare_firewall_action", "cloudflare_firewall_source", "Value"],
         hide=["__name__"], sort_by="Events", decimals=0)
 
+    bot_description = (
+        "Firewall Groups event counter rates, not sampled logs or a latency histogram. "
+        "Each zone, source tuple and exporter instance stays independent; no replica totals. "
+        "Account scope is the exporter's configured account, not a multi-account aggregate. "
+        "Optional enrichment is selected only when advertised and within the field budget; "
+        "fallback keeps base firewall counts without inventing bot dimensions. No enabled live zone "
+        "currently advertises these fields: source/fixture coverage only. Missing data can mean "
+        "unadvertised, empty, failed or expired, never a fabricated healthy zero. "
+        "Exporter-defined width-ten numeric bins cover 0-255 (0-9 through 250-255), not vendor "
+        "human/bot classes or sentinel meanings. Score source names have 32 sticky admissions plus other. "
+        "The total series cap can emit an all-other remainder across all dimensions; other is not a "
+        "numeric bin or a specific source. Selecting one zone excludes that cross-zone remainder. "
+        "Zone-filtered only; the HTTP host dropdown does not apply."
+    )
+    for pid, title, label in ((2117, "Firewall events by numeric bot score interval", "cloudflare_firewall_bot_score_bucket"),
+                              (2118, "Firewall events by bot score source", "cloudflare_firewall_bot_score_source")):
+        d.ts(pid, title, bot_description,
+            [prom(f'rate(cloudflare_firewall_events_total{{{FW},{label}!=""}}[$__rate_interval])',
+                  '{{cloudflare_firewall_zone}} / {{instance}} / interval={{cloudflare_firewall_bot_score_bucket}} / '
+                  'score source={{cloudflare_firewall_bot_score_source}} / action={{cloudflare_firewall_action}} / '
+                  'engine={{cloudflare_firewall_source}} / rule={{cloudflare_firewall_rule_id}} / '
+                  '{{cloudflare_firewall_rule_description}} / {{cloudflare_firewall_host}} / {{cloudflare_firewall_client_country}}')],
+            unit="reqps", no_value="No data")
+
     d.ts(913, "Audit events by product", "Audit events per bar interval by resource product; entries without a product are account-level and show as account.",
         [prom(f'label_replace(sum by (cloudflare_audit_resource_product) (increase(cloudflare_audit_events_total{{{S}}}[$__interval])), '
               f'"cloudflare_audit_resource_product", "account", "cloudflare_audit_resource_product", "")', "{{cloudflare_audit_resource_product}}")],
@@ -775,6 +799,7 @@ def security_tab(d: Dashboard) -> dict:
         row("Account audit log", [(913, 12, 8), (2121, 12, 8), (2122, 24, 10)]),
         row("Firewall event logs", [(2131, 24, 12)], collapse=True),
         row("Audit logs", [(2132, 24, 12)], collapse=True),
+        row("Advertised bot score dimensions", [(2117, 12, 8), (2118, 12, 8)]),
     ])
 
 
@@ -1421,6 +1446,21 @@ def platform_tab(d: Dashboard) -> dict:
              "{{cloudflare_dex_test_name}} / {{cloudflare_dex_test_kind}} / {{instance}}")],
              unit=unit, legend="table", no_value="Unavailable")
 
+    d.table(2690, "Load balancer direct provider health flags (partial)",
+        "Partial, unattributed direct provider health flag: true=1, false=0; unknown is omitted. "
+        "Not regional pool availability, origin health, RTT or request analytics. Disabled by default, "
+        "fixture-only; no populated live source is claimed. Account-wide within each exporter's configured "
+        "account; zone and host dropdowns do not apply. Resolved pool names are capped, and exporter "
+        "instances remain separate. other is the minimum of known overflow flags (including a literal "
+        "pool named other), not complete fleet coverage or mixed-pool availability. No footer aggregate. "
+        "Snapshots expire after three configured collector intervals; unknown/empty valid snapshots "
+        "remove prior flags. No data is unknown, disabled, failed or expired, not healthy zero. "
+        "The Prometheus ratio suffix is unit-1 translation, not a measured availability ratio.",
+        [table_q(f'cloudflare_loadbalancers_pool_health_ratio{{{S}}}')],
+        columns={"instance": "Exporter instance", "cloudflare_loadbalancers_pool_name": "Pool name", "Value": "Provider flag (1/0)"},
+        order=["instance", "cloudflare_loadbalancers_pool_name", "Value"],
+        hide=["__name__", "service_name"], decimals=0)
+
     return tab(TAB_PLATFORM, [
         row("At a glance", [(pid, 3, 4) for pid, *_ in glance]),
         row("Workers", [(501, 16, 9), (2611, 8, 9)]),
@@ -1440,6 +1480,7 @@ def platform_tab(d: Dashboard) -> dict:
                                                      (2668, 8, 8), (2669, 8, 8), (2670, 8, 8)]),
         row("Resolved platform resources and R2 actions", [(pid, 12, 8) for pid, *_ in resource_panels] + [(2683, 24, 8)]),
         row("DEX test results (opt-in provider averages)", [(pid, 12, 8) for pid, *_ in dex_panels]),
+        row("Load balancer provider flags (partial opt-in)", [(2690, 24, 8)]),
     ])
 
 
