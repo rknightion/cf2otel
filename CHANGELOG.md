@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0](https://github.com/rknightion/cf2otel/compare/v0.16.1...v0.17.0) (2026-10-03)
+
+
+### Features
+
+* **cfapi:** back off unavailable zone datasets before retrying ([062bbe7](https://github.com/rknightion/cf2otel/commit/062bbe7d36b3abfcc675ddb712a7fdcbd6a8f3b2))
+
 ## [0.16.1](https://github.com/rknightion/cf2otel/compare/v0.16.0...v0.16.1) (2026-10-03)
 
 
