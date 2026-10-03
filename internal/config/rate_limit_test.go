@@ -44,7 +44,7 @@ func TestRateLimitLoadDefaultsAndPrecedence(t *testing.T) {
 }
 
 func TestRateLimitLoadIntegerBurst(t *testing.T) {
-	for _, value := range []string{"true", "1.9", ".inf", "9223372036854775808", "18446744073709551616", "[]"} {
+	for _, value := range []string{"true", "1.9", ".inf", "9223372036854775808", "18446744073709551616", "[]", "0", "-1", "1001"} {
 		t.Run("YAML_"+value, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.yaml")
 			if err := os.WriteFile(path, []byte("cloudflare:\n  rate_limit:\n    burst: "+value+"\n"), 0600); err != nil {
@@ -55,7 +55,7 @@ func TestRateLimitLoadIntegerBurst(t *testing.T) {
 			}
 		})
 	}
-	for _, value := range []string{"true", "1.9", "1.0", "9223372036854775808", ""} {
+	for _, value := range []string{"true", "1.9", "1.0", "9223372036854775808", "", "0", "-1", "1001"} {
 		t.Run("ENV_"+value, func(t *testing.T) {
 			t.Setenv("CF2OTEL_CLOUDFLARE__RATE_LIMIT__BURST", value)
 			if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "cloudflare.rate_limit.burst") {
@@ -63,8 +63,8 @@ func TestRateLimitLoadIntegerBurst(t *testing.T) {
 			}
 		})
 	}
-	// Numeric YAML spelling is immaterial; exact integral values within int range work.
-	for _, value := range []string{"2", "2.0", strconv.Itoa(int(^uint(0) >> 1))} {
+	// Numeric YAML spelling is immaterial; exact integral values in [1,1000] work.
+	for _, value := range []string{"1", "2", "2.0", "1000"} {
 		t.Run("valid_"+value, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.yaml")
 			if err := os.WriteFile(path, []byte("cloudflare:\n  rate_limit:\n    burst: "+value+"\n"), 0600); err != nil {
@@ -86,7 +86,7 @@ func TestRateLimitLoadIntegerBurst(t *testing.T) {
 }
 
 func TestRateLimitValidation(t *testing.T) {
-	for _, bad := range []RateLimitConfig{{0, 1}, {-1, 1}, {math.NaN(), 1}, {math.Inf(1), 1}, {0.5, 0}, {0.5, -1}} {
+	for _, bad := range []RateLimitConfig{{0, 1}, {-1, 1}, {math.NaN(), 1}, {math.Inf(1), 1}, {0.5, 0}, {0.5, -1}, {0.5, 1001}} {
 		if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "cloudflare.rate_limit") {
 			t.Errorf("invalid limit %+v accepted: %v", bad, err)
 		}

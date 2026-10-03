@@ -75,8 +75,8 @@ func (c RateLimitConfig) Validate() error {
 	if math.IsNaN(c.RequestsPerSecond) || math.IsInf(c.RequestsPerSecond, 0) || c.RequestsPerSecond <= 0 {
 		return errors.New("cloudflare.rate_limit.requests_per_second must be finite and positive")
 	}
-	if c.Burst < 1 {
-		return errors.New("cloudflare.rate_limit.burst must be at least 1")
+	if c.Burst < 1 || c.Burst > 1000 {
+		return errors.New("cloudflare.rate_limit.burst must be an integer in [1, 1000]")
 	}
 	return nil
 }
@@ -296,12 +296,12 @@ func Load(path string) (*Config, error) {
 }
 
 // integerBurst accepts numeric integers without imposing a YAML spelling.
-// Environment strings must parse as integers, and all values must fit an int.
+// Environment strings must parse as integers; all values must be in [1,1000].
 func integerBurst(raw any) (int, error) {
-	invalid := errors.New("cloudflare.rate_limit.burst must be an integer within int range")
+	invalid := errors.New("cloudflare.rate_limit.burst must be an integer in [1, 1000]")
 	if text, ok := raw.(string); ok {
 		value, err := strconv.Atoi(text)
-		if err != nil {
+		if err != nil || value < 1 || value > 1000 {
 			return 0, invalid
 		}
 		return value, nil
@@ -310,20 +310,17 @@ func integerBurst(raw any) (int, error) {
 	switch value.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		n := value.Int()
-		if int64(int(n)) == n {
+		if n >= 1 && n <= 1000 {
 			return int(n), nil
 		}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		n := value.Uint()
-		if n <= uint64(^uint(0)>>1) {
+		if n >= 1 && n <= 1000 {
 			return int(n), nil
 		}
 	case reflect.Float32, reflect.Float64:
 		n := value.Float()
-		// The upper bound is exclusive: float64(maxInt) rounds up on 64-bit
-		// systems, so comparison against maxInt would allow an overflow.
-		bound := math.Ldexp(1, strconv.IntSize-1)
-		if n >= -bound && n < bound && math.Trunc(n) == n {
+		if n >= 1 && n <= 1000 && math.Trunc(n) == n {
 			return int(n), nil
 		}
 	}

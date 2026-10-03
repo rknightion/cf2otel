@@ -13,11 +13,12 @@ import (
 // One budget covers every client, account, page, retry and redirect in this
 // process. Configure it before any Cloudflare traffic; construction never
 // resets tokens or grants another client its own burst.
-var processBudget = &tokenBucket{rate: 0.5, capacity: 1, tokens: 1}
+var processBudget = &tokenBucket{rate: 0.5, burst: 1, capacity: 1, tokens: 1}
 
 type tokenBucket struct {
 	mu                     sync.Mutex
 	rate, capacity, tokens float64
+	burst                  int // Exact configuration identity, separate from token arithmetic.
 	last                   time.Time
 	started                bool
 }
@@ -32,12 +33,13 @@ func ConfigureProcessRateLimit(cfg config.RateLimitConfig) error {
 	b := processBudget
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.rate == cfg.RequestsPerSecond && b.capacity == float64(cfg.Burst) {
+	if b.rate == cfg.RequestsPerSecond && b.burst == cfg.Burst {
 		return nil
 	}
 	if b.started {
 		return errors.New("cloudflare process rate limit already in use")
 	}
+	b.burst = cfg.Burst
 	b.rate, b.capacity, b.tokens = cfg.RequestsPerSecond, float64(cfg.Burst), float64(cfg.Burst)
 	return nil
 }

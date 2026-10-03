@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -18,6 +20,68 @@ import (
 // A subprocess is the process edge: configuration is immutable after traffic,
 // so this exercises a genuinely fresh configured process rather than resetting
 // the singleton in a test or changing production defaults for fixtures.
+// The former 64-bit collision must either be rejected at the loader boundary
+// (the bounded contract) or distinguished after real traffic; it cannot silently
+// accept a different active configuration.
+func TestProcessRateLimitReviewIntegerCollision(t *testing.T) {
+	if os.Getenv("LOOP_TEST_COLLISION_CHILD") != "1" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestProcessRateLimitReviewIntegerCollision$", "-test.v")
+		cmd.Env = append(os.Environ(), "LOOP_TEST_COLLISION_CHILD=1")
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("integer collision process: %v\n%s", err, output)
+		}
+		return
+	}
+	load := func(burst string) (*config.Config, error) {
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		if err := os.WriteFile(path, []byte("cloudflare:\n  rate_limit:\n    burst: "+burst+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		return config.Load(path)
+	}
+	secondBurst := "9223372036854775806"
+	first, err := load("9223372036854775807")
+	if err != nil {
+		if !strings.Contains(err.Error(), "cloudflare.rate_limit.burst") {
+			t.Fatal(err)
+		}
+		if _, err := load("9223372036854775806"); err == nil || !strings.Contains(err.Error(), "cloudflare.rate_limit.burst") {
+			t.Fatalf("second oversized burst not rejected: %v", err)
+		}
+		// Under the bounded contract, also exercise exact integer identity
+		// at the largest supported capacity through the same public path.
+		first, err = load("1000")
+		if err != nil {
+			t.Fatal(err)
+		}
+		secondBurst = "999"
+	}
+	if err := ConfigureProcessRateLimit(first.Cloudflare.RateLimit); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"result":[]}`))
+	}))
+	defer server.Close()
+	first.Cloudflare.APIBase = server.URL
+	var out []any
+	if err := New(first.Cloudflare).Get(context.Background(), "/first", nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if err := ConfigureProcessRateLimit(first.Cloudflare.RateLimit); err != nil {
+		t.Fatalf("identical integer burst rejected after HTTP traffic: %v", err)
+	}
+	second, err := load(secondBurst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ConfigureProcessRateLimit(second.Cloudflare.RateLimit); err == nil {
+		t.Fatal("distinct integer bursts collided after HTTP traffic")
+	}
+}
+
 func TestProcessRateLimitRepeatedConfiguration(t *testing.T) {
 	if os.Getenv("CF2OTEL_TEST_LIFECYCLE_CHILD") != "1" {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
