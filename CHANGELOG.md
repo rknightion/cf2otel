@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.16.1](https://github.com/rknightion/cf2otel/compare/v0.16.0...v0.16.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* **cfapi:** bound burst inputs and preserve integer limiter identity ([1ed8339](https://github.com/rknightion/cf2otel/commit/1ed8339d0c61d8d1881cb08f8b557ea2ef3882d9))
+* **cfapi:** pace shared requests and refuse GraphQL redirects ([069c5e7](https://github.com/rknightion/cf2otel/commit/069c5e7b95406d0e512d0700ed9bbd256aa5fdc0))
+* **config:** reject undersized Workers AI windows ([d6edca7](https://github.com/rknightion/cf2otel/commit/d6edca7e8482cc76716c9d91511f3be42af1924f))
+* **config:** validate effective burst before weak decoding ([72bd3e9](https://github.com/rknightion/cf2otel/commit/72bd3e95279222444c099a210689b3746dcf510d))
+* **config:** validate exact raw YAML rate limit bursts ([652c55e](https://github.com/rknightion/cf2otel/commit/652c55e852cd7e27a23fe4c8b3fae6741c58af26))
+* **platform:** sync fixture state and budget dimension ([87b845c](https://github.com/rknightion/cf2otel/commit/87b845c0b25ee07d3621840666dfd387bbfbd16e))
+* **platform:** withdraw unproven fixture race hardening ([be8c345](https://github.com/rknightion/cf2otel/commit/be8c345521a0f4f60be86e6ef50d68dc7d495c53))
+* **pushscan:** classify dotted suffixes as part of IPv6 exceptions ([78ecd03](https://github.com/rknightion/cf2otel/commit/78ecd03a2f425f638d43d2e959ad8e5acdabd1be))
+* **pushscan:** report allowed historical addresses ([c489845](https://github.com/rknightion/cf2otel/commit/c48984531e0ee02c1d2ad11d336ad01850352ff7))
+* **pushscan:** report only complete IPv6 address exceptions ([6070c6e](https://github.com/rknightion/cf2otel/commit/6070c6eed2c4209f2555f43bf4835cc1f238d9f5))
+* **workersai:** require two buckets for unaligned startup windows ([7982ce7](https://github.com/rknightion/cf2otel/commit/7982ce75f8e0e5500678f273ea1876626c55ce0c))
+
 ## [0.16.0](https://github.com/rknightion/cf2otel/compare/v0.15.0...v0.16.0) (2026-10-03)
 
 
