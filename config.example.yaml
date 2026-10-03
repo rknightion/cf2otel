@@ -9,6 +9,7 @@ cloudflare:
   api_base: https://api.cloudflare.com/client/v4
   timeout: 30s
   max_response_bytes: 16777216
+  entitlement_backoff: 1h # Positive duration; retry disabled/absent zone datasets.
   rate_limit:
     requests_per_second: 0.5
     burst: 1 # Integer in [1, 1000].

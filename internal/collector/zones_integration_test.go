@@ -3,7 +3,11 @@ package collector_test
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -131,4 +135,97 @@ func assertZoneGauge(t *testing.T, out *telemetry.Buffer, domain, name, reason s
 		return
 	}
 	t.Fatalf("missing gauge %s/%s", name, reason)
+}
+
+// The registered collector observes absence as a skip, never a successful empty
+// source for a schema failure. Complete-poll metrics remain bounded snapshots.
+func TestRegisteredDNSEntitlementHTTPBackoffAndSchemaRecovery(t *testing.T) {
+	for _, initial := range []string{"absent", "disabled", "missing-fields", "null-fields"} {
+		t.Run(initial, func(t *testing.T) {
+			var mu sync.Mutex
+			recovered := false
+			settingsCalls := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/zones" {
+					_, _ = w.Write([]byte(`{"success":true,"result":[{"id":"opaque-a","name":"fixture-a"},{"id":"opaque-b","name":"fixture-b"}],"result_info":{"page":1,"total_pages":1}}`))
+					return
+				}
+				var body struct {
+					Query string `json:"query"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&body)
+				mu.Lock()
+				defer mu.Unlock()
+				if !strings.Contains(body.Query, "settings{") {
+					_, _ = w.Write([]byte(`{"data":{"viewer":{"zones":[{"dnsAnalyticsAdaptiveGroups":[]}]}}}`))
+					return
+				}
+				raw := `{"enabled":true,"availableFields":["count"],"maxNumberOfFields":1}`
+				target := strings.Contains(body.Query, "opaque-b")
+				if target {
+					settingsCalls++
+					if !recovered {
+						switch initial {
+						case "disabled":
+							raw = `{"enabled":false}`
+						case "missing-fields":
+							raw = `{"enabled":true}`
+						case "null-fields":
+							raw = `{"enabled":true,"availableFields":null}`
+						}
+					}
+				}
+				settings := `"dnsAnalyticsAdaptiveGroups":` + raw
+				if target && !recovered && initial == "absent" {
+					settings = ""
+				}
+				_, _ = w.Write([]byte(`{"data":{"viewer":{"zones":[{"settings":{` + settings + `}}]}}}`))
+			}))
+			defer srv.Close()
+			cfg := config.Default()
+			cfg.Cloudflare.APIBase = srv.URL
+			cfg.Collectors = map[string]config.CollectorConfig{"dns.metrics": {Enabled: true}}
+			api := cfapi.New(cfg.Cloudflare)
+			registry := collector.NewRegistry()
+			dns.Register(collector.Deps{Config: &cfg, API: api, Registry: registry})
+			run := func() (*telemetry.Buffer, time.Time, error) {
+				out := &telemetry.Buffer{}
+				from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+				mark, err := registry.Entries()[0].Collector.(collector.WindowCollector).CollectWindow(context.Background(), from, from.Add(time.Minute), out)
+				return out, mark, err
+			}
+			out, _, err := run()
+			schema := initial == "missing-fields" || initial == "null-fields"
+			if schema {
+				if err == nil || len(out.Metrics) != 0 {
+					t.Fatalf("schema gap must fail with no partial poll output: err=%v metrics=%v", err, out.Metrics)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("zone denial should skip independently: %v", err)
+				}
+				assertZoneGauge(t, out, "dns.metrics", "cf2otel.zones.skipped", "unentitled", 1)
+				assertZoneGauge(t, out, "dns.metrics", "cf2otel.zones.processed", "", 1)
+			}
+			mu.Lock()
+			recovered = true
+			mu.Unlock()
+			out, mark, err := run()
+			if err != nil || !mark.Equal(time.Date(2026, 1, 1, 0, 1, 0, 0, time.UTC)) {
+				t.Fatalf("next collection: mark=%v err=%v", mark, err)
+			}
+			wantCalls, wantSkipped := 1, float64(1)
+			if schema {
+				wantCalls, wantSkipped = 2, 0
+			}
+			assertZoneGauge(t, out, "dns.metrics", "cf2otel.zones.skipped", "unentitled", wantSkipped)
+			assertZoneGauge(t, out, "dns.metrics", "cf2otel.zones.processed", "", 2-wantSkipped)
+			mu.Lock()
+			n := settingsCalls
+			mu.Unlock()
+			if n != wantCalls {
+				t.Fatalf("settings requests=%d want=%d", n, wantCalls)
+			}
+		})
+	}
 }

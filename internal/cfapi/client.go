@@ -35,13 +35,16 @@ func (e *HTTPError) Error() string {
 }
 
 type HTTPClient struct {
-	base     string
-	token    string
-	client   *http.Client
-	cap      int64
-	observer Observer
-	mu       sync.Mutex
-	settings map[string]cachedSettings
+	base               string
+	token              string
+	client             *http.Client
+	cap                int64
+	observer           Observer
+	mu                 sync.Mutex
+	settings           map[string]cachedSettings
+	now                func() time.Time
+	entitlementBackoff time.Duration
+	settingsPending    map[string]chan struct{}
 }
 type cachedSettings struct {
 	value   DatasetSettings
@@ -59,7 +62,7 @@ func NewObserved(cfg config.CloudflareConfig, obs Observer) *HTTPClient {
 	if cfg.MaxResponseBytes <= 0 {
 		cfg.MaxResponseBytes = 16 << 20
 	}
-	return &HTTPClient{base: strings.TrimRight(cfg.APIBase, "/"), token: cfg.APIToken.Value(), client: &http.Client{Timeout: cfg.Timeout, Transport: observedTransport{next: http.DefaultTransport, observer: obs}, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}, cap: cfg.MaxResponseBytes, observer: obs, settings: make(map[string]cachedSettings)}
+	return &HTTPClient{base: strings.TrimRight(cfg.APIBase, "/"), token: cfg.APIToken.Value(), client: &http.Client{Timeout: cfg.Timeout, Transport: observedTransport{next: http.DefaultTransport, observer: obs}, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}, cap: cfg.MaxResponseBytes, observer: obs, settings: make(map[string]cachedSettings), entitlementBackoff: cfg.EntitlementBackoff}
 }
 func (c *HTTPClient) do(ctx context.Context, method, path string, query url.Values, body []byte) ([]byte, error) {
 	// Guard before URL processing or any I/O.

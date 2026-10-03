@@ -301,7 +301,7 @@ The seat source is `GET /accounts/{account}/access/users`. Cloudflare's [officia
 | `cf2otel.zones.discovered` | `{zone}` | Zones returned by discovery for a complete collector poll. |
 | `cf2otel.zones.filtered` | `{zone}` | Zones removed by include, ownership or exclusion selection, by reason. |
 | `cf2otel.zones.processed` | `{zone}` | Distinct eligible zones queried in a complete collector poll. |
-| `cf2otel.zones.skipped` | `{zone}` | Eligible zones not queried in a complete collector poll, by reason. |
+| `cf2otel.zones.skipped` | `{zone}` | Eligible zones not queried in a complete collector poll, by reason. `unentitled` includes disabled/absent zone datasets during `cloudflare.entitlement_backoff`; no zone or dataset ID labels. |
 | `cf2otel.scrape.duration` | `s` | Collector scrape duration. Explicit histogram boundaries in seconds: 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 7.5, 10, 15, 20, 30, 45, 60, 90, 120. |
 | `cf2otel.scrape.errors` | `1` | Collector scrape errors. |
 | `cf2otel.scrape.last_success_timestamp` | `s` | Time of last successful collector scrape. |

@@ -17,6 +17,7 @@ Settings load in this order: built-in defaults, YAML, then `CF2OTEL_` environmen
 | `health`, `log` | Loopback health listener and application logging. |
 | `firewall` | `rule_dimensions` defaults to false; `max_metric_series_per_window` is a positive total cap, default 500. |
 | `cloudflare.rate_limit` | `requests_per_second` defaults to `0.5` (finite and positive); `burst` defaults to `1` (integer in `[1, 1000]`, checked before decoding YAML or environment overrides). One process-wide token bucket covers all Cloudflare clients, accounts, REST and GraphQL requests, pagination, retries and redirect hops. |
+| `cloudflare.entitlement_backoff` | Positive duration, default `1h`. Disabled or absent GraphQL zone datasets share a timed settings decision across aliases and collectors using the same client, independently per zone and dataset. Override with `CF2OTEL_CLOUDFLARE__ENTITLEMENT_BACKOFF`. |
 
 Collector keys are `access.logins`, `access.login_metrics`, `access.scim`, `access.seats`, `inventory.access`, `httpreq.events`, `httpreq.metrics`, `aigateway.logs`, `aigateway.metrics`, `aigateway.coverage`, `audit.logs`, `firewall.events`, `firewall.metrics`, `dns.events`, `dns.metrics`, `rum.pageloads`, `rum.web_vitals`, `gateway.dns`, `workers.overview`, `workers.invocations`, `turnstile.events`, `logpush.health`, `d1.analytics`, `d1.queries`, `d1.storage`, `kv.operations`, `kv.storage`, `r2.bandwidth`, `r2.catalog_data`, `r2.catalog_maintenance`, `r2.operations`, `r2.storage`, `r2.sql`, `durableobjects.invocations`, `durableobjects.periodic`, `durableobjects.sql_storage`, `durableobjects.subrequests`, `queues.backlog`, `queues.consumer`, `queues.delayed_backlog`, `queues.message_operations`, `email.routing`, `email.sending`, `selfobs`, `certs.packs`, and `tunnels.status`. Enabled collectors default to five-minute intervals. `access.seats` is enabled by default and polls every 15 minutes as a snapshot, without windows or checkpoints. It counts the independent `access_seat` and `gateway_seat` user flags across the complete paginated Access users list, emitting only the bounded seat-type attribute. Both flags may be true for one user; do not sum the two series as a unique billing-user total. An empty list publishes two zeros; missing, null or nonboolean flags, HTTP errors and incomplete pagination fail the scrape without publishing partial counts. To disable it, set `CF2OTEL_COLLECTORS__ACCESS_SEATS__ENABLED=false`; to override its interval, set `CF2OTEL_COLLECTORS__ACCESS_SEATS__INTERVAL=30m`. The email collectors sum Groups counts across account-owned zones over complete five-minute buckets; they emit no zone metric attributes. DMARC is excluded. `aigateway.metrics` is disabled and unscheduled because its GraphQL Groups ingestion lag is not bounded; `aigateway.logs` emits the AI Gateway metrics from REST rows. The default initial lookback is 30 minutes and maximum window is one hour. `aigateway.coverage` is present but disabled by default. The scheduler advances a checkpoint after a successful window or after it drops a window following three payload rejections.
 
@@ -43,6 +44,23 @@ Package users constructing clients directly must call `cfapi.ConfigureProcessRat
 before traffic to override the default; `New` and `NewObserved` share the same
 budget and never reset it. Reapplying identical configuration is a no-op, even after
 traffic; changing configuration after the first acquisition is rejected.
+
+## Zone entitlement retry
+
+Only an explicit `enabled: false` or a dataset absent from a valid zone settings
+object starts entitlement backoff. The next settings request at or after expiry
+rechecks upstream; healthy enabled settings retain the normal 15-minute cache.
+Missing or null `availableFields` on an enabled dataset is a schema error, not
+absence. Authentication, transient and malformed-settings failures are not cached
+as denials and remain collection errors. Account-scope discovery keeps its normal
+cache lifetime. The cache is client-local and resets on process restart.
+
+Collectors using zone-poll discovery reporting count skipped unentitled zones
+through the existing `cf2otel.zones.skipped` gauge, with
+`cf2otel.zone.reason=unentitled` and the collector attribute only. These are
+complete-poll snapshots, not cumulative denial counts; a failed poll publishes no
+partial snapshot. Existing explicit-zone validation and all-zones-disabled failure
+behavior remain unchanged.
 
 ## Workers AI metrics
 

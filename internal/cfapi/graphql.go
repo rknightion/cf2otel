@@ -144,39 +144,6 @@ func gqlErrors(r graphResponse) error {
 	}
 	return nil
 }
-func (c *HTTPClient) settingsFor(ctx context.Context, r GraphQLRequest, refresh bool) (DatasetSettings, error) {
-	var zero DatasetSettings
-	key := string(r.Scope) + "/" + r.ScopeID + "/" + r.Dataset
-	c.mu.Lock()
-	entry, ok := c.settings[key]
-	c.mu.Unlock()
-	if ok && !refresh && time.Now().Before(entry.expires) {
-		return entry.value, nil
-	}
-	q := fmt.Sprintf("{viewer{%s(%s){settings{%s{enabled availableFields maxNumberOfFields maxDuration notOlderThan maxPageSize}}}}}", scopeName(r.Scope), scopeFilter(r.Scope, r.ScopeID), r.Dataset)
-	response, err := c.graph(ctx, q)
-	if err != nil {
-		return zero, err
-	}
-	if err = gqlErrors(response); err != nil {
-		return zero, err
-	}
-	node, err := firstNode(response, r.Scope)
-	if err != nil {
-		return zero, err
-	}
-	var settings map[string]json.RawMessage
-	if err = json.Unmarshal(node["settings"], &settings); err != nil {
-		return zero, err
-	}
-	if err = json.Unmarshal(settings[r.Dataset], &zero); err != nil {
-		return zero, err
-	}
-	c.mu.Lock()
-	c.settings[key] = cachedSettings{zero, time.Now().Add(15 * time.Minute)}
-	c.mu.Unlock()
-	return zero, nil
-}
 
 // DatasetSettings exposes entitlement metadata for the read-only drift canary.
 // Scope IDs remain request-only and must never be written into the public spec.
