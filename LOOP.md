@@ -106,7 +106,9 @@ None recorded.
   passes live only on 60 continuous minutes in which its attempts equal its successes: the increase of
   `cf2otel_scrape_duration_seconds_count` equals the increase of `cf2otel_scrape_success_total`, with at
   least one attempt, one exporter instance and no counter reset. `codex/live-hour.py` is the witness; use
-  it unchanged (Rob, 2026-10-02).
+  it unchanged (Rob, 2026-10-02). The rule is per collector: a criterion about one collector closes on that
+  collector's own clean 60 minutes in the receipt, and another collector's failure in the same hour does not
+  block it (loop 17 preparation; loop 16 parked every criterion on one Durable Objects mismatch).
 - A counter that never incremented has no series. An absent `cf2otel_scrape_errors_total` series for a
   collector is not a coverage gap and never blocks an hour proof: a failed attempt shows as attempts ahead
   of successes. Loop 15 parked every live criterion on this for a whole run (loop 16 preparation).
@@ -141,6 +143,10 @@ None recorded.
 - `auto-rc` cuts a `v*-rc.*` tag and pre-release for any green `main` SHA, including one pushed before
   the run. The closeout grants cover every `v*-rc.*` tag whose target is on `main`'s first-parent history
   (Rob, 2026-10-02).
+- A loop lands from `-runend`, so the shared checkout's `main` stays where START left it. A commit made there
+  during a run (loop 16: a LOOP.md receiver opt-in) diverges from `origin/main` and blocks `git pull --ff-only`.
+  START rebases only a docs-only commit it can attribute and records it; anything else parks START (loop 17
+  preparation).
 - The state record is written in plain sentences with spaces between words. Removing spaces to fit a size
   cap makes it unreadable after compaction; archive detail instead (loop 16 preparation).
 
