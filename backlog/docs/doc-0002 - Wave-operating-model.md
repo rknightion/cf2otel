@@ -7,7 +7,7 @@ updated_date: '2026-09-23 10:01'
 ---
 This document carries **only what is true of cf2otel**. The campaign model itself (run contract,
 routing, authority, lane briefs, contract freezing, blockers, goal template, run-end protocol,
-pre-flight checklist) is the *Agent fan-out protocol (canonical)* doc, and that doc wins on any
+pre-flight checklist) is in `~/repos/agent-docs/sources/loop/contract.md` and `~/repos/agent-docs/sources/loop/planner.md`, which win on any
 specific. If a section below could be pasted into another repo unchanged, it is in the wrong document.
 
 Every rule keeps its reason. A rule without one gets argued away by the next session.
