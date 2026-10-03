@@ -30,6 +30,8 @@ See [Security and PII](security.md) before enabling AI Gateway body capture or w
 `workersai.metrics` is disabled by default. Enable it with
 `CF2OTEL_COLLECTORS__WORKERSAI_METRICS__ENABLED=true` or its collector YAML entry.
 Defaults are `interval: 5m`, `initial_lookback: 30m`, and `max_window: 1h`.
+An enabled collector requires `max_window` of at least `5m`, matching its complete
+source buckets; smaller windows are rejected during configuration validation.
 It uses the configured account and `aiInferenceAdaptiveGroups`, emitting only
 account aggregate inference count, input/output tokens and total inference time.
 There is no new config group; `platform.max_metric_series_per_window` (default

@@ -405,7 +405,11 @@ func (c Config) Validate() error {
 			add(v.Interval > 0, name+".interval must be positive")
 			add(v.InitialLookback >= 0, name+".initial_lookback must be nonnegative")
 			if name != "certs.packs" && name != "tunnels.status" && name != "httpreq.transfer" && name != "access.seats" && name != "warp.fleet" && name != semconv.CollectorNameDEXTests && name != semconv.CollectorNameLBHealth {
-				add(v.MaxWindow > 0, name+".max_window must be positive")
+				if name == "workersai.metrics" {
+					add(v.MaxWindow >= 5*time.Minute, name+".max_window must be at least 5m for complete source buckets")
+				} else {
+					add(v.MaxWindow > 0, name+".max_window must be positive")
+				}
 			}
 		}
 	}

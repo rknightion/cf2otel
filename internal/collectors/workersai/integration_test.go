@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -89,6 +90,60 @@ func setup(t *testing.T, optional bool, limit int, rows func(time.Time, time.Tim
 }
 func row(at time.Time, count any, sum map[string]any) any {
 	return map[string]any{"count": count, "dimensions": map[string]any{"datetimeFiveMinutes": at.Format(time.RFC3339)}, "sum": sum}
+}
+
+func TestPublicConfigRejectsWindowShorterThanSourceBucket(t *testing.T) {
+	var dataQueries int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct{ Query string }
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+			return
+		}
+		response := map[string]any{}
+		if strings.Contains(body.Query, "settings{") {
+			response["settings"] = map[string]any{"aiInferenceAdaptiveGroups": cfapi.DatasetSettings{Enabled: true, AvailableFields: []string{"count", "dimensions_datetimeFiveMinutes"}, MaxNumberOfFields: 2, MaxDuration: 3600, NotOlderThan: 3600, MaxPageSize: 100}}
+		} else {
+			dataQueries++
+			response["ai"] = []any{}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"viewer": map[string]any{"accounts": []any{response}}}})
+	}))
+	defer srv.Close()
+
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	yaml := "cloudflare:\n  account_id: account-fixture\n  api_base: " + srv.URL + "\ncollectors:\n  workersai.metrics:\n    enabled: true\n    interval: 5m\n    initial_lookback: 30m\n    max_window: 1m\n"
+	if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entryConfig := cfg.Collector(semconv.CollectorNameWorkersAIMetrics)
+	registry := collector.NewRegistry()
+	workersai.Register(collector.Deps{Config: cfg, API: cfapi.New(cfg.Cloudflare), Registry: registry})
+	entry := registry.Entries()[0]
+	store, err := collector.NewFileStore(filepath.Join(t.TempDir(), "checkpoints.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now().UTC().Add(-time.Hour).Truncate(5 * time.Minute)
+	if err := store.Set(entry.Collector.Name(), start); err != nil {
+		t.Fatal(err)
+	}
+	scheduler := collector.NewScheduler(nil, &emitter{values: map[string]float64{}}, store)
+	scheduler.Now = func() time.Time { return start.Add(15 * time.Minute) }
+	if err := scheduler.RunOnce(context.Background(), entry); err == nil || !strings.Contains(err.Error(), "no complete bucket") {
+		t.Fatalf("one-minute scheduler window did not reproduce source-bucket failure: %v", err)
+	}
+	if dataQueries != 0 {
+		t.Fatalf("scheduler issued %d partial-bucket data queries", dataQueries)
+	}
+	validation := cfg.Validate()
+	if validation == nil || !strings.Contains(validation.Error(), "workersai.metrics.max_window") {
+		t.Fatalf("public config validation did not reject the sub-bucket window: %v (loaded max_window %s)", validation, entryConfig.MaxWindow)
+	}
 }
 
 func TestSchedulerAdditiveTotalsAndExactSelection(t *testing.T) {
