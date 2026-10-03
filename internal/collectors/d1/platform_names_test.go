@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -37,11 +38,11 @@ func TestPlatformNamesThroughHTTP(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			from := time.Now().UTC().Truncate(5 * time.Minute).Add(-15 * time.Minute)
-			restCalls := 0
+			var restCalls atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				if r.Method == http.MethodGet {
-					restCalls++
+					restCalls.Add(1)
 					if r.URL.Path != "/accounts/account-fixture"+tc.path {
 						t.Errorf("unexpected list path %s", r.URL.Path)
 					}
@@ -149,8 +150,8 @@ func TestPlatformNamesThroughHTTP(t *testing.T) {
 					}
 				}
 			}
-			if tc.path != "" && restCalls != 2 {
-				t.Fatalf("list calls=%d, want two server-capped pages cached across windows", restCalls)
+			if tc.path != "" && restCalls.Load() != 2 {
+				t.Fatalf("list calls=%d, want two server-capped pages cached across windows", restCalls.Load())
 			}
 		})
 	}

@@ -482,7 +482,7 @@ func TestSQLStorageFallsBackToAccountAggregationWhenOptionalFieldUnavailableOrOv
 		maxFields int
 	}{
 		{"absent", []string{"max.storedBytes", "dimensions.datetimeFiveMinutes"}, 30},
-		{"field budget", []string{"max.storedBytes", "dimensions.datetimeFiveMinutes", "dimensions.namespaceName"}, 2},
+		{"field budget", []string{"max.storedBytes", "dimensions.datetimeFiveMinutes", "dimensions.namespaceId"}, 2},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			settings := standardSettings(test.available...)
@@ -498,7 +498,7 @@ func TestSQLStorageFallsBackToAccountAggregationWhenOptionalFieldUnavailableOrOv
 			if err != nil || !mark.Equal(to) {
 				t.Fatalf("account fallback mark=%s error=%v", mark, err)
 			}
-			if containsField(api.requests[0].WantedFields, "dimensions.namespaceName") {
+			if containsField(api.requests[0].WantedFields, "dimensions.namespaceId") {
 				t.Fatalf("selected unavailable/over-budget optional field: %v", api.requests[0].WantedFields)
 			}
 			if len(emitter.metrics) != 1 || emitter.metrics[0].value != 14 || !expectedRemainder(emitter.metrics[0].attrs) {

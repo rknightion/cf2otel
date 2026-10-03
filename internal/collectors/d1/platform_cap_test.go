@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -36,7 +37,7 @@ func TestPlatformStickyCapThroughHTTP(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			from := time.Now().UTC().Truncate(5 * time.Minute).Add(-20 * time.Minute)
-			phase := 0
+			var phase atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				if r.Method == http.MethodGet {
@@ -71,7 +72,7 @@ func TestPlatformStickyCapThroughHTTP(t *testing.T) {
 					return
 				}
 				indexes := []int{}
-				if phase == 0 {
+				if phase.Load() == 0 {
 					for i := range 55 {
 						indexes = append(indexes, i)
 					}
@@ -80,7 +81,7 @@ func TestPlatformStickyCapThroughHTTP(t *testing.T) {
 				}
 				rows := []any{}
 				for _, i := range indexes {
-					dims := map[string]any{"datetimeFiveMinutes": from.Add(time.Duration(phase) * 5 * time.Minute).Format(time.RFC3339), tc.dimension: fmt.Sprintf("opaque-%02d", i)}
+					dims := map[string]any{"datetimeFiveMinutes": from.Add(time.Duration(phase.Load()) * 5 * time.Minute).Format(time.RFC3339), tc.dimension: fmt.Sprintf("opaque-%02d", i)}
 					if tc.name == "r2.operations" {
 						dims[tc.dimension] = fmt.Sprintf("named-%02d", i)
 						dims["bucketName"] = "named-bucket"
@@ -112,9 +113,10 @@ func TestPlatformStickyCapThroughHTTP(t *testing.T) {
 			if window == nil {
 				t.Fatal("collector not registered")
 			}
-			for phase = 0; phase < 2; phase++ {
+			for currentPhase := int32(0); currentPhase < 2; currentPhase++ {
+				phase.Store(currentPhase)
 				out := &telemetry.Buffer{}
-				start := from.Add(time.Duration(phase) * 5 * time.Minute)
+				start := from.Add(time.Duration(currentPhase) * 5 * time.Minute)
 				mark, err := window.CollectWindow(context.Background(), start, start.Add(5*time.Minute), out)
 				if err != nil || !mark.Equal(start.Add(5*time.Minute)) {
 					t.Fatalf("window checkpoint=%v err=%v", mark, err)
@@ -136,7 +138,7 @@ func TestPlatformStickyCapThroughHTTP(t *testing.T) {
 				for _, value := range values {
 					total += value
 				}
-				if phase == 0 {
+				if currentPhase == 0 {
 					if len(values) != 50 || values["other"] != 6 || total != 55 {
 						t.Fatalf("first-window capped counts: sets=%d remainder=%v total=%v", len(values), values["other"], total)
 					}
