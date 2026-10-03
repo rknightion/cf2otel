@@ -209,7 +209,11 @@ func (s *scanner) scanDiff(commit string, command, refs []string) error {
 				continue
 			}
 			if inHunk && len(line) > 0 && line[0] == '+' {
-				for _, class := range s.classes(string(line[1:])) {
+				content := string(line[1:])
+				for _, class := range allowedAddressClasses(content) {
+					fmt.Fprintf(s.out, "file=%q commit=%s class=%s allowed=true\n", file, commit, class)
+				}
+				for _, class := range s.classes(content) {
 					fmt.Fprintf(s.out, "file=%q commit=%s class=%s\n", file, commit, class)
 					s.hits++
 				}
@@ -217,6 +221,33 @@ func (s *scanner) scanDiff(commit string, command, refs []string) error {
 		}
 	}
 	return nil
+}
+
+func allowedAddressClasses(line string) []string {
+	var classes []string
+	for _, candidate := range ipv4.FindAllString(line, -1) {
+		if addr, err := netip.ParseAddr(candidate); err == nil && addr.Is4() && isAllowedAddress(addr) {
+			classes = append(classes, "ipv4")
+			break
+		}
+	}
+	for _, run := range ipv6.FindAllString(line, -1) {
+		for start := 0; start < len(run); start++ {
+			endLimit := min(len(run), start+45)
+			for end := endLimit; end > start; end-- {
+				addr, err := netip.ParseAddr(run[start:end])
+				if err == nil && addr.Is6() && isAllowedAddress(addr) {
+					classes = append(classes, "ipv6")
+					start = len(run)
+					break
+				}
+			}
+		}
+		if len(classes) > 0 && classes[len(classes)-1] == "ipv6" {
+			break
+		}
+	}
+	return classes
 }
 
 func isAllowedAddress(addr netip.Addr) bool {

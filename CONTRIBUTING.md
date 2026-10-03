@@ -17,7 +17,9 @@ Before publishing, run `just push-scan PUBLISHED_BASE CANDIDATE_HEAD </dev/null`
 The base is the previously published commit, not the candidate's parent. The scanner checks added
 lines in every commit reachable from head but not base (including merged branches and merge
 resolutions), then checks added lines in the net base-to-head diff. An add-then-remove sequence is
-still rejected. It does not rewrite history or override a publication exception.
+still rejected; each finding names its exact path and introducing commit (or `net-diff`). Known
+allowed loopback and documentation-range address additions are reported with `allowed=true` and do
+not count as findings. The scanner does not rewrite history or override a publication exception.
 
 The standard-library-only tool flags 32-hex identifiers, email-shaped literals (including example
 addresses), valid IPv4/IPv6 addresses outside the loopback and RFC 5737 / RFC 3849 documentation

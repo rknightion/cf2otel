@@ -11,6 +11,46 @@ import (
 )
 
 // This exercises ancestry, not just successive commits on a single branch.
+func TestCLIHistoricalAllowedAndRemovedLiteral(t *testing.T) {
+	binary := filepath.Join(t.TempDir(), "pushscan")
+	command(t, ".", "go", "build", "-o", binary, ".")
+	dir, base := fixture(t)
+	literal := "private-" + "publication-exception"
+	allowed := strings.Join([]string{"192", "0", "2", "17"}, ".")
+	commitFile(t, dir, "historical-add", allowed+"\n"+literal+"\n")
+	added := strings.TrimSpace(string(command(t, dir, "git", "rev-parse", "HEAD")))
+	commitFile(t, dir, "historical-remove", "safe\n")
+	head := strings.TrimSpace(string(command(t, dir, "git", "rev-parse", "HEAD")))
+	before := strings.TrimSpace(string(command(t, dir, "git", "rev-list", "--reverse", base+".."+head)))
+	literals := filepath.Join(t.TempDir(), "literals")
+	if err := os.WriteFile(literals, []byte(literal+"\n"), 0600); err != nil {
+		t.Fatal("cannot create fixture literal list")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, binary, base, head)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "PUSHSCAN_LITERALS="+literals)
+	out, err := cmd.CombinedOutput()
+	requireExit(t, err, 1)
+	text := string(out)
+	for _, evidence := range []string{
+		`file="fixture.txt" commit=` + added + " class=literal",
+		`file="fixture.txt" commit=` + added + " class=ipv4 allowed=true",
+	} {
+		if !strings.Contains(text, evidence) {
+			t.Fatalf("missing historical publication evidence %q: %s", evidence, text)
+		}
+	}
+	if strings.Contains(text, literal) || strings.Contains(text, head) {
+		t.Fatal("scanner leaked the literal or misattributed the removal commit")
+	}
+	after := strings.TrimSpace(string(command(t, dir, "git", "rev-list", "--reverse", base+".."+head)))
+	if after != before {
+		t.Fatal("scanner rewrote candidate history")
+	}
+}
+
 func TestCLIHistoryBoundaries(t *testing.T) {
 	binary := filepath.Join(t.TempDir(), "pushscan")
 	command(t, ".", "go", "build", "-o", binary, ".")
