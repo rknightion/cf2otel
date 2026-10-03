@@ -3,9 +3,9 @@ id: CFO-0067
 title: Validate newly reachable history before public pushes
 status: In Progress
 assignee:
-  - '@loop15-root'
+  - '@loop17-root'
 created_date: '2026-10-01 11:17'
-updated_date: '2026-10-02 14:10'
+updated_date: '2026-10-03 12:15'
 labels:
   - security
   - tooling
@@ -40,10 +40,14 @@ Loop14 independent drift review proved a net-tree added-line scan can miss prohi
 
 <!-- SECTION:PLAN:BEGIN -->
 Loop15 implementation follows the frozen lane packet; assertion-based red witness, local just check and CodeRabbit, independent REV where required, root linear landing and sustained live evidence where applicable.
+
+Loop17 frozen packet: one local implementation attempt with assertion-red witness, just check and CodeRabbit to terminal result; fresh exact-SHA independent REV before root linear landing. No lane remote writes.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Loop16 RECON-M1 checked source criteria 1,2,3 against landed tests at ced4edfbfb66f1b9ee45037bdb425b69820a8ebe. Evidence: codex/evidence-loop16/RECON-return.txt. No new live or browser observation is claimed.
+
+Loop17 fresh REV-P67 FAIL cf7b7f56b0790f0a85147ecf0b42202d55d1997d: allowedAddressClasses reports inner IPv6 loopback suffix as an allowed exception within a complete prohibited address, contradicting historical publication evidence though rejection remains intact. Independent exact-SHA full gate passed and original red/green reporting witness confirmed; prior unrelated DNS assertion failure did not repeat and remains unclassified. Review-repair RR1 of3 now authorized solely for complete-address coverage semantics and public CLI regression; no history rewrite or broader allowlist.
 <!-- SECTION:NOTES:END -->

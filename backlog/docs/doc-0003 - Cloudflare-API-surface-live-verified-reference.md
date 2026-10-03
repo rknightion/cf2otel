@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-10-02 21:53'
+updated_date: '2026-10-03 12:21'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -344,3 +344,13 @@ Load-balancer health source admission is now partial, superseding the blanket so
 DEX HTTP and traceroute result detail paths likewise remain **documented shape, no live rows observed**, explicitly `documented_only` and unprobed with nonempty fixture-only reasons. Their exact documented templates are registered but are never called by the live canary. Source fixtures establish optional millisecond, hop and percentage measurements, retry isolation and empty/unknown behavior; they do not establish populated live detail, source-to-storage equality or browser rendering. Default-live probes and the existing production path registry remain unchanged.
 
 Platform resource-name catalogs and field-budget fallback were accepted as bounded source behavior with the registered API paths; names are resolved and capped, and resource identifiers remain internal. The successful canaries do not establish every resource type has populated live rows or that all least-privilege tokens were exercised. No resource creation, permission edit or credential edit occurred.
+
+## Loop 17 current empty DEX and load-balancer contract verification (2026-10-03)
+
+At approximately 12:01 UTC, root read-only canary-token probes returned HTTP 200 with successful empty catalog envelopes for DEX `/accounts/{account}/dex/tests/overview` (`result.tests: []`, page 1/per_page 1) and load-balancer `/accounts/{account}/load_balancers/pools` (`result: []`, page 1/per_page 1). These bounded captures show envelopes only. Required row fields remain **documented shape, no live rows observed**. No test or pool identifier was invented for a detail call.
+
+The unchanged full API drift canary at source `597f2bfe3fedf08c5f9a5594fbe3f6a7e0aa48da` concluded at 12:13 UTC with `Cloudflare API contract matched`, using its actual request logic rather than treating the bounded capture as a canary receipt. In particular the pool canary uses default paging, not the bounded probe query above. The existing `dex-tests-overview` and `load-balancer-pools` live entries match; independent exact-source review and full local gate passed. No contract entry change or new drift-workflow dispatch was needed.
+
+The existing `dex-http-results`, `dex-traceroute-results`, and `lb-pool-health` detail templates remain **documented shape, no live rows observed**, explicitly `documented_only` and unprobed with their existing nonblank reasons. The canary's successful empty lists do not prove populated fields, health flags, measurements, pagination completeness, least privilege, deployed collection or browser rendering. No resource, policy, permission or credential was changed for these observations.
+
+A separate first-zone firewall rule/host/country GraphQL selection returned an access-denial error under HTTP 200. It is not shape or populated-value proof and does not supersede prior enabled-zone observations; this loop leaves that live criterion parked and makes no second-zone or alternate-token retry.

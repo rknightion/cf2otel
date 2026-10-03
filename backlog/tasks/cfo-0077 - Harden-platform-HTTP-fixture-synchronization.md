@@ -1,9 +1,11 @@
 ---
 id: CFO-0077
 title: Harden platform HTTP fixture synchronization
-status: To Do
-assignee: []
+status: Parked
+assignee:
+  - '@loop17-root'
 created_date: '2026-10-02 17:38'
+updated_date: '2026-10-03 12:17'
 labels: []
 dependencies: []
 priority: low
@@ -29,3 +31,15 @@ Loop16 CodeRabbit review of the platform canary repair raised test-only synchron
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Loop17 frozen packet: one local implementation attempt with assertion-red witness, just check and CodeRabbit to terminal result; fresh exact-SHA independent REV before root linear landing. No lane remote writes.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Loop17 FIX-PLAT candidate sound atomic fixture hardening and full gate passed, but required frozen packet base race red was not observed by worker or fresh independent reviewer (150 repetitions per named test plus full race package all passed). No false race-elimination pass or gate waiver. Preserve combined candidate d77f62315412dc73342a652393164ae7382e7524; withdraw D1 changes from forthcoming CFO-0076-only candidate. Resume only with authentic base race witness or owner-approved changed prerequisite.
+<!-- SECTION:NOTES:END -->

@@ -3,9 +3,9 @@ id: CFO-0057
 title: Investigate zero values from RUM p75 and KV storage gauges
 status: In Progress
 assignee:
-  - '@loop15-root'
+  - '@loop17-root'
 created_date: '2026-09-30 21:44'
-updated_date: '2026-10-02 14:10'
+updated_date: '2026-10-03 11:59'
 labels:
   - rum
   - platform
@@ -39,6 +39,8 @@ The latest RUM p75 gauge value is 0 for most site/device pairs while max_over_ti
 
 <!-- SECTION:PLAN:BEGIN -->
 Loop15 implementation follows the frozen lane packet; assertion-based red witness, local just check and CodeRabbit, independent REV where required, root linear landing and sustained live evidence where applicable.
+
+Loop17 K57 root captured current source GraphQL shapes and matching Mimir values; lane attributes root causes and fixes only proven local defects with assertion-red. KV live comparison at next HOUR.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
