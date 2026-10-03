@@ -1,11 +1,11 @@
 ---
 id: CFO-0071
 title: Zero-initialise scrape error counters for enabled collectors
-status: In Progress
+status: Done
 assignee:
   - '@loop16-root'
 created_date: '2026-10-02 13:52'
-updated_date: '2026-10-02 14:58'
+updated_date: '2026-10-03 14:14'
 labels: []
 dependencies: []
 priority: high
@@ -23,7 +23,7 @@ A never-failing collector has no error series, so error-counter coverage cannot 
 <!-- AC:BEGIN -->
 - [x] #1 Through the real SDK and an OTLP HTTP collaborator, two enabled collectors that do not fail each export a zero-valued scrape error point; the test fails on the base by assertion.
 - [x] #2 A later real failure adds one with its real error class, window-committing collectors initialise the commit-failure counter at zero, disabled collectors export neither point, and dry-run remains side-effect free.
-- [ ] #3 The released running exporter exposes scrape error series for every enabled collector at the next sustained-hour read.
+- [x] #3 The released running exporter exposes scrape error series for every enabled collector at the next sustained-hour read.
 <!-- AC:END -->
 
 ## Definition of Done
@@ -46,3 +46,9 @@ Loop16 ZERO-I1 consumed one implementation attempt, zero infra retries. Real-SDK
 
 Loop16 ZERO source accepted on REV-ZERO PASS 43d9c70305c7706a971d326a6e60ef81177fa9a3. Independent reviewer copied only new test onto literal unchanged base, compiled and failed missing-zero assertion; exact candidate passed real-SDK OTLP and dry-run boundaries. Intended error-class point-set update retained all fixture assertions. Two implementation attempts consumed, review-repair zero, infrastructure zero. Exact patch cherry-picked as ca6e69e and pushed in 4f14d92189703ab26752f663d5c6b3502e0e2da4, integrated gate passed. AC3 remains live-only parked behind failed deploy-kit acceptance; running release is unchanged. Landing CI pending watcher.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Deployed0.16.0 DEP1 healthy with exact image/hash/process and monotonic checkpoints. HOUR1 passed65continuousminutes,49enabled collectors with attempts equal successes, single instance/no reset/age gaps, scrape-error series present for all49. Released/deployed zero counters sustained, source tests already checked. Private hour1/health receipts retained outside repository; no error absence proxy used.
+<!-- SECTION:FINAL_SUMMARY:END -->
