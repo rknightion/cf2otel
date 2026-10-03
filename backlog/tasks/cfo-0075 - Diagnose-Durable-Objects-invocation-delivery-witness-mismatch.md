@@ -1,11 +1,11 @@
 ---
 id: CFO-0075
 title: Diagnose Durable Objects invocation delivery witness mismatch
-status: In Progress
+status: Parked
 assignee:
   - '@loop17-root'
 created_date: '2026-10-02 16:01'
-updated_date: '2026-10-03 12:08'
+updated_date: '2026-10-03 18:12'
 labels: []
 dependencies: []
 priority: medium
@@ -42,4 +42,6 @@ Loop17 D75 read-only attribution against loop16 hour receipts and timestamped Lo
 
 <!-- SECTION:NOTES:BEGIN -->
 Loop17 D75 read-only attribution at source 597f2bfe3fedf08c5f9a5594fbe3f6a7e0aa48da: HOUR-0 2026-10-02T14:32:04Z attempt45-to46 with success44 unchanged and errors1-to2 proves failed collector poll, not observation coherence; retry span passes independently. Root timestamped Mimir error-class read confirms class other. Three successful sanitized Loki selections returned no rows, so exact failed source operation remains unknown and no source correction is justified yet. AC1 checked on its stated collector-failure witness; AC2 remains open rather than claiming a source fix. Private evidence D75-return.md and do-error-class.json retained outside tracked paths.
+
+Loop17 AC1timestamped failed-poll attribution checked; specific old failure sourcecall unknown classother, no actionable correction justified. AC2 remains unproved rather than fabricated fix. Current0.16.0HOUR1DOattempts=successes sustained; future failure needs exact safe error/call witness before F75 admission.
 <!-- SECTION:NOTES:END -->

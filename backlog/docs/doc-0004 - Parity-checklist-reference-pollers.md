@@ -3,7 +3,7 @@ id: doc-0004
 title: Parity checklist - reference pollers
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-10-02 14:17'
+updated_date: '2026-10-03 15:57'
 ---
 cf2otel must cover every capability listed here. The list is a behaviour contract drawn from a survey
 of open-source Cloudflare pollers and exporters; no other project is named and no code is copied.
@@ -112,36 +112,36 @@ The OTel SDK cardinality limit is per instrument and configurable (CFO-0045).
   (CFO-0047.02).
 - [x] Logpush failed uploads by job, destination, status and final attempt, account and zone scope
   (CFO-0047.03).
-- Bounded per-resource names for D1, KV, Queues and DO; R2 action type (CFO-0047.04).
+- [x] Bounded per-resource names for D1, KV, Queues and DO; R2 action type (CFO-0047.04).
 
 ## Zero Trust state [Prom] (CFO-0048)
 
 - [x] Tunnel status and connector health (CFO-0048.01).
 - WARP fleet status as aggregates by status, platform, version, mode and colo, fully paginated; never
   per device (CFO-0048.02).
-- DEX HTTP and traceroute test results (CFO-0048.03).
+- [x] DEX HTTP and traceroute test results (CFO-0048.03).
 - [x] Access and Gateway seat counts (CFO-0048.04).
 
 ## Firewall depth [Prom] (CFO-0049)
 
 - Rule ID and resolved rule description, host and country on the firewall metric (CFO-0049.01).
-- Bot score buckets and score source with a fallback for unentitled zones (CFO-0049.02).
+- [x] Bot score buckets and score source with a fallback for unentitled zones (CFO-0049.02).
 
 ## Origin and edge health [Prom] (CFO-0050)
 
-- Certificate pack status and expiry (CFO-0050.01).
+- [x] Certificate pack status and expiry (CFO-0050.01).
 - Load balancer pool/origin health by region, origin RTT, pool traffic (CFO-0050.02).
-- Health check events with RTT/TTFB/TCP/TLS timings and failure reason (CFO-0050.03).
+- [x] Health check events with RTT/TTFB/TCP/TLS timings and failure reason (CFO-0050.03).
 - Opt-in public status page component status (CFO-0050.04).
 
 ## Operations [Prom] (CFO-0051)
 
 - [x] Zone exclude list; discovered/filtered/processed/skipped zone self-metrics (CFO-0051.01).
-- Metric and attribute deny list validated against semconv (CFO-0051.02).
+- [x] Metric and attribute deny list validated against semconv (CFO-0051.02).
 - [x] Classified collector errors (CFO-0051.03).
-- Per-zone entitlement backoff and a shared client-side rate limiter (CFO-0051.04).
+- [x] Per-zone entitlement backoff and a shared client-side rate limiter (CFO-0051.04).
 - Multiple accounts, listed or discovered (CFO-0051.05).
-- Optional Prometheus `/metrics` endpoint (CFO-0051.06).
+- [x] Optional Prometheus `/metrics` endpoint (CFO-0051.06).
 
 ## Deliberately out of scope
 
@@ -152,3 +152,10 @@ analytics endpoints are superseded by the GraphQL datasets above.
 
 
 Loop 16 source reconciliation at ced4edf: checked items above have landed collector and boundary-test evidence. Checks denote source parity, not fresh deployed proof. WARP connected-device parity, resource names, DEX, deny list, limiter/backoff, multiple accounts and pull endpoint remain unchecked on this baseline.
+
+
+
+Loop 17 current source reconciliation: the additional checks follow current Done child criteria and their recorded exact-source review/test evidence. They denote source parity, not new live populated detail, browser, listener enablement or least-privilege proof. DEX detail remains documented-only/unprobed with empty overview; source bot fields remain opt-in-by-advertisement, not a new live score claim. WARP, firewall contract, full regional/origin/load-balancer traffic, status-page and multi-account criteria remain open. Limiter/backoff source check awaits its final landing acceptance.
+
+
+Backoff/limiter source parity checked at loop17 landing2eb6a689 with fresh independent high reviews and authentic public/registered red-green proof. Live-quiet acceptance remains parked on two incomplete startup-hour receipts for0.16.1; source parity is not a sustained live pass. No rate/burst or strict collector policy was relaxed.
