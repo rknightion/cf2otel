@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.0](https://github.com/rknightion/cf2otel/compare/v0.15.0...v0.16.0) (2026-10-03)
+
+
+### Features
+
+* **grafana:** show bot score dimensions and partial pool health ([b5240ca](https://github.com/rknightion/cf2otel/commit/b5240cadb2132473208f230beb119acb75d0f158))
+
 ## [0.15.0](https://github.com/rknightion/cf2otel/compare/v0.14.0...v0.15.0) (2026-10-02)
 
 
