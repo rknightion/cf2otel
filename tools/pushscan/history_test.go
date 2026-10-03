@@ -18,8 +18,18 @@ func TestCLIHistoricalAllowedAndRemovedLiteral(t *testing.T) {
 	literal := "private-" + "publication-exception"
 	allowed := strings.Join([]string{"192", "0", "2", "17"}, ".")
 	prohibitedIPv6 := "2002" + strings.Repeat(":", 2) + "1"
-	commitFile(t, dir, "prohibited-ipv6", prohibitedIPv6+"\n")
-	prohibitedCommit := strings.TrimSpace(string(command(t, dir, "git", "rev-parse", "HEAD")))
+	prohibitedCases := []struct {
+		name, text, commit string
+		standaloneIPv4     bool
+	}{
+		{name: "prohibited-ipv6", text: prohibitedIPv6},
+		{name: "embedded-ipv4", text: "2002" + strings.Repeat(":", 2) + allowed},
+		{name: "embedded-and-standalone-ipv4", text: "2002" + strings.Repeat(":", 2) + allowed + " " + allowed, standaloneIPv4: true},
+	}
+	for i := range prohibitedCases {
+		commitFile(t, dir, prohibitedCases[i].name, prohibitedCases[i].text+"\n")
+		prohibitedCases[i].commit = strings.TrimSpace(string(command(t, dir, "git", "rev-parse", "HEAD")))
+	}
 	allowedIPv6 := strings.Repeat(":", 2) + "1"
 	commitFile(t, dir, "historical-add", allowed+"\n"+allowedIPv6+"\n"+literal+"\n")
 	added := strings.TrimSpace(string(command(t, dir, "git", "rev-parse", "HEAD")))
@@ -42,23 +52,37 @@ func TestCLIHistoricalAllowedAndRemovedLiteral(t *testing.T) {
 		`file="fixture.txt" commit=` + added + " class=literal",
 		`file="fixture.txt" commit=` + added + " class=ipv4 allowed=true",
 		`file="fixture.txt" commit=` + added + " class=ipv6 allowed=true",
-		`file="fixture.txt" commit=` + prohibitedCommit + " class=ipv6\n",
 	} {
 		if !strings.Contains(text, evidence) {
 			t.Fatalf("missing historical publication evidence %q: %s", evidence, text)
 		}
 	}
-	if strings.Contains(text, "commit="+prohibitedCommit+" class=ipv6 allowed=true") {
-		t.Fatalf("prohibited complete IPv6 address reported as allowed: %s", text)
-	}
-	// The same complete address must not gain an exception in the net-diff report.
-	cmd = exec.CommandContext(ctx, binary, base, prohibitedCommit)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "PUSHSCAN_LITERALS="+literals)
-	netOut, netErr := cmd.CombinedOutput()
-	requireExit(t, netErr, 1)
-	if !strings.Contains(string(netOut), "commit=net-diff class=ipv6\n") || strings.Contains(string(netOut), "allowed=true") {
-		t.Fatalf("inaccurate prohibited IPv6 net-diff report: %s", netOut)
+	previous := base
+	for _, tc := range prohibitedCases {
+		// Isolate each addition for net-diff proof as well as full history above.
+		cmd = exec.CommandContext(ctx, binary, previous, tc.commit)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "PUSHSCAN_LITERALS="+literals)
+		netOut, netErr := cmd.CombinedOutput()
+		requireExit(t, netErr, 1)
+		for _, report := range []struct{ output, commit string }{
+			{text, tc.commit}, {string(netOut), "net-diff"},
+		} {
+			prefix := `file="fixture.txt" commit=` + report.commit
+			if !strings.Contains(report.output, prefix+" class=ipv6\n") {
+				t.Fatalf("missing prohibited IPv6 evidence (%s): %s", tc.name, report.output)
+			}
+			if strings.Contains(report.output, prefix+" class=ipv6 allowed=true") {
+				t.Fatalf("prohibited complete IPv6 address reported as allowed (%s): %s", tc.name, report.output)
+			}
+			if strings.Contains(report.output, prefix+" class=ipv4 allowed=true") != tc.standaloneIPv4 {
+				t.Fatalf("inaccurate standalone IPv4 exception report (%s): %s", tc.name, report.output)
+			}
+			if strings.Contains(report.output, tc.text) {
+				t.Fatal("scanner leaked a prohibited address")
+			}
+		}
+		previous = tc.commit
 	}
 	if strings.Contains(text, prohibitedIPv6) || strings.Contains(text, allowedIPv6) {
 		t.Fatal("scanner leaked an IPv6 literal")
@@ -69,6 +93,25 @@ func TestCLIHistoricalAllowedAndRemovedLiteral(t *testing.T) {
 	after := strings.TrimSpace(string(command(t, dir, "git", "rev-list", "--reverse", base+".."+head)))
 	if after != before {
 		t.Fatal("scanner rewrote candidate history")
+	}
+	for _, address := range []string{
+		"2001" + ":db8" + strings.Repeat(":", 2) + "1",
+		strings.Repeat(":", 2) + "ffff:" + allowed,
+		strings.Repeat(":", 2) + "ffff:" + strings.Join([]string{"127", "0", "0", "1"}, "."),
+	} {
+		// Whole documentation and mapped addresses remain IPv6 exceptions.
+		dir, base := fixture(t)
+		commitFile(t, dir, "allowed-ipv6", address+"\n")
+		added := strings.TrimSpace(string(command(t, dir, "git", "rev-parse", "HEAD")))
+		out := string(command(t, dir, binary, base, added))
+		for _, commit := range []string{added, "net-diff"} {
+			if !strings.Contains(out, `file="fixture.txt" commit=`+commit+" class=ipv6 allowed=true\n") {
+				t.Fatalf("missing whole IPv6 exception: %s", out)
+			}
+		}
+		if strings.Contains(out, "class=ipv4") || strings.Contains(out, address) || !strings.Contains(out, "findings=0") {
+			t.Fatalf("inaccurate or disclosing whole IPv6 exception report: %s", out)
+		}
 	}
 }
 

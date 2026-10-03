@@ -224,14 +224,10 @@ func (s *scanner) scanDiff(commit string, command, refs []string) error {
 }
 
 func allowedAddressClasses(line string) []string {
-	var classes []string
-	for _, candidate := range ipv4.FindAllString(line, -1) {
-		if addr, err := netip.ParseAddr(candidate); err == nil && addr.Is4() && isAllowedAddress(addr) {
-			classes = append(classes, "ipv4")
-			break
-		}
-	}
-	for _, run := range ipv6.FindAllString(line, -1) {
+	var completeIPv6 [][2]int
+	allowedIPv6 := false
+	for _, bounds := range ipv6.FindAllStringIndex(line, -1) {
+		run := line[bounds[0]:bounds[1]]
 		coveredEnd := 0
 		for start := 0; start < len(run); start++ {
 			endLimit := min(len(run), start+45)
@@ -240,20 +236,36 @@ func allowedAddressClasses(line string) []string {
 				if err != nil || !addr.Is6() {
 					continue
 				}
-				// A complete address covers its suffixes even when prohibited.
+				// Whole addresses cover both IPv6 and dotted IPv4 suffixes,
+				// even when the whole address is prohibited.
 				if end > coveredEnd {
-					if isAllowedAddress(addr) {
-						classes = append(classes, "ipv6")
-						start = len(run)
-					}
+					completeIPv6 = append(completeIPv6, [2]int{bounds[0] + start, bounds[0] + end})
+					allowedIPv6 = allowedIPv6 || isAllowedAddress(addr)
 					coveredEnd = end
 				}
 				break
 			}
 		}
-		if len(classes) > 0 && classes[len(classes)-1] == "ipv6" {
+	}
+	var classes []string
+	for _, bounds := range ipv4.FindAllStringIndex(line, -1) {
+		covered := false
+		for _, whole := range completeIPv6 {
+			if whole[0] <= bounds[0] && whole[1] >= bounds[1] {
+				covered = true
+				break
+			}
+		}
+		if covered {
+			continue
+		}
+		if addr, err := netip.ParseAddr(line[bounds[0]:bounds[1]]); err == nil && addr.Is4() && isAllowedAddress(addr) {
+			classes = append(classes, "ipv4")
 			break
 		}
+	}
+	if allowedIPv6 {
+		classes = append(classes, "ipv6")
 	}
 	return classes
 }

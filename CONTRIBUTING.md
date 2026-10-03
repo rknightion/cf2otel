@@ -19,7 +19,10 @@ lines in every commit reachable from head but not base (including merged branche
 resolutions), then checks added lines in the net base-to-head diff. An add-then-remove sequence is
 still rejected; each finding names its exact path and introducing commit (or `net-diff`). Known
 allowed loopback and documentation-range address additions are reported with `allowed=true` and do
-not count as findings. The scanner does not rewrite history or override a publication exception.
+not count as findings. Exceptions classify the complete address: IPv6 suffixes, including dotted
+IPv4 suffixes, are not separate allowed addresses. Standalone IPv4 and IPv4-mapped IPv6 retain
+the same loopback and documentation rules. The scanner does not rewrite history or override a
+publication exception.
 
 The standard-library-only tool flags 32-hex identifiers, email-shaped literals (including example
 addresses), valid IPv4/IPv6 addresses outside the loopback and RFC 5737 / RFC 3849 documentation
