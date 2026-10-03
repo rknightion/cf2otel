@@ -232,15 +232,23 @@ func allowedAddressClasses(line string) []string {
 		}
 	}
 	for _, run := range ipv6.FindAllString(line, -1) {
+		coveredEnd := 0
 		for start := 0; start < len(run); start++ {
 			endLimit := min(len(run), start+45)
 			for end := endLimit; end > start; end-- {
 				addr, err := netip.ParseAddr(run[start:end])
-				if err == nil && addr.Is6() && isAllowedAddress(addr) {
-					classes = append(classes, "ipv6")
-					start = len(run)
-					break
+				if err != nil || !addr.Is6() {
+					continue
 				}
+				// A complete address covers its suffixes even when prohibited.
+				if end > coveredEnd {
+					if isAllowedAddress(addr) {
+						classes = append(classes, "ipv6")
+						start = len(run)
+					}
+					coveredEnd = end
+				}
+				break
 			}
 		}
 		if len(classes) > 0 && classes[len(classes)-1] == "ipv6" {

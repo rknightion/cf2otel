@@ -17,7 +17,11 @@ func TestCLIHistoricalAllowedAndRemovedLiteral(t *testing.T) {
 	dir, base := fixture(t)
 	literal := "private-" + "publication-exception"
 	allowed := strings.Join([]string{"192", "0", "2", "17"}, ".")
-	commitFile(t, dir, "historical-add", allowed+"\n"+literal+"\n")
+	prohibitedIPv6 := "2002" + strings.Repeat(":", 2) + "1"
+	commitFile(t, dir, "prohibited-ipv6", prohibitedIPv6+"\n")
+	prohibitedCommit := strings.TrimSpace(string(command(t, dir, "git", "rev-parse", "HEAD")))
+	allowedIPv6 := strings.Repeat(":", 2) + "1"
+	commitFile(t, dir, "historical-add", allowed+"\n"+allowedIPv6+"\n"+literal+"\n")
 	added := strings.TrimSpace(string(command(t, dir, "git", "rev-parse", "HEAD")))
 	commitFile(t, dir, "historical-remove", "safe\n")
 	head := strings.TrimSpace(string(command(t, dir, "git", "rev-parse", "HEAD")))
@@ -37,10 +41,27 @@ func TestCLIHistoricalAllowedAndRemovedLiteral(t *testing.T) {
 	for _, evidence := range []string{
 		`file="fixture.txt" commit=` + added + " class=literal",
 		`file="fixture.txt" commit=` + added + " class=ipv4 allowed=true",
+		`file="fixture.txt" commit=` + added + " class=ipv6 allowed=true",
+		`file="fixture.txt" commit=` + prohibitedCommit + " class=ipv6\n",
 	} {
 		if !strings.Contains(text, evidence) {
 			t.Fatalf("missing historical publication evidence %q: %s", evidence, text)
 		}
+	}
+	if strings.Contains(text, "commit="+prohibitedCommit+" class=ipv6 allowed=true") {
+		t.Fatalf("prohibited complete IPv6 address reported as allowed: %s", text)
+	}
+	// The same complete address must not gain an exception in the net-diff report.
+	cmd = exec.CommandContext(ctx, binary, base, prohibitedCommit)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "PUSHSCAN_LITERALS="+literals)
+	netOut, netErr := cmd.CombinedOutput()
+	requireExit(t, netErr, 1)
+	if !strings.Contains(string(netOut), "commit=net-diff class=ipv6\n") || strings.Contains(string(netOut), "allowed=true") {
+		t.Fatalf("inaccurate prohibited IPv6 net-diff report: %s", netOut)
+	}
+	if strings.Contains(text, prohibitedIPv6) || strings.Contains(text, allowedIPv6) {
+		t.Fatal("scanner leaked an IPv6 literal")
 	}
 	if strings.Contains(text, literal) || strings.Contains(text, head) {
 		t.Fatal("scanner leaked the literal or misattributed the removal commit")
