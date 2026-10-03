@@ -27,6 +27,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.46.0
 	go.opentelemetry.io/otel/trace v1.46.0
 	go.opentelemetry.io/proto/otlp v1.11.1
+	go.yaml.in/yaml/v3 v3.0.5
 	google.golang.org/protobuf v1.36.12
 )
 
@@ -48,7 +49,6 @@ require (
 	github.com/prometheus/procfs v0.21.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.46.0 // indirect
-	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect

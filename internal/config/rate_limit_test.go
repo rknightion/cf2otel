@@ -44,7 +44,7 @@ func TestRateLimitLoadDefaultsAndPrecedence(t *testing.T) {
 }
 
 func TestRateLimitLoadIntegerBurst(t *testing.T) {
-	for _, value := range []string{"true", "1.9", ".inf", "9223372036854775808", "18446744073709551616", "[]", "0", "-1", "1001"} {
+	for _, value := range []string{"true", "1.9", "1000.00000000000001", "1.0000000000000001", "0.99999999999999999", ".inf", "9223372036854775808", "18446744073709551616", "[]", "0", "-1", "1001"} {
 		t.Run("YAML_"+value, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.yaml")
 			if err := os.WriteFile(path, []byte("cloudflare:\n  rate_limit:\n    burst: "+value+"\n"), 0600); err != nil {
@@ -80,6 +80,47 @@ func TestRateLimitLoadIntegerBurst(t *testing.T) {
 				}
 			} else if strconv.Itoa(c.Cloudflare.RateLimit.Burst) != value {
 				t.Fatalf("burst=%d; want %s", c.Cloudflare.RateLimit.Burst, value)
+			}
+		})
+	}
+}
+
+func TestRateLimitLoadRawYAMLSemantics(t *testing.T) {
+	for _, tc := range []struct {
+		name, document string
+		want           int
+	}{
+		{"alias_fraction", "cloudflare:\n  rate_limit:\n    requests_per_second: &number 1.0000000000000001\n    burst: *number\n", 0},
+		{"merged_fraction", "cloudflare:\n  rate_limit:\n    <<: {burst: 0.99999999999999999}\n", 0},
+		{"alias_integral", "cloudflare:\n  rate_limit:\n    requests_per_second: &number 2.0\n    burst: *number\n", 2},
+		{"explicit_over_merge", "cloudflare:\n  rate_limit:\n    <<: {burst: 1.0000000000000001}\n    burst: 2.0\n", 2},
+		{"merge_sequence_first_wins", "cloudflare:\n  rate_limit:\n    <<: [{burst: 2.0}, {burst: 1.0000000000000001}]\n", 2},
+		{"exponent_integral", "cloudflare:\n  rate_limit: {burst: 20e-1}\n", 2},
+		{"octal_integral", "cloudflare:\n  rate_limit: {burst: 02}\n", 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(path, []byte(tc.document), 0600); err != nil {
+				t.Fatal(err)
+			}
+			c, err := Load(path)
+			if tc.want == 0 {
+				if err == nil || !strings.Contains(err.Error(), "cloudflare.rate_limit.burst") {
+					t.Fatalf("raw fraction accepted or unrelated error: %v", err)
+				}
+				// The environment supersedes even an invalid aliased/merged scalar.
+				t.Setenv("CF2OTEL_CLOUDFLARE__RATE_LIMIT__BURST", "3")
+				c, err = Load(path)
+				if err != nil || c.Cloudflare.RateLimit.Burst != 3 {
+					t.Fatalf("environment precedence failed: config=%v err=%v", c, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.Cloudflare.RateLimit.Burst != tc.want {
+				t.Fatalf("burst=%d; want %d", c.Cloudflare.RateLimit.Burst, tc.want)
 			}
 		})
 	}

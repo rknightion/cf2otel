@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"net"
 	"os"
 	"reflect"
@@ -22,6 +23,7 @@ import (
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
 	"github.com/rknightion/cf2otel/internal/semconv"
+	yamlv3 "go.yaml.in/yaml/v3"
 )
 
 const EnvPrefix = "CF2OTEL_"
@@ -241,7 +243,7 @@ func Load(path string) (*Config, error) {
 	}
 	if path != "" {
 		only := koanf.New(".")
-		if err := only.Load(file.Provider(path), yaml.Parser()); err != nil {
+		if err := only.Load(file.Provider(path), burstYAMLParser{}); err != nil {
 			return nil, fmt.Errorf("config YAML: %w", err)
 		}
 		for _, key := range secretKeys {
@@ -254,7 +256,7 @@ func Load(path string) (*Config, error) {
 				return nil, fmt.Errorf("%s is secret and must be supplied through environment", key)
 			}
 		}
-		if err := k.Load(file.Provider(path), yaml.Parser()); err != nil {
+		if err := k.Merge(only); err != nil {
 			return nil, fmt.Errorf("config YAML: %w", err)
 		}
 	}
@@ -295,6 +297,120 @@ func Load(path string) (*Config, error) {
 	return &c, nil
 }
 
+// burstYAMLParser retains the effective burst scalar before numeric decoding.
+// Native YAML decoding resolves aliases, merges and explicit-key precedence;
+// koanf applies its normal dotted-key flattening to the parallel raw map.
+// All other values and YAML errors still come from the existing parser.
+type burstYAMLParser struct{}
+
+func (burstYAMLParser) Unmarshal(data []byte) (map[string]any, error) {
+	var raw map[string]rawBurstYAML
+	if err := yamlv3.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	values := make(map[string]any, len(raw))
+	for key, value := range raw {
+		resolved, err := value.atPath(key)
+		if err != nil {
+			return nil, err
+		}
+		values[key] = resolved
+	}
+	k := koanf.New(".")
+	if err := k.Load(rawBurstProvider(values), nil); err != nil {
+		return nil, err
+	}
+	const burstKey = "cloudflare.rate_limit.burst"
+	if k.Exists(burstKey) && !burstEnvironmentOverride() {
+		if _, err := integerBurst(k.Get(burstKey)); err != nil {
+			return nil, err
+		}
+	}
+	// Only now decode ordinary numeric values. A superseded YAML burst need
+	// not be valid, but syntax, secret and unknown-key checks still apply.
+	out, err := yaml.Parser().Unmarshal(data)
+	if err != nil {
+		return nil, err
+	}
+	if k.Exists(burstKey) {
+		// Set via koanf so dotted YAML keys behave exactly like the loader.
+		decoded := koanf.New(".")
+		if err := decoded.Load(rawBurstProvider(out), nil); err != nil {
+			return nil, err
+		}
+		if err := decoded.Set("cloudflare.rate_limit.burst", k.Get("cloudflare.rate_limit.burst")); err != nil {
+			return nil, err
+		}
+		out = decoded.Raw()
+	}
+	return out, nil
+}
+
+func (burstYAMLParser) Marshal(values map[string]any) ([]byte, error) {
+	return yaml.Parser().Marshal(values)
+}
+
+type rawBurstProvider map[string]any
+
+func (p rawBurstProvider) Read() (map[string]any, error) { return p, nil }
+func (rawBurstProvider) ReadBytes() ([]byte, error) {
+	return nil, errors.New("raw YAML map has no bytes")
+}
+
+func burstEnvironmentOverride() bool {
+	for _, entry := range os.Environ() {
+		key, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(key, EnvPrefix) && strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(key, EnvPrefix)), "__", ".") == "cloudflare.rate_limit.burst" {
+			return true
+		}
+	}
+	return false
+}
+
+type rawBurstYAML struct{ node *yamlv3.Node }
+
+func (r *rawBurstYAML) UnmarshalYAML(node *yamlv3.Node) error {
+	r.node = node
+	return nil
+}
+
+// Only expand maps on the burst path. Native Decode handles merge ordering
+// and aliases at each level; unrelated maps and sequences stay opaque. This
+// also avoids recursively expanding arbitrary alias graphs in other settings.
+func (r rawBurstYAML) atPath(path string) (any, error) {
+	node := r.node
+	if node != nil && node.Kind == yamlv3.MappingNode && (path == "cloudflare" || path == "cloudflare.rate_limit") {
+		// Match yaml.v3's string-map rule. Other maps remain opaque to koanf.
+		stringMap := true
+		for i := 0; i < len(node.Content); i += 2 {
+			tag := node.Content[i].Tag
+			if tag != "!!str" && tag != "!!merge" {
+				stringMap = false
+				break
+			}
+		}
+		if stringMap {
+			var children map[string]rawBurstYAML
+			if err := node.Decode(&children); err != nil {
+				return nil, err
+			}
+			values := make(map[string]any, len(children))
+			for key, child := range children {
+				resolved, err := child.atPath(path + "." + key)
+				if err != nil {
+					return nil, err
+				}
+				values[key] = resolved
+			}
+			return values, nil
+		}
+	}
+	if node == nil {
+		return nil, nil
+	}
+	return node, nil
+}
+
 // integerBurst accepts numeric integers without imposing a YAML spelling.
 // Environment strings must parse as integers; all values must be in [1,1000].
 func integerBurst(raw any) (int, error) {
@@ -305,6 +421,29 @@ func integerBurst(raw any) (int, error) {
 			return 0, invalid
 		}
 		return value, nil
+	}
+	if node, ok := raw.(*yamlv3.Node); ok {
+		if node.Tag == "!!float" {
+			// Decimal YAML numbers must be integral exactly, not just after
+			// rounding to float64. Bound exponent work before rational parsing.
+			text := strings.ReplaceAll(node.Value, "_", "")
+			if _, exponent, found := strings.Cut(strings.ToLower(text), "e"); found {
+				n, err := strconv.ParseInt(exponent, 10, 64)
+				if err != nil || n < -int64(len(text))-4 || n > int64(len(text))+4 {
+					return 0, invalid
+				}
+			}
+			n, ok := new(big.Rat).SetString(text)
+			if !ok || !n.IsInt() || n.Sign() <= 0 || n.Cmp(big.NewRat(1000, 1)) > 0 {
+				return 0, invalid
+			}
+			return int(n.Num().Int64()), nil
+		}
+		var decoded any
+		if err := node.Decode(&decoded); err != nil {
+			return 0, invalid
+		}
+		return integerBurst(decoded)
 	}
 	value := reflect.ValueOf(raw)
 	switch value.Kind() {
