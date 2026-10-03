@@ -93,7 +93,12 @@ func row(at time.Time, count any, sum map[string]any) any {
 }
 
 func TestPublicConfigRejectsWindowShorterThanSourceBucket(t *testing.T) {
+	t.Setenv("CF2OTEL_CLOUDFLARE__API_TOKEN", "fixture-token")
+	t.Setenv("CF2OTEL_OTLP__ENDPOINT", "http://127.0.0.1:4318")
+	t.Setenv("CF2OTEL_OTLP__GRAFANA_CLOUD__INSTANCE_ID", "fixture-instance")
+	t.Setenv("CF2OTEL_OTLP__GRAFANA_CLOUD__TOKEN", "fixture-token")
 	var dataQueries int
+	var fetched [][2]time.Time
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct{ Query string }
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -105,7 +110,15 @@ func TestPublicConfigRejectsWindowShorterThanSourceBucket(t *testing.T) {
 			response["settings"] = map[string]any{"aiInferenceAdaptiveGroups": cfapi.DatasetSettings{Enabled: true, AvailableFields: []string{"count", "dimensions_datetimeFiveMinutes"}, MaxNumberOfFields: 2, MaxDuration: 3600, NotOlderThan: 3600, MaxPageSize: 100}}
 		} else {
 			dataQueries++
-			response["ai"] = []any{}
+			matches := bounds.FindAllStringSubmatch(body.Query, -1)
+			if len(matches) != 2 {
+				t.Error("missing half-open bounds")
+				return
+			}
+			a, _ := time.Parse(time.RFC3339, matches[0][1])
+			b, _ := time.Parse(time.RFC3339, matches[1][1])
+			fetched = append(fetched, [2]time.Time{a, b})
+			response["ai"] = []any{row(a, 1, nil)}
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"viewer": map[string]any{"accounts": []any{response}}}})
 	}))
@@ -143,6 +156,79 @@ func TestPublicConfigRejectsWindowShorterThanSourceBucket(t *testing.T) {
 	validation := cfg.Validate()
 	if validation == nil || !strings.Contains(validation.Error(), "workersai.metrics.max_window") {
 		t.Fatalf("public config validation did not reject the sub-bucket window: %v (loaded max_window %s)", validation, entryConfig.MaxWindow)
+	}
+
+	for _, window := range []string{"5m", "6m", "10m"} {
+		t.Run(window+"-fresh-31m-lookback", func(t *testing.T) {
+			publicYAML := strings.ReplaceAll(strings.ReplaceAll(yaml, "max_window: 1m", "max_window: "+window), "initial_lookback: 30m", "initial_lookback: 31m")
+			if err := os.WriteFile(path, []byte(publicYAML), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := config.Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			registry := collector.NewRegistry()
+			workersai.Register(collector.Deps{Config: cfg, API: cfapi.New(cfg.Cloudflare), Registry: registry})
+			entry := registry.Entries()[0]
+			checkpointPath := filepath.Join(t.TempDir(), "checkpoints.json")
+			store, err := collector.NewFileStore(checkpointPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out := &emitter{values: map[string]float64{}}
+			scheduler := collector.NewScheduler(nil, out, store)
+			// With the source lag, the initial cursor is one minute before a
+			// bucket boundary. No checkpoint seed may mask startup alignment.
+			now := start.Add(time.Hour)
+			scheduler.Now = func() time.Time { return now }
+			if window != "10m" {
+				if window == "5m" {
+					if err := scheduler.RunOnce(context.Background(), entry); err == nil || !strings.Contains(err.Error(), "no complete bucket") {
+						t.Fatalf("fresh unaligned startup did not reproduce failure: %v", err)
+					}
+				}
+				if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "workersai.metrics.max_window") {
+					t.Fatalf("public config validation did not reject unsafe %s window with 31m lookback: %v", window, err)
+				}
+				return
+			}
+			if err := cfg.Validate(); err != nil {
+				t.Fatalf("supported 10m minimum rejected: %v", err)
+			}
+			firstQuery := len(fetched)
+			previous := now.Add(-41 * time.Minute) // source holdback plus public lookback
+			for cycle := 0; cycle < 3; cycle++ {
+				if cycle == 2 {
+					store, err = collector.NewFileStore(checkpointPath)
+					if err != nil {
+						t.Fatal(err)
+					}
+					scheduler = collector.NewScheduler(nil, out, store)
+					scheduler.Now = func() time.Time { return now }
+				}
+				if err := scheduler.RunOnce(context.Background(), entry); err != nil {
+					t.Fatalf("supported minimum failed cycle %d: %v", cycle, err)
+				}
+				mark, ok := store.Get(entry.Collector.Name())
+				if !ok || !mark.After(previous) || !mark.Equal(mark.Truncate(5*time.Minute)) {
+					t.Fatalf("cycle %d checkpoint did not advance on complete buckets: previous=%s mark=%s", cycle, previous, mark)
+				}
+				previous = mark
+				now = now.Add(5 * time.Minute)
+			}
+			if len(fetched) == firstQuery || out.values[semconv.MetricWorkersAIInferences] == 0 {
+				t.Fatal("supported minimum exported no complete buckets")
+			}
+			for i, interval := range fetched[firstQuery:] {
+				if !interval[0].Equal(interval[0].Truncate(5*time.Minute)) || !interval[1].Equal(interval[1].Truncate(5*time.Minute)) || !interval[1].After(interval[0]) {
+					t.Fatalf("partial bucket query: %v", interval)
+				}
+				if i > 0 && !interval[0].Equal(fetched[firstQuery+i-1][1]) {
+					t.Fatalf("overlap or gap after committed bucket: %v", interval)
+				}
+			}
+		})
 	}
 }
 
