@@ -146,6 +146,7 @@ func (s *Scheduler) runEntry(ctx context.Context, e Entry) {
 	}
 }
 func (s *Scheduler) RunOnce(ctx context.Context, e Entry) (err error) {
+	ctx = cfapi.WithCollector(ctx, e.Collector.Name())
 	defer func() {
 		if p := recover(); p != nil {
 			err = fmt.Errorf("collector panic: %v", p)
@@ -456,6 +457,7 @@ func payloadRejected(err error) bool {
 
 // CollectRange exports an explicit window without changing its durable cursor.
 func (s *Scheduler) CollectRange(ctx context.Context, c WindowCollector, from, to time.Time) error {
+	ctx = cfapi.WithCollector(ctx, c.Name())
 	if err := ctx.Err(); err != nil {
 		return err
 	}
