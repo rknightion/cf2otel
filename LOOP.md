@@ -23,9 +23,11 @@ needs a Docker daemon. Run `just` with stdin from `/dev/null`, in a clean worktr
 - Never copy a token, ID, email, IP or hostname into the repo, a log, argv or a fixture. A
   diagnostic that reads runtime or compose settings drops every key matching token, key, secret,
   password, authorization or headers and prints key names and value lengths only.
-- A deploy is a version-pin edit plus an app-only recreate on the one compose host, verified
-  `healthy` within 10 minutes with the pin reverted automatically if not. The compose file passes
-  named variables only: a new `CF2OTEL_` variable needs its own `environment:` entry.
+- The compose host runs `:main` (`pull_policy: always`, Watchtower fastlane, 5-minute poll). A
+  green push to main is the deploy: the release workflow's `edge` job publishes `:main` and
+  Watchtower recreates the app. Confirm the live commit from `cf2otel_build_info` `build_commit` on
+  robknight; roll back by reverting on main. A new `CF2OTEL_` variable needs its own compose
+  `environment:` entry, which is a host edit and needs an ops grant.
 
 ## Traps
 
@@ -57,10 +59,10 @@ needs a Docker daemon. Run `just` with stdin from `/dev/null`, in a clean worktr
 - `auto-rc` cuts a `v*-rc.*` tag for any green `main` SHA. release-please moves its branch
   non-fast-forward at every release, so `loop-pi-audit closeout` exits 1: report it as the bot's
   move and never widen the grants.
-- A watcher that overran its deadline once forced the rollback of a healthy deploy. Launch every
-  watcher and the launcher under `caffeinate -i`, measure on the wall clock, and treat an
-  observation gap or an SSH error as not observed, never as unhealthy. Read the exact-SHA CI run
-  back with `gh run view`.
+- Every push to main redeploys and restarts the process, tracker-only commits included. Hold all
+  pushes during an hour proof, and start the hour after `build_commit` matches the landed SHA.
+- Launch every watcher under `caffeinate -i`, measure on the wall clock, and treat an observation
+  gap as not observed, never as unhealthy. Read the exact-SHA CI run back with `gh run view`.
 - The push scan flags every email-shaped literal, `example.com` included, and a net-diff scan
   misses a literal added then removed within one push: use opaque non-email strings and scan newly
   reachable commits too. The private scans allow loopback and the RFC 5737 and RFC 3849 ranges.

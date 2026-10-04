@@ -43,9 +43,13 @@ jobs:
       security-events: write # uploads container scan results
     with:
       release_tag: ${{ needs.release-please.outputs.tag_name }}
+  # Builds :main on every non-release push; camden's Watchtower fastlane deploys it.
+  # always() keeps it running when release-please fails on its broker token, which
+  # would otherwise silently stop :main being rebuilt. release_created is 'true' only
+  # when a release was cut, so this never runs alongside publish.
   edge:
     needs: release-please
-    if: needs.release-please.outputs.release_created != 'true'
+    if: always() && needs.release-please.outputs.release_created != 'true'
     uses: ./.github/workflows/publish.yml
     permissions:
       actions: read # permits reusable workflow metadata access
