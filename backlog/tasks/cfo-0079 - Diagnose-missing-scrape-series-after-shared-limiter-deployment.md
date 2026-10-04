@@ -1,11 +1,11 @@
 ---
 id: CFO-0079
 title: Diagnose missing scrape series after shared-limiter deployment
-status: In Progress
+status: Parked
 assignee:
   - '@loop18-root'
 created_date: '2026-10-03 15:23'
-updated_date: '2026-10-04 12:56'
+updated_date: '2026-10-04 14:14'
 labels:
   - ops
   - limiter
@@ -55,4 +55,6 @@ Owner requested High-priority investigation of deployed polling performance. Fre
 Owner close out at18:10UTC. Final0.17.0startupreadback stopped before secondread, not an hour pass; healthy final deployment remains in place. High-priority performance investigation is next-loop priority. At18:04UTC46completed series, three never-success, no errors; durations19-40minutes prove configured5minute cadence not sustained. Source correction and exact in-flight/fairness attribution remain open, parked-live AC3alternative checked, no live-quiet acceptance.
 
 Loop18 historical read at 18:20UTC resolves the three previously missing collectors: email.routing first poll43.14min, firewall.metrics48.84min, httpreq.metrics54.64min. Completion/success counters publish only after RunOnce returns; all later succeeded. Shared0.5rps pacing saturated continuously; exact live percollector request/queue breakdown unavailable. Independent design challenge rejects184 unbatched selections as irreducible quota demand: bounded envelope coalescing already authorized, request frequency distinct from node/query cost. Revised design in progress; no correction/deploy/live-hour pass yet.
+
+Loop18: implementation attempts2; parked authority before unproved code landing. Draft in persistent polling worktree implements packing/fair dual quotas, safe validation and testclock migration; config/cfapi and migrated domain checks pass but allsix realregistered synctest cases deadlock because existing namecache mutex holds across paced REST while siblings wait. This is NOT authentic pacing red. Root inspected manualclock alternative: owned scheduler/admission injection cannot control unowned domain cacheTTL/currentmonth/snapshot/retention clocks, so full frozen clock semantics would be silently lost. Root rescue inspected only, no third change-and-verify attempt charged. No fullgate/race/CodeRabbit/security/baseline-red/candidate-green or F1 commit/push/release/deploy/hour proof. Preserve draft; resume after narrow domainclock ownership or independently validated witness amendment is authorized. AC2 stays open; existing AC3 checked only parked alternative from loop17, not real pass. Three initially missing collectors now precisely attributed as delayed firstpoll completions; percollector live request attribution remains unavailable.
 <!-- SECTION:NOTES:END -->
