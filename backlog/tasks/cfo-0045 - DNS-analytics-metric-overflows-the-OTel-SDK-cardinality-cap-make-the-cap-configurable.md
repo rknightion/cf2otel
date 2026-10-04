@@ -3,10 +3,10 @@ id: CFO-0045
 title: >-
   DNS analytics metric overflows the OTel SDK cardinality cap; make the cap
   configurable
-status: Parked
+status: Done
 assignee: []
 created_date: '2026-09-30 21:15'
-updated_date: '2026-10-04 14:44'
+updated_date: '2026-10-04 15:12'
 labels:
   - parity
   - dns
@@ -29,7 +29,7 @@ On the live account cloudflare_dns_queries_total has exactly 2000 series and an 
 - [x] #2 The DNS metric carries no attribute combination that can exceed its cap at default config; colo stays available on dns.query log events
 - [x] #3 A documented config key sets the SDK cardinality limit (default unchanged unless justified), validated at load
 - [x] #4 Any instrument reaching its cardinality limit is visible in cf2otel self-observability (metric or warning log naming the instrument), not only in the backend
-- [ ] #5 After deploy, the live DNS metric has no otel_metric_overflow series over 24h
+- [x] #5 After deploy, the live DNS metric has no otel_metric_overflow series over a 21h12m clean read (owner-accepted 2026-10-04, replacing 24h)
 <!-- AC:END -->
 
 ## Definition of Done
@@ -49,4 +49,6 @@ LIVE45 AC5 remains parked, not waived: the healthy DEP2 epoch was 2026-10-01 09:
 Loop18 interim owner-requested read over17:21UTC previousday..14:33UTC today (21h12m41s) found no DNS SDK-overflow series and absent selfoverflow counter, but not24h acceptance. Version reduction found two old0.16.1 samples at17:21:00.907, while existing DEP3 operation ended17:21:01.803; the original rounded boundary therefore straddles deployment. Root records factual goal-clock repair: safe postdeploy full24h window17:22UTC Oct3..17:22UTC Oct4, no-deploy condition retained. Original fixed window is not claimed accepted; one-minute shift will be explicitly reported for owner re-grade. No deployment or external write in loop18.
 
 Loop18: implementation attempts0 (read-only proof). Owner steering accepts operationally okay classification from clean21h12m41s evidence rather than holding run for24h. Clock-only wait canceled; literal AC5 remains unchecked, NOT a24h pass. Root recommends formally recording a shorter owner-accepted criterion if task closure is desired, otherwise resume full24h read after safe17:22UTC boundary. DNS overflow absent and selfoverflow counter absent over interim span; no deployment in loop18. Receipt retained privately, no values/identifiers in tracker.
+
+Loop19: owner accepts the 21h12m clean read in /Users/rob/repos/cf2otel/codex/live-loop18/dns-overflow-interim.json, replacing the prior 24h criterion. Implementation attempts0 in this loop; closed by explicit owner acceptance. Tracker change rides the polling fix landing, not a standalone push.
 <!-- SECTION:NOTES:END -->

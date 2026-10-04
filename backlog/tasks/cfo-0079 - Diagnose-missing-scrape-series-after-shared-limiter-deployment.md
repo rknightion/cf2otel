@@ -3,9 +3,9 @@ id: CFO-0079
 title: Diagnose missing scrape series after shared-limiter deployment
 status: Parked
 assignee:
-  - '@loop18-root'
+  - '@loop19-root'
 created_date: '2026-10-03 15:23'
-updated_date: '2026-10-04 14:14'
+updated_date: '2026-10-04 15:42'
 labels:
   - ops
   - limiter
@@ -41,6 +41,8 @@ Loop17 deployed0.16.1 with default shared0.5rps/burst1, process remained healthy
 Read-only root diagnosis mapping against deployed limiter source and first/retry-hour receipts, safe current Mimir poll/error/age samples and sanitized host logs. No new implementation budget or configuration write granted; affected live criteria park after the one authorized retry if still failing.
 
 Loop18: D1 source/live quota design packet, independent design review, F1 registered-collector red/green correction with security review and CodeRabbit before landing, composed gate and exact-SHA CI, release/deploy ops, all first polls then unchanged 65-minute hour and interval-age closeout.
+
+Loop19: resume preserved packing/fair-limiter draft; owner-authorized exported-client red/green replaces registered scheduler witness. Pre-land security review and CodeRabbit; just check plus repeated race gate; deploy via green main push, confirm build SHA and every first poll, unchanged 65-minute live-hour and final interval ages.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -57,4 +59,8 @@ Owner close out at18:10UTC. Final0.17.0startupreadback stopped before secondread
 Loop18 historical read at 18:20UTC resolves the three previously missing collectors: email.routing first poll43.14min, firewall.metrics48.84min, httpreq.metrics54.64min. Completion/success counters publish only after RunOnce returns; all later succeeded. Shared0.5rps pacing saturated continuously; exact live percollector request/queue breakdown unavailable. Independent design challenge rejects184 unbatched selections as irreducible quota demand: bounded envelope coalescing already authorized, request frequency distinct from node/query cost. Revised design in progress; no correction/deploy/live-hour pass yet.
 
 Loop18: implementation attempts2; parked authority before unproved code landing. Draft in persistent polling worktree implements packing/fair dual quotas, safe validation and testclock migration; config/cfapi and migrated domain checks pass but allsix realregistered synctest cases deadlock because existing namecache mutex holds across paced REST while siblings wait. This is NOT authentic pacing red. Root inspected manualclock alternative: owned scheduler/admission injection cannot control unowned domain cacheTTL/currentmonth/snapshot/retention clocks, so full frozen clock semantics would be silently lost. Root rescue inspected only, no third change-and-verify attempt charged. No fullgate/race/CodeRabbit/security/baseline-red/candidate-green or F1 commit/push/release/deploy/hour proof. Preserve draft; resume after narrow domainclock ownership or independently validated witness amendment is authorized. AC2 stays open; existing AC3 checked only parked alternative from loop17, not real pass. Three initially missing collectors now precisely attributed as delayed firstpoll completions; percollector live request attribution remains unavailable.
+
+Loop19: total implementation attempts4 (two historical, two resumed). Exported-client identical semantic ledger baseline552 physical requests versus candidate69 passes packing reproduction; REST FIFO/cancellation passes. Pre-land security rejects production-exported caller clock: valid capacities can be accelerated without wall-time pacing, contrary to private-only seam contract. No landing/deploy/live-hour. Final gate initially blocked by lint-lock infrastructure; unchanged-state gate retry in flight. Ceiling exhausted; resume needs owner-raised attempt ceiling to remove public clock bypass, then review/gates/deploy and live proof. AC2 remains unchecked; AC3 remains only prior parked alternative.
+
+Loop19 final unchanged-state gate retry passed just check and go test -race -count=10 ./internal/cfapi/ ./internal/config/, exit0. Tested dirty worktree on base f1a82ed280a1dddc856e8fdca722ac204592a8cb plus candidate patch b57b8595258db4982f2fa255e151d840924c7915359f35c94546f55ed744e248. Security clock-bypass blocker remains; no acceptance, commit, push, deployed proof or composed gate. Four attempts exhausted. Gate green is not landing permission.
 <!-- SECTION:NOTES:END -->
