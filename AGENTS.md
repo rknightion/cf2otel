@@ -15,13 +15,8 @@ designing a wave, and the **Wave operating model** doc for this repo's own rules
 wins on anything about this repo. **Cloudflare API surface - live-verified reference** is the data
 contract for every collector, and **Parity checklist - reference pollers** is the feature floor.
 
-Tracker traps:
-
-- **Never `--notes` or `--plan` bare.** They silently replace the whole section and exit 0. Use
-  `--append-notes` and `--append-plan`.
-- **Finalize in one call**: `backlog task edit <id> --check-ac 1 --check-ac 2 -s Done`.
-- `backlog/` is committed and public: no credential, account/zone/gateway ID, email, public IP or
-  internal hostname in a task or doc.
+`backlog/` is committed and public: no credential, account/zone/gateway ID, email, public IP or
+internal hostname in a task or doc.
 
 ## Ownership seams
 
