@@ -16,8 +16,40 @@ Settings load in this order: built-in defaults, YAML, then `CF2OTEL_` environmen
 | `state` | Persistent checkpoint directory; default `/var/lib/cf2otel`. |
 | `health`, `log` | Loopback health listener and application logging. |
 | `firewall` | `rule_dimensions` defaults to false; `max_metric_series_per_window` is a positive total cap, default 500. |
-| `cloudflare.rate_limit` | `requests_per_second` defaults to `0.5` (finite and positive); `burst` defaults to `1` (integer in `[1, 1000]`, checked before decoding YAML or environment overrides). One process-wide token bucket covers all Cloudflare clients, accounts, REST and GraphQL requests, pagination, retries and redirect hops. |
+| `cloudflare.rate_limit` | Aggregate `requests_per_second: 1.99`, `burst: 1`; nested `graphql_requests_per_second: 0.49`, `graphql_burst: 1`. Rates must be finite and positive and bursts exact integers. Both budgets are process-wide: every REST exchange consumes aggregate credit and every GraphQL exchange consumes aggregate and nested credit atomically, including retries, pages and redirect hops. |
 | `cloudflare.entitlement_backoff` | Positive duration, default `1h`. Disabled or absent GraphQL zone datasets share a timed settings decision across aliases and collectors using the same client, independently per zone and dataset. Override with `CF2OTEL_CLOUDFLARE__ENTITLEMENT_BACKOFF`. |
+
+The rate bounds are validated for all constructors, YAML and environment overrides:
+aggregate `requests_per_second * 300 + burst <= 600`, nested
+`graphql_requests_per_second * 300 + graphql_burst <= 150`, and nested rate cannot
+exceed aggregate rate. These reserve half the documented aggregate 1200/300s and
+conservative GraphQL 300/300s allowances; defaults bound attempts to 598 aggregate
+and 148 GraphQL in a rolling 300s interval. Credits count physical HTTP attempts,
+not dataset nodes. FIFO admission within each protocol chooses the oldest eligible
+head; a nested-credit wait does not block eligible REST work. Quota waits happen
+before the independent per-exchange HTTP timeout. Active budgets cannot be reset
+by constructing another client or repeating configuration.
+
+Environment overrides use `CF2OTEL_CLOUDFLARE__RATE_LIMIT__REQUESTS_PER_SECOND`,
+`CF2OTEL_CLOUDFLARE__RATE_LIMIT__BURST`,
+`CF2OTEL_CLOUDFLARE__RATE_LIMIT__GRAPHQL_REQUESTS_PER_SECOND` and
+`CF2OTEL_CLOUDFLARE__RATE_LIMIT__GRAPHQL_BURST`. Cloudflare YAML must use nested
+mappings, not dotted keys. Bursts are checked exactly after YAML aliases/merges
+and environment precedence, before weak decoding can truncate them.
+
+GraphQL generated selections can share a per-client physical envelope, retaining
+independent exact fields, filters, limits, scopes and windows. Packing is bounded
+to eight dataset nodes, ten zones or one account, and a 32-KiB encoded JSON body,
+with at most 250ms accumulation from the oldest child. Settings/data and
+zone/account work are separate classes. Pending work is bounded to 256 logical
+children and 8 MiB of generated payload per client; excess submissions fail
+explicitly. Any provider GraphQL error fails its entire envelope. Packing never
+caches analytics, changes source windows, combines sampled rows, or increases
+quota allowances. Cloudflare's undocumented combined node/resource-cost ceiling
+remains an upstream acceptance risk: these engineering caps are not a provider
+cost guarantee. No arbitrary-zone/page/row-volume cadence guarantee is implied.
+Default enablement, all collector intervals, lookbacks and source coverage are
+unchanged.
 
 Collector keys are `access.logins`, `access.login_metrics`, `access.scim`, `access.seats`, `inventory.access`, `httpreq.events`, `httpreq.metrics`, `aigateway.logs`, `aigateway.metrics`, `aigateway.coverage`, `audit.logs`, `firewall.events`, `firewall.metrics`, `dns.events`, `dns.metrics`, `rum.pageloads`, `rum.web_vitals`, `gateway.dns`, `workers.overview`, `workers.invocations`, `turnstile.events`, `logpush.health`, `d1.analytics`, `d1.queries`, `d1.storage`, `kv.operations`, `kv.storage`, `r2.bandwidth`, `r2.catalog_data`, `r2.catalog_maintenance`, `r2.operations`, `r2.storage`, `r2.sql`, `durableobjects.invocations`, `durableobjects.periodic`, `durableobjects.sql_storage`, `durableobjects.subrequests`, `queues.backlog`, `queues.consumer`, `queues.delayed_backlog`, `queues.message_operations`, `email.routing`, `email.sending`, `selfobs`, `certs.packs`, and `tunnels.status`. Enabled collectors default to five-minute intervals. `access.seats` is enabled by default and polls every 15 minutes as a snapshot, without windows or checkpoints. It counts the independent `access_seat` and `gateway_seat` user flags across the complete paginated Access users list, emitting only the bounded seat-type attribute. Both flags may be true for one user; do not sum the two series as a unique billing-user total. An empty list publishes two zeros; missing, null or nonboolean flags, HTTP errors and incomplete pagination fail the scrape without publishing partial counts. To disable it, set `CF2OTEL_COLLECTORS__ACCESS_SEATS__ENABLED=false`; to override its interval, set `CF2OTEL_COLLECTORS__ACCESS_SEATS__INTERVAL=30m`. The email collectors sum Groups counts across account-owned zones over complete five-minute buckets; they emit no zone metric attributes. DMARC is excluded. `aigateway.metrics` is disabled and unscheduled because its GraphQL Groups ingestion lag is not bounded; `aigateway.logs` emits the AI Gateway metrics from REST rows. The default initial lookback is 30 minutes and maximum window is one hour. `aigateway.coverage` is present but disabled by default. The scheduler advances a checkpoint after a successful window or after it drops a window following three payload rejections.
 
@@ -31,8 +63,10 @@ See [Security and PII](security.md) before enabling AI Gateway body capture or w
 
 Override the process budget with `CF2OTEL_CLOUDFLARE__RATE_LIMIT__REQUESTS_PER_SECOND`
 and `CF2OTEL_CLOUDFLARE__RATE_LIMIT__BURST`, or the corresponding YAML keys.
-The default sustained rate is 150 calls per five minutes, below the documented
-GraphQL limit of 300 queries per five minutes. Other applications using the same
+The default sustained rates are 1.99 aggregate and 0.49 GraphQL requests per
+second, both with burst 1: at most 598 aggregate and 148 GraphQL physical attempts
+per rolling five minutes. GraphQL also consumes aggregate credit; its allowance
+is not added to the aggregate allowance. Other applications using the same
 upstream quota are not coordinated by this process-local budget.
 
 Quota waiting happens before each HTTP exchange starts its `cloudflare.timeout`,

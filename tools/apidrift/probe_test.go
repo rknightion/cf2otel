@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,11 +22,40 @@ import (
 
 func TestMain(m *testing.M) {
 	// Catalog HTTP fixtures retain caller deadlines with explicit process pacing.
-	if err := cfapi.ConfigureProcessRateLimit(config.RateLimitConfig{RequestsPerSecond: 10000, Burst: 1}); err != nil {
+	if err := cfapi.ConfigureProcessRateLimitWithClock(config.Default().Cloudflare.RateLimit, &fixtureAdmissionClock{now: time.Now()}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	os.Exit(m.Run())
+}
+
+// Advance only Cloudflare admission/accumulation, never HTTP or TTL time.
+type fixtureAdmissionClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func (c *fixtureAdmissionClock) Now() time.Time { c.mu.Lock(); defer c.mu.Unlock(); return c.now }
+func (c *fixtureAdmissionClock) NewTimer(d time.Duration) cfapi.AdmissionTimer {
+	c.mu.Lock()
+	c.now = c.now.Add(max(0, d))
+	at := c.now
+	c.mu.Unlock()
+	ch := make(chan time.Time, 1)
+	ch <- at
+	return &fixtureAdmissionTimer{ch: ch}
+}
+
+type fixtureAdmissionTimer struct{ ch chan time.Time }
+
+func (t *fixtureAdmissionTimer) C() <-chan time.Time { return t.ch }
+func (t *fixtureAdmissionTimer) Stop() bool {
+	select {
+	case <-t.ch:
+		return true
+	default:
+		return false
+	}
 }
 
 type fakeAPI struct {
