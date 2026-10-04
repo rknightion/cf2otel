@@ -25,7 +25,7 @@ needs a Docker daemon. Run `just` with stdin from `/dev/null`, in a clean worktr
   password, authorization or headers and prints key names and value lengths only.
 - The compose host runs `:main` (`pull_policy: always`, Watchtower fastlane, 5-minute poll). A
   green push to main is the deploy: the release workflow's `edge` job publishes `:main` and
-  Watchtower recreates the app. Confirm the live commit from `cf2otel_build_info` `build_commit` on
+  Watchtower recreates the app. Confirm the live commit from `cf2otel_build_info_ratio` `build_commit` on
   robknight; roll back by reverting on main. A new `CF2OTEL_` variable needs its own compose
   `environment:` entry, which is a host edit and needs an ops grant.
 
@@ -50,6 +50,8 @@ needs a Docker daemon. Run `just` with stdin from `/dev/null`, in a clean worktr
   gap. Before closeout read `time() - cf2otel_scrape_last_success_timestamp_seconds` per collector.
 - After a start, the first cycle may fail once on account-scoped collectors; begin an hour proof
   after the first complete cycle and never revert a healthy deploy for it.
+- The scheduled "Cloudflare API drift" workflow is not a required check (`ci-success` is). Read
+  its log before treating red as a gate or as real drift.
 - The drift canary reads only what `restProbeQuery` in `tools/apidrift/probe.go` asks for, mostly
   one row, so a default-paging census does not show what it sees. Two Worker-destination Access
   apps legitimately have no `domain`; JSON null `domain` counts as missing on a domain-based row.
