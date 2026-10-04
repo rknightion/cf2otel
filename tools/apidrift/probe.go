@@ -81,6 +81,13 @@ type probeAPI interface {
 	Get(context.Context, string, url.Values, any) error
 }
 
+// These fields are the live-accepted firewall rule-dimension selection. An
+// empty response attests selection acceptance, never populated value shape.
+var firewallGroupFields = []string{
+	"count", "dimensions.action", "dimensions.source", "dimensions.ruleId",
+	"dimensions.clientRequestHTTPHost", "dimensions.clientCountryName",
+}
+
 type rawProbeAPI interface {
 	GetRaw(context.Context, string, url.Values, any) error
 }
@@ -292,7 +299,13 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 	if len(accounts) == 0 || len(accounts) > 4 || len(zones) == 0 || len(zones) > 32 {
 		return []string{"scope count outside bounded probe range"}
 	}
+	var firewallRequest *cfapi.GraphQLRequest
+	firewallOrdinal := 0
+	firewallContract := false
 	for _, g := range c.GraphQL {
+		if g.Scope == cfapi.ZoneScope && g.Dataset == "firewallEventsAdaptiveGroups" {
+			firewallContract = true
+		}
 		ids := make([]string, 0)
 		if g.Scope == cfapi.AccountScope {
 			for _, account := range accounts {
@@ -309,6 +322,12 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 			if err != nil {
 				diffs = append(diffs, label+": settings request failed")
 				continue
+			}
+			if firewallRequest == nil && g.Scope == cfapi.ZoneScope && g.Dataset == "firewallEventsAdaptiveGroups" {
+				if request, ok := firewallGroupRequest(id, s, time.Now().UTC()); ok {
+					firewallRequest = &request
+					firewallOrdinal = index + 1
+				}
 			}
 			if !s.Enabled {
 				if g.AllowDisabled {
@@ -329,6 +348,39 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 			}
 			if s.MaxPageSize < 100 || s.MaxNumberOfFields < len(g.RequiredFields) {
 				diffs = append(diffs, label+": page or field limit below collector requirement")
+			}
+		}
+	}
+	if getter, ok := api.(cfapi.GraphQLBatchQuerier); ok && firewallContract {
+		if firewallRequest == nil {
+			fmt.Println("GraphQL zone/firewallEventsAdaptiveGroups: unprobed, no eligible zone advertising complete selection and usable limits; populated value shape unproven")
+		} else {
+			label := fmt.Sprintf("GraphQL zone/firewallEventsAdaptiveGroups scope #%d", firewallOrdinal)
+			// A singleton batch is the strict cfapi seam: every wanted field
+			// must remain available, and entitlement errors never renegotiate
+			// or retry with a reduced selection. One selection, one data query.
+			result, err := getter.QueryBatch(ctx, []cfapi.GraphQLBatchSelection{{Alias: "firewall_canary", Request: *firewallRequest}})
+			var rows []map[string]any
+			if err == nil {
+				err = json.Unmarshal(result["firewall_canary"], &rows)
+				if err == nil && rows == nil {
+					err = errors.New("selection probe missing row array")
+				}
+			}
+			// QueryBatch reports saturation before returning the row. That proves
+			// selection acceptance, but does not expose any row shape to check.
+			if _, saturated := cfapi.AsSaturation(err); saturated {
+				fmt.Println(label + ": selection accepted, limit reached; populated value shape unproven")
+			} else if err != nil {
+				diffs = append(diffs, label+": selection probe failed")
+			} else if len(rows) == 0 {
+				fmt.Println(label + ": selection accepted, zero rows; populated value shape unproven")
+			} else {
+				for _, field := range firewallGroupFields {
+					if !hasNonNullField(rows[0], field) {
+						diffs = append(diffs, label+": missing field "+field)
+					}
+				}
 			}
 		}
 	}
@@ -506,6 +558,26 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 		}
 	}
 	return diffs
+}
+
+// Select one unsplit, limit-one recent window strictly inside retention. The
+// half-retention bound leaves room for the client's own later retention check.
+func firewallGroupRequest(id string, s cfapi.DatasetSettings, now time.Time) (cfapi.GraphQLRequest, bool) {
+	if !s.Enabled || s.MaxNumberOfFields < len(firewallGroupFields) || s.MaxPageSize < 1 || s.MaxDuration < 1 || s.NotOlderThan < 2 {
+		return cfapi.GraphQLRequest{}, false
+	}
+	for _, field := range firewallGroupFields {
+		if !hasAvailableField(s.AvailableFields, field) {
+			return cfapi.GraphQLRequest{}, false
+		}
+	}
+	seconds := min(int64(300), s.MaxDuration, s.NotOlderThan/2)
+	to := now.Truncate(time.Second)
+	return cfapi.GraphQLRequest{
+		Scope: cfapi.ZoneScope, ScopeID: id, Dataset: "firewallEventsAdaptiveGroups",
+		WantedFields: append([]string(nil), firewallGroupFields...), Limit: 1,
+		From: to.Add(-time.Duration(seconds) * time.Second), To: to,
+	}, true
 }
 
 func hasAvailableField(available []string, required string) bool {
