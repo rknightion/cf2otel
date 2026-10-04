@@ -1,11 +1,11 @@
 ---
 id: CFO-0079
 title: Diagnose missing scrape series after shared-limiter deployment
-status: Parked
+status: In Progress
 assignee:
-  - '@loop19-root'
+  - '@loop20-root'
 created_date: '2026-10-03 15:23'
-updated_date: '2026-10-04 15:42'
+updated_date: '2026-10-04 18:08'
 labels:
   - ops
   - limiter
@@ -43,6 +43,8 @@ Read-only root diagnosis mapping against deployed limiter source and first/retry
 Loop18: D1 source/live quota design packet, independent design review, F1 registered-collector red/green correction with security review and CodeRabbit before landing, composed gate and exact-SHA CI, release/deploy ops, all first polls then unchanged 65-minute hour and interval-age closeout.
 
 Loop19: resume preserved packing/fair-limiter draft; owner-authorized exported-client red/green replaces registered scheduler witness. Pre-land security review and CodeRabbit; just check plus repeated race gate; deploy via green main push, confirm build SHA and every first poll, unchanged 65-minute live-hour and final interval ages.
+
+Loop20: owner grants two additional clock-only attempts. Refuse ConfigureProcessRateLimitWithClock outside testing.Testing; preserve packing/fairness semantics. Rebase onto current main, unchanged public-client and FIFO witnesses, delta security and CodeRabbit, candidate gates, landing and exact-SHA CI, then all49 first polls followed by unchanged65minute proof and interval ages.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -63,4 +65,8 @@ Loop18: implementation attempts2; parked authority before unproved code landing.
 Loop19: total implementation attempts4 (two historical, two resumed). Exported-client identical semantic ledger baseline552 physical requests versus candidate69 passes packing reproduction; REST FIFO/cancellation passes. Pre-land security rejects production-exported caller clock: valid capacities can be accelerated without wall-time pacing, contrary to private-only seam contract. No landing/deploy/live-hour. Final gate initially blocked by lint-lock infrastructure; unchanged-state gate retry in flight. Ceiling exhausted; resume needs owner-raised attempt ceiling to remove public clock bypass, then review/gates/deploy and live proof. AC2 remains unchecked; AC3 remains only prior parked alternative.
 
 Loop19 final unchanged-state gate retry passed just check and go test -race -count=10 ./internal/cfapi/ ./internal/config/, exit0. Tested dirty worktree on base f1a82ed280a1dddc856e8fdca722ac204592a8cb plus candidate patch b57b8595258db4982f2fa255e151d840924c7915359f35c94546f55ed744e248. Security clock-bypass blocker remains; no acceptance, commit, push, deployed proof or composed gate. Four attempts exhausted. Gate green is not landing permission.
+
+Loop20 adopted. Historical attempts4 remain; two owner-granted clock-only additional attempts. Current main already publishes the newer loop19 tracker records. Root owns tracker writes; no pushes during live proof.
+
+Loop20 clock-only additional attempt1 passes at a756b7af7e6524143137731a5ceaaf1d0d2a9c52 on base0f69a0b60321b4aa5ea3233479afe67d6c30eba7. Frozen public-client ledger552 physical requests to69, identical semantic hash; FIFO A,C,newcomers; production normal executable clock rejection red/green. just check and race count10 exit0 after lint-lock infrastructure retry. Independent security accepts clock-only delta; CodeRabbit complete with two owner-rejected unchanged-path majors, no new delta blocker. No push yet; live acceptance and composed gate/CI outstanding.
 <!-- SECTION:NOTES:END -->
