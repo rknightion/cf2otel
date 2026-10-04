@@ -1,11 +1,11 @@
 ---
 id: CFO-0079
 title: Diagnose missing scrape series after shared-limiter deployment
-status: Parked
+status: In Progress
 assignee:
-  - '@loop17-root'
+  - '@loop18-root'
 created_date: '2026-10-03 15:23'
-updated_date: '2026-10-03 18:12'
+updated_date: '2026-10-04 12:56'
 labels:
   - ops
   - limiter
@@ -39,6 +39,8 @@ Loop17 deployed0.16.1 with default shared0.5rps/burst1, process remained healthy
 
 <!-- SECTION:PLAN:BEGIN -->
 Read-only root diagnosis mapping against deployed limiter source and first/retry-hour receipts, safe current Mimir poll/error/age samples and sanitized host logs. No new implementation budget or configuration write granted; affected live criteria park after the one authorized retry if still failing.
+
+Loop18: D1 source/live quota design packet, independent design review, F1 registered-collector red/green correction with security review and CodeRabbit before landing, composed gate and exact-SHA CI, release/deploy ops, all first polls then unchanged 65-minute hour and interval-age closeout.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -51,4 +53,6 @@ Fresh loop17 drift review confirms AC3 explicit parked alternative is satisfied:
 Owner requested High-priority investigation of deployed polling performance. Fresh Grafana0.17.0 read around18:04UTC shows46/49completed collectors and zero scrape errors; email.routing/firewall.metrics/httpreq.metrics still never-success. Mean completed polls: HTTPthreats2373.98s, HTTPevents2198.50s, Logpushfailures2088.44s, firewall1720.37s, certificates1627.81s, DNS1512.22/1461.24s.1277APIrequests at shared0.5rps imply roughly42.6minutes request capacity. Sharedpacing strongly supported bottleneck, exact missingcollector queue/inflight state and starvation notproved. Most configured5mincadences therefore not sustained. Preserve frozenrate/burst until new authorized correction; nextloop should prioritize cause/reproduction, fairboundedpacing and realistic wholepoll budgets without weakening upstreamquota/window guarantees. Numeric safe receipt /Users/rob/repos/cf2otel/codex/live-loop17/poll-performance-1758.json.
 
 Owner close out at18:10UTC. Final0.17.0startupreadback stopped before secondread, not an hour pass; healthy final deployment remains in place. High-priority performance investigation is next-loop priority. At18:04UTC46completed series, three never-success, no errors; durations19-40minutes prove configured5minute cadence not sustained. Source correction and exact in-flight/fairness attribution remain open, parked-live AC3alternative checked, no live-quiet acceptance.
+
+Loop18 historical read at 18:20UTC resolves the three previously missing collectors: email.routing first poll43.14min, firewall.metrics48.84min, httpreq.metrics54.64min. Completion/success counters publish only after RunOnce returns; all later succeeded. Shared0.5rps pacing saturated continuously; exact live percollector request/queue breakdown unavailable. Independent design challenge rejects184 unbatched selections as irreducible quota demand: bounded envelope coalescing already authorized, request frequency distinct from node/query cost. Revised design in progress; no correction/deploy/live-hour pass yet.
 <!-- SECTION:NOTES:END -->

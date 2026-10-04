@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-10-03 12:21'
+updated_date: '2026-10-04 12:50'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -354,3 +354,11 @@ The unchanged full API drift canary at source `597f2bfe3fedf08c5f9a5594fbe3f6a7e
 The existing `dex-http-results`, `dex-traceroute-results`, and `lb-pool-health` detail templates remain **documented shape, no live rows observed**, explicitly `documented_only` and unprobed with their existing nonblank reasons. The canary's successful empty lists do not prove populated fields, health flags, measurements, pagination completeness, least privilege, deployed collection or browser rendering. No resource, policy, permission or credential was changed for these observations.
 
 A separate first-zone firewall rule/host/country GraphQL selection returned an access-denial error under HTTP 200. It is not shape or populated-value proof and does not supersede prior enabled-zone observations; this loop leaves that live criterion parked and makes no second-zone or alternate-token retry.
+
+## Loop 18 eligible firewall rule-dimension selection (2026-10-04)
+
+At 12:23 UTC, the root checked zone settings before choosing an eligible scope advertising `count`, `dimensions_action`, `dimensions_source`, `dimensions_ruleId`, `dimensions_clientRequestHTTPHost`, and `dimensions_clientCountryName`. Observed limits: maxNumberOfFields 30, maxDuration 86400 seconds, notOlderThan 259200 seconds, maxPageSize 10000. One exact limit-one recent-five-minute selection of all six fields was accepted without GraphQL errors and returned zero rows. This supersedes loop 17's ineligible-first-zone rejection for selection validity only, not populated values.
+
+At 12:49 UTC, the real task-scoped API drift canary exercised the same six-field selection through the strict singleton batch seam. It reported `selection accepted, limit reached; populated value shape unproven` and `Cloudflare API contract matched` with exit 0. The supplied contract comprised the existing firewall settings entry and mandatory zone-list entry only; this is not a full 43-dataset/25-REST contract pass. Saturation preserves accepted-selection evidence but exposes no row shape. No actual rule, host, country or other private value is reproduced here. The strict selection never refreshes entitlements or retries with fewer fields; existing bounded retries of the identical request remain allowed within one canary invocation.
+
+These receipts establish live acceptance of the rule/host/country field selection and its ongoing eligible-zone canary. They do not prove populated value types, complete pagination, metric delivery, least privilege or dashboard rendering. No token, policy, resource, permission or credential was changed.
