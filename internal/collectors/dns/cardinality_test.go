@@ -30,6 +30,10 @@ func TestRegisteredDNSLifetimeCardinalityBudget(t *testing.T) {
 	}{
 		{"default many zones", 10000, 201, 1, 9999},
 		{"unlimited SDK still bounded", 0, 201, 1, 9999},
+		// Exercise every prefix of the churn sequence with the same provider and
+		// collector alive across its windows, then assert its final OTLP export.
+		{"small limit initial window", 4, 1, 1, 3},
+		{"small limit second window", 4, 1, 2, 3},
 		{"small limit window churn", 4, 1, 3, 3},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -74,11 +78,19 @@ func TestRegisteredDNSLifetimeCardinalityBudget(t *testing.T) {
 			if providerLimit == 0 {
 				providerLimit = -1
 			}
-			p, err := telemetry.NewProviders(context.Background(), telemetry.ProviderOptions{Endpoint: server.URL, Interval: 10 * time.Millisecond, CardinalityLimit: providerLimit})
+			// FlushCommit flushes logs and traces, not metrics. A fast periodic
+			// reader can leave latest pointing at a mid-window snapshot when a
+			// wall-clock polling deadline expires. Shutdown below synchronously
+			// collects and exports all metrics; don't compete with it every 10ms.
+			p, err := telemetry.NewProviders(context.Background(), telemetry.ProviderOptions{Endpoint: server.URL, Interval: time.Hour, CardinalityLimit: providerLimit})
 			if err != nil {
 				t.Fatal(err)
 			}
+			shutdown := false
 			defer func() {
+				if shutdown {
+					return
+				}
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 				if err := p.Shutdown(ctx); err != nil {
@@ -125,61 +137,58 @@ func TestRegisteredDNSLifetimeCardinalityBudget(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				var m *metricspb.Metric
-				deadline := time.Now().Add(5 * time.Second)
-				for time.Now().Before(deadline) {
-					mu.Lock()
-					m = latest
-					mu.Unlock()
-					var sum float64
-					if m != nil {
-						for _, point := range m.GetSum().DataPoints {
-							sum += point.GetAsDouble()
-						}
-					}
-					if sum == expected {
-						break
-					}
-					time.Sleep(10 * time.Millisecond)
-				}
-				if m == nil {
-					t.Fatal("DNS metric missing")
-				}
-				var total, folded float64
-				normals := 0
-				for _, point := range m.GetSum().DataPoints {
-					total += point.GetAsDouble()
-					aggregated := false
-					for _, attr := range point.Attributes {
-						if attr.Key == "otel.metric.overflow" && attr.Value.GetBoolValue() {
-							t.Errorf("SDK overflow at limit %d window %d", tc.limit, window)
-						}
-						if attr.Key == semconv.AttrDNSZone && attr.Value.GetStringValue() == "<aggregated>" {
-							aggregated = true
-						}
-						if attr.Key == semconv.AttrDNSColo {
-							t.Error("colo leaked to DNS metric")
-						}
-					}
-					if aggregated {
-						if len(point.Attributes) != 1 {
-							t.Error("fallback has extra dimensions")
-						}
-						folded += point.GetAsDouble()
-					} else {
-						normals++
-						if len(point.Attributes) != 6 {
-							t.Error("normal attributes changed")
-						}
-					}
-				}
-				if total != expected || len(m.GetSum().DataPoints) > tc.maxPoints || folded == 0 {
-					t.Fatalf("total=%v want=%v points=%d max=%d folded=%v", total, expected, len(m.GetSum().DataPoints), tc.maxPoints, folded)
-				}
-				if tc.limit == 4 && (normals != 2 || folded != expected-4) {
-					t.Fatalf("sticky admission lost: normals=%d folded=%v want=%v", normals, folded, expected-4)
-				}
 				from = to
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			err = p.Shutdown(ctx)
+			cancel()
+			shutdown = true
+			if err != nil {
+				t.Fatal(err)
+			}
+			mu.Lock()
+			m := latest
+			mu.Unlock()
+			if m == nil {
+				t.Fatal("DNS metric missing")
+			}
+			if sum := m.GetSum(); sum == nil || sum.AggregationTemporality != metricspb.AggregationTemporality_AGGREGATION_TEMPORALITY_CUMULATIVE {
+				t.Fatal("DNS queries must export a cumulative sum")
+			}
+			var total, folded float64
+			normals := 0
+			for _, point := range m.GetSum().DataPoints {
+				total += point.GetAsDouble()
+				aggregated := false
+				for _, attr := range point.Attributes {
+					if attr.Key == "otel.metric.overflow" && attr.Value.GetBoolValue() {
+						t.Errorf("SDK overflow at limit %d after %d windows", tc.limit, tc.windows)
+					}
+					if attr.Key == semconv.AttrDNSZone && attr.Value.GetStringValue() == "<aggregated>" {
+						aggregated = true
+					}
+					if attr.Key == semconv.AttrDNSColo {
+						t.Error("colo leaked to DNS metric")
+					}
+				}
+				if aggregated {
+					if len(point.Attributes) != 1 {
+						t.Error("fallback has extra dimensions")
+					}
+					folded += point.GetAsDouble()
+				} else {
+					normals++
+					if len(point.Attributes) != 6 {
+						t.Error("normal attributes changed")
+					}
+				}
+			}
+			t.Logf("after %d windows: total=%v want=%v points=%d max=%d folded=%v", tc.windows, total, expected, len(m.GetSum().DataPoints), tc.maxPoints, folded)
+			if total != expected || len(m.GetSum().DataPoints) > tc.maxPoints || folded == 0 {
+				t.Fatalf("total=%v want=%v points=%d max=%d folded=%v", total, expected, len(m.GetSum().DataPoints), tc.maxPoints, folded)
+			}
+			if tc.limit == 4 && (normals != 2 || folded != expected-4) {
+				t.Fatalf("sticky admission lost: normals=%d folded=%v want=%v", normals, folded, expected-4)
 			}
 			if got := strings.Count(warnings.String(), "DNS metric series coalesced"); got != 1 || !strings.Contains(warnings.String(), semconv.MetricDNSQueries) {
 				t.Fatalf("want one coalescing warning naming DNS instrument, got %s", warnings.String())
