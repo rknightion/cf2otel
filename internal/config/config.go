@@ -69,43 +69,16 @@ type Config struct {
 	Zones      ZonesConfig                `yaml:"zones" json:"zones"`
 }
 type RateLimitConfig struct {
-	RequestsPerSecond        float64 `yaml:"requests_per_second" json:"requests_per_second"`
-	Burst                    int     `yaml:"burst" json:"burst"`
-	GraphQLRequestsPerSecond float64 `yaml:"graphql_requests_per_second" json:"graphql_requests_per_second"`
-	GraphQLBurst             int     `yaml:"graphql_burst" json:"graphql_burst"`
-}
-
-// WithDefaults preserves old programmatic literals which omitted both nested
-// fields. A partially specified pair is not defaulted and fails validation.
-func (c RateLimitConfig) WithDefaults() RateLimitConfig {
-	if c.GraphQLRequestsPerSecond == 0 && c.GraphQLBurst == 0 {
-		c.GraphQLRequestsPerSecond, c.GraphQLBurst = 0.49, 1
-	}
-	return c
+	RequestsPerSecond float64 `yaml:"requests_per_second" json:"requests_per_second"`
+	Burst             int     `yaml:"burst" json:"burst"`
 }
 
 func (c RateLimitConfig) Validate() error {
-	c = c.WithDefaults()
-	for _, budget := range []struct {
-		name         string
-		rate         float64
-		burst, quota int
-	}{
-		{"", c.RequestsPerSecond, c.Burst, 600},
-		{"graphql_", c.GraphQLRequestsPerSecond, c.GraphQLBurst, 150},
-	} {
-		if math.IsNaN(budget.rate) || math.IsInf(budget.rate, 0) || budget.rate <= 0 {
-			return fmt.Errorf("cloudflare.rate_limit.%srequests_per_second must be finite and positive", budget.name)
-		}
-		if budget.burst < 1 || budget.burst > 1000 {
-			return fmt.Errorf("cloudflare.rate_limit.%sburst must be an integer in [1, 1000]", budget.name)
-		}
-		if budget.rate*300+float64(budget.burst) > float64(budget.quota) {
-			return fmt.Errorf("cloudflare.rate_limit.%srequests_per_second * 300 + %sburst must be <= %d", budget.name, budget.name, budget.quota)
-		}
+	if math.IsNaN(c.RequestsPerSecond) || math.IsInf(c.RequestsPerSecond, 0) || c.RequestsPerSecond <= 0 {
+		return errors.New("cloudflare.rate_limit.requests_per_second must be finite and positive")
 	}
-	if c.GraphQLRequestsPerSecond > c.RequestsPerSecond {
-		return errors.New("cloudflare.rate_limit.graphql_requests_per_second must not exceed requests_per_second")
+	if c.Burst < 1 || c.Burst > 1000 {
+		return errors.New("cloudflare.rate_limit.burst must be an integer in [1, 1000]")
 	}
 	return nil
 }
@@ -225,7 +198,7 @@ var disabledCollectorNames = []string{"aigateway.coverage", "logpush.failures", 
 
 func Default() Config {
 	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{RequestSource: "eyeball", Breakdowns: []string{"status", "origin_status", "country", "protocol", "tls_protocol", "method", "content_type"}, Scope: "access_protected", MaxMetricHostsPerZone: 1000, MaxMetricSeriesPerWindow: 10000}, Platform: PlatformConfig{MaxMetricSeriesPerWindow: 500}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{MetricCardinalityLimit: 10000, Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
-	c.Cloudflare.RateLimit = RateLimitConfig{RequestsPerSecond: 1.99, Burst: 1, GraphQLRequestsPerSecond: 0.49, GraphQLBurst: 1}
+	c.Cloudflare.RateLimit = RateLimitConfig{RequestsPerSecond: 0.5, Burst: 1}
 	c.Cloudflare.EntitlementBackoff = time.Hour
 	c.HTTP.HighCardinalityLimit = 500
 	c.HTTP.HighCardinalityHosts = []string{}
@@ -306,21 +279,16 @@ func Load(path string) (*Config, error) {
 	}
 	// Check after all overrides, before weak decoding can truncate fractions or
 	// coerce booleans. Normalize the checked value to avoid decoder overflow.
-	for _, key := range []string{"cloudflare.rate_limit.burst", "cloudflare.rate_limit.graphql_burst"} {
-		burst, err := integerBurst(k.Get(key))
-		if err != nil {
-			return nil, fmt.Errorf("%s: invalid integer burst", key)
-		}
-		if err := k.Set(key, burst); err != nil {
-			return nil, fmt.Errorf("%s: %w", key, err)
-		}
+	burst, err := integerBurst(k.Get("cloudflare.rate_limit.burst"))
+	if err != nil {
+		return nil, err
+	}
+	if err := k.Set("cloudflare.rate_limit.burst", burst); err != nil {
+		return nil, fmt.Errorf("cloudflare.rate_limit.burst: %w", err)
 	}
 	var c Config
 	if err := k.UnmarshalWithConf("", &c, koanf.UnmarshalConf{Tag: "yaml", DecoderConfig: &mapstructure.DecoderConfig{Result: &c, WeaklyTypedInput: true, ErrorUnused: true, DecodeHook: mapstructure.StringToTimeDurationHookFunc()}}); err != nil {
 		return nil, fmt.Errorf("decode config: %w", err)
-	}
-	if err := c.Cloudflare.RateLimit.Validate(); err != nil {
-		return nil, err
 	}
 	if err := applyCollectorEnvironment(&c); err != nil {
 		return nil, fmt.Errorf("environment: %w", err)
@@ -344,9 +312,6 @@ func (burstYAMLParser) Unmarshal(data []byte) (map[string]any, error) {
 	}
 	values := make(map[string]any, len(raw))
 	for key, value := range raw {
-		if strings.HasPrefix(key, "cloudflare.") {
-			return nil, errors.New("dotted cloudflare YAML keys are unsupported; use nested mappings")
-		}
 		resolved, err := value.atPath(key)
 		if err != nil {
 			return nil, err
@@ -357,12 +322,10 @@ func (burstYAMLParser) Unmarshal(data []byte) (map[string]any, error) {
 	if err := k.Load(rawBurstProvider(values), nil); err != nil {
 		return nil, err
 	}
-	burstKeys := []string{"cloudflare.rate_limit.burst", "cloudflare.rate_limit.graphql_burst"}
-	for _, key := range burstKeys {
-		if k.Exists(key) && !burstEnvironmentOverride(key) {
-			if _, err := integerBurst(k.Get(key)); err != nil {
-				return nil, fmt.Errorf("%s: invalid integer burst", key)
-			}
+	const burstKey = "cloudflare.rate_limit.burst"
+	if k.Exists(burstKey) && !burstEnvironmentOverride() {
+		if _, err := integerBurst(k.Get(burstKey)); err != nil {
+			return nil, err
 		}
 	}
 	// Only now decode ordinary numeric values. A superseded YAML burst need
@@ -371,18 +334,17 @@ func (burstYAMLParser) Unmarshal(data []byte) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	decoded := koanf.New(".")
-	if err := decoded.Load(rawBurstProvider(out), nil); err != nil {
-		return nil, err
-	}
-	for _, key := range burstKeys {
-		if k.Exists(key) {
-			if err := decoded.Set(key, k.Get(key)); err != nil {
-				return nil, err
-			}
+	if k.Exists(burstKey) {
+		// Set via koanf so dotted YAML keys behave exactly like the loader.
+		decoded := koanf.New(".")
+		if err := decoded.Load(rawBurstProvider(out), nil); err != nil {
+			return nil, err
 		}
+		if err := decoded.Set("cloudflare.rate_limit.burst", k.Get("cloudflare.rate_limit.burst")); err != nil {
+			return nil, err
+		}
+		out = decoded.Raw()
 	}
-	out = decoded.Raw()
 	return out, nil
 }
 
@@ -397,10 +359,10 @@ func (rawBurstProvider) ReadBytes() ([]byte, error) {
 	return nil, errors.New("raw YAML map has no bytes")
 }
 
-func burstEnvironmentOverride(name string) bool {
+func burstEnvironmentOverride() bool {
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")
-		if strings.HasPrefix(key, EnvPrefix) && strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(key, EnvPrefix)), "__", ".") == name {
+		if strings.HasPrefix(key, EnvPrefix) && strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(key, EnvPrefix)), "__", ".") == "cloudflare.rate_limit.burst" {
 			return true
 		}
 	}
@@ -436,9 +398,6 @@ func (r rawBurstYAML) atPath(path string) (any, error) {
 			}
 			values := make(map[string]any, len(children))
 			for key, child := range children {
-				if strings.Contains(key, ".") {
-					return nil, errors.New("dotted cloudflare YAML keys are unsupported; use nested mappings")
-				}
 				resolved, err := child.atPath(path + "." + key)
 				if err != nil {
 					return nil, err

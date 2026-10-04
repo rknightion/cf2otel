@@ -45,12 +45,6 @@ type HTTPClient struct {
 	now                func() time.Time
 	entitlementBackoff time.Duration
 	settingsPending    map[string]chan struct{}
-	graphMu            sync.Mutex
-	graphPending       []*graphChild
-	graphBytes         int
-	graphChildren      int
-	graphRunning       bool
-	graphWake          chan struct{}
 }
 type cachedSettings struct {
 	value   DatasetSettings
@@ -154,7 +148,7 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, query url.Valu
 // before Do starts that timer. The original caller context bounds the whole chain.
 func (c *HTTPClient) doRedirects(req *http.Request) (*http.Response, error) {
 	for hops := 0; ; hops++ {
-		if err := processBudget.acquire(req.Context(), req.Method == http.MethodPost); err != nil {
+		if err := processBudget.acquire(req.Context()); err != nil {
 			if req.Body != nil {
 				_ = req.Body.Close()
 			}

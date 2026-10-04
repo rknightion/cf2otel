@@ -1,11 +1,11 @@
 ---
 id: CFO-0079
 title: Diagnose missing scrape series after shared-limiter deployment
-status: In Progress
+status: Parked
 assignee:
   - '@loop20-root'
 created_date: '2026-10-03 15:23'
-updated_date: '2026-10-04 18:08'
+updated_date: '2026-10-04 20:17'
 labels:
   - ops
   - limiter
@@ -69,4 +69,6 @@ Loop19 final unchanged-state gate retry passed just check and go test -race -cou
 Loop20 adopted. Historical attempts4 remain; two owner-granted clock-only additional attempts. Current main already publishes the newer loop19 tracker records. Root owns tracker writes; no pushes during live proof.
 
 Loop20 clock-only additional attempt1 passes at a756b7af7e6524143137731a5ceaaf1d0d2a9c52 on base0f69a0b60321b4aa5ea3233479afe67d6c30eba7. Frozen public-client ledger552 physical requests to69, identical semantic hash; FIFO A,C,newcomers; production normal executable clock rejection red/green. just check and race count10 exit0 after lint-lock infrastructure retry. Independent security accepts clock-only delta; CodeRabbit complete with two owner-rejected unchanged-path majors, no new delta blocker. No push yet; live acceptance and composed gate/CI outstanding.
+
+Loop20: total production implementation attempts5 (historical4 plus owner-granted clock-only attempt1; second additional clock-only attempt unused). Candidate production a756b7af7e6524143137731a5ceaaf1d0d2a9c52 landed through0519970c1257738eb4f4f947a6db33b8161cd8cf; gates, security, CodeRabbit disposition and exact-SHA CI green. Deployed RC0.17.1-rc.6 fails live performance envelope: first email.routing2337.420s, firewall.metrics1748.335s, htt preq.threats2337.419s;48/49 completed after~100minutes, htt preq.metrics no completed attempt; several5minute collector success ages exceed twice interval despite zero error counters. No65minute hour started. Owner correctly challenged longpolls as unresolved issue; root prior incomplete-proof framing corrected. Goal-authorized singlecommit production rollback in progress, no code retry afterdeploy. Private receipts first.json and first-retry.json retained; original first receipt not-observed due repaired1ms helper skew, not exporter failure. AC1/2 remain open; AC3 remains only loop17 parked alternative, not real sustainedhour pass. Resume needs a separately authorised realcollector throughput/catchup diagnosis, then correction budget and new deployed proof.
 <!-- SECTION:NOTES:END -->
