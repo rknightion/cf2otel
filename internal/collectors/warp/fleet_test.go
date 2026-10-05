@@ -202,6 +202,78 @@ func TestRegisteredPaginationAndValidation(t *testing.T) {
 	}
 }
 
+func TestRawFleetGroupingAcrossThreePagesWithShortFinalPage(t *testing.T) {
+	// Vary each dimension independently so neither omitted grouping keys nor
+	// swapped attribute values can pass on total count alone.
+	type tuple [5]string
+	base := tuple{"raw-status-a", "platform-a", "version-a", "mode-a", "colo-a"}
+	groups := []tuple{base}
+	for i, replacement := range []string{"raw-status-b", "platform-b", "version-b", "mode-b", "colo-b"} {
+		d := base
+		d[i] = replacement
+		groups = append(groups, d)
+	}
+	groupOrder := []int{0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 0}
+	rows := make([]string, 0, len(groupOrder))
+	want := map[tuple]float64{}
+	for i, group := range groupOrder {
+		d := groups[group]
+		body, err := json.Marshal(map[string]any{
+			"deviceId": fmt.Sprintf("opaque-device-%d", i), "timestamp": "opaque-time",
+			"status": d[0], "platform": d[1], "version": d[2], "mode": d[3], "colo": d[4],
+			// These ignored fields must neither override raw status nor become
+			// attributes. Both Boolean values occur within the same raw group.
+			"connected": i%2 == 0, "name": "opaque-device-name", "user": "opaque-user",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows = append(rows, string(body))
+		want[d]++
+	}
+	pages := []string{array(rows[:4]...), array(rows[4:8]...), array(rows[8:]...)}
+	calls := 0
+	c, e, reader := setup(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		q := r.URL.Query()
+		page, err := strconv.Atoi(q.Get("page"))
+		if err != nil || page != calls || page < 1 || page > len(pages) {
+			t.Errorf("unexpected page %q at call %d", q.Get("page"), calls)
+			http.Error(w, "fixture", http.StatusBadRequest)
+			return
+		}
+		if r.Method != http.MethodGet || r.URL.EscapedPath() != "/accounts/fixture%2Faccount/dex/fleet-status/devices" || q.Get("source") != "last_seen" || q.Get("per_page") != "50" {
+			t.Error("wrong read-only fleet request shape")
+		}
+		// Deliberately misleading totals must not truncate the census. The
+		// actual server page size is four, with a nonempty short final page.
+		fmt.Fprintf(w, `{"success":true,"result":%s,"result_info":{"page":%d,"per_page":4,"total_count":4,"total_pages":1}}`, pages[page-1], page)
+	}, time.Minute, 500)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := c.Collect(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 3 {
+		t.Fatalf("incomplete/extra pagination: got %d calls, want 3", calls)
+	}
+	got := points(t, reader) // Also rejects every per-device/user attribute.
+	if len(got) != len(want) || total(got) != float64(len(rows)) {
+		t.Fatalf("group/count mismatch: %d groups, total %v; want %d groups, total %d", len(got), total(got), len(want), len(rows))
+	}
+	for _, p := range got {
+		d := tuple{value(p, semconv.AttrWARPStatus), value(p, semconv.AttrWARPPlatform), value(p, semconv.AttrWARPClientVersion), value(p, semconv.AttrWARPMode), value(p, semconv.AttrWARPColo)}
+		n, exists := want[d]
+		if !exists || p.Value != n || value(p, semconv.AttrWARPRemainder) != "false" {
+			t.Fatalf("unexpected raw tuple/count/remainder: %v count %v remainder %q; expected %v", d, p.Value, value(p, semconv.AttrWARPRemainder), want)
+		}
+		delete(want, d)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing raw groups: %v", want)
+	}
+}
+
 func TestSnapshotReplacementFailureExpiryAndEmpty(t *testing.T) {
 	body := array(row("opaque-a", "observed-a"))
 	c, e, reader := setup(t, func(w http.ResponseWriter, _ *http.Request) { fmt.Fprintf(w, `{"success":true,"result":%s}`, body) }, 30*time.Millisecond, 500)
