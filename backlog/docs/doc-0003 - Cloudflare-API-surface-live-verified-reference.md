@@ -3,7 +3,7 @@ id: doc-0003
 title: Cloudflare API surface - live-verified reference
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-10-04 12:50'
+updated_date: '2026-10-05 21:31'
 ---
 Live-verified against a real non-Enterprise account (one Pro zone, twenty-odd Free zones, Zero Trust
 Free, one AI Gateway) on **2026-09-23** with a read-only token. Where Cloudflare's documentation and
@@ -362,3 +362,16 @@ At 12:23 UTC, the root checked zone settings before choosing an eligible scope a
 At 12:49 UTC, the real task-scoped API drift canary exercised the same six-field selection through the strict singleton batch seam. It reported `selection accepted, limit reached; populated value shape unproven` and `Cloudflare API contract matched` with exit 0. The supplied contract comprised the existing firewall settings entry and mandatory zone-list entry only; this is not a full 43-dataset/25-REST contract pass. Saturation preserves accepted-selection evidence but exposes no row shape. No actual rule, host, country or other private value is reproduced here. The strict selection never refreshes entitlements or retries with fewer fields; existing bounded retries of the identical request remain allowed within one canary invocation.
 
 These receipts establish live acceptance of the rule/host/country field selection and its ongoing eligible-zone canary. They do not prove populated value types, complete pagination, metric delivery, least privilege or dashboard rendering. No token, policy, resource, permission or credential was changed.
+
+## 20. Load-balancer documented traffic and health attribution limits (2026-10-05)
+
+Current official documentation fetched through Firecrawl and gh documents `loadBalancingRequestsAdaptiveGroups` at zone scope with `count` and `dimensions.datetimeFifteenMinutes`, `dimensions.coloCode` and `dimensions.selectedPoolName`. Its Requests per pool example describes the number of requests each pool receives. Requests represent uncached load-balancer resolutions, not all HTTP requests; analytics are documented as paid-plan-only. Selections must be built from `settings.availableFields`; absent or unentitled datasets are no-ops.
+
+Pool Health Details documents a flat optional `pop_health { healthy, origins: [{ ip: { healthy, response_code, failure_reason, rtt } }] }` response. Its current example shows `rtt="201.5ms"`, an explicit milliseconds-suffixed value, but no region discriminator or origin name/address discriminator. A dynamic region/address-map parser or origin-to-pool-catalog join remains unproved and must not be inferred from the prose “List of regions and associated health status.” Regional/origin-attributed health remains blocked; no array-position identity is inferred.
+
+Sources: https://developers.cloudflare.com/api/resources/load_balancers/subresources/pools/subresources/health/methods/get/ ; official Go SDK revision `05ca1e4fc7c7f02ffd8257ea199c985e1ec618e8`, https://github.com/cloudflare/cloudflare-go/blob/05ca1e4fc7c7f02ffd8257ea199c985e1ec618e8/load_balancers/poolhealth.go ; https://developers.cloudflare.com/load-balancing/reference/load-balancing-analytics/ ; documentation revision `09c03c2bb428b1c4396dccff3724af40c1add7e8`, https://github.com/cloudflare/cloudflare-docs/blob/09c03c2bb428b1c4396dccff3724af40c1add7e8/src/content/docs/load-balancing/reference/load-balancing-analytics.mdx .
+
+Documentation-only shape and semantics: no populated live pool response, traffic data selection or entitlement settings were queried this loop. The existing successful empty pool-list observation does not prove populated health. The new traffic canary is fixture-proved; no new live verification is claimed.
+
+
+The documented pool-traffic candidate uses zone-scoped `loadBalancingRequestsAdaptiveGroups` with `count` and `dimensions.selectedPoolName`, selected only when both fields are advertised. The existing opt-in snapshot collector publishes a replaceable trailing-poll-window gauge of uncached load-balancer resolutions, not all HTTP requests or a cumulative/backfill counter. Absent, disabled and explicitly unentitled datasets are no-ops; no-pool accounts make only the pool-list request. The optional drift canary requires those fields and default-interval-compatible limits (minimum maxDuration 300 seconds and minimum notOlderThan 600 seconds). These are collector requirements, not observed provider guarantees. Local upstream fixtures and the immutable candidate gate prove source behavior; no new live dataset entitlement or populated traffic is claimed. Original regional/origin attribution remains open.

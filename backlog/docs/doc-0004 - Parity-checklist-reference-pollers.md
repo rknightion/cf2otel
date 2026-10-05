@@ -3,7 +3,7 @@ id: doc-0004
 title: Parity checklist - reference pollers
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-10-03 15:57'
+updated_date: '2026-10-05 22:19'
 ---
 cf2otel must cover every capability listed here. The list is a behaviour contract drawn from a survey
 of open-source Cloudflare pollers and exporters; no other project is named and no code is copied.
@@ -117,14 +117,14 @@ The OTel SDK cardinality limit is per instrument and configurable (CFO-0045).
 ## Zero Trust state [Prom] (CFO-0048)
 
 - [x] Tunnel status and connector health (CFO-0048.01).
-- WARP fleet status as aggregates by status, platform, version, mode and colo, fully paginated; never
+- [x] WARP fleet status as aggregates by raw status, platform, version, mode and colo, fully paginated; never
   per device (CFO-0048.02).
 - [x] DEX HTTP and traceroute test results (CFO-0048.03).
 - [x] Access and Gateway seat counts (CFO-0048.04).
 
 ## Firewall depth [Prom] (CFO-0049)
 
-- Rule ID and resolved rule description, host and country on the firewall metric (CFO-0049.01).
+- [x] Rule ID and resolved rule description, host and country on the firewall metric (CFO-0049.01).
 - [x] Bot score buckets and score source with a fallback for unentitled zones (CFO-0049.02).
 
 ## Origin and edge health [Prom] (CFO-0050)
@@ -159,3 +159,7 @@ Loop 17 current source reconciliation: the additional checks follow current Done
 
 
 Backoff/limiter source parity checked at loop17 landing2eb6a689 with fresh independent high reviews and authentic public/registered red-green proof. Live-quiet acceptance remains parked on two incomplete startup-hour receipts for0.16.1; source parity is not a sustained live pass. No rate/burst or strict collector policy was relaxed.
+
+
+
+Loop24 reconciliation: CFO-0048.02 (WARP fleet status aggregates) is Done under the owner raw-status decision, with exact tuple/pagination fixture proof at 4a74ad304fdb0cd5fe2f59b084c9fc97db0e4883, required CI and composed gate green; no inferred connected Boolean or populated fleet proof. CFO-0049.01 (firewall rule, host and country dimensions) was already Done and is now reflected here. All four Zero Trust children are Done and that section is fully checked. CFO-0050.02 (load-balancer health and traffic) remains Parked: documented pool traffic landed, but regional/origin attribution is unproved. CFO-0050.04 (public status page collector) remains Parked: its unlanded candidate has a major fractional-checkpoint restart replay finding and an exhausted implementation ceiling. Neither health row is checked; the health parent stays open. CFO-0051 (operations parity) stays open for multi-account decisions. Checks denote their accepted source contracts, not a new live-hour proof.

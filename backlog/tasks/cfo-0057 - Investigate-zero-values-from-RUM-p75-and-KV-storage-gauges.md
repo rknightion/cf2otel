@@ -3,9 +3,9 @@ id: CFO-0057
 title: Investigate zero values from RUM p75 and KV storage gauges
 status: Parked
 assignee:
-  - '@loop17-root'
+  - '@loop24-root'
 created_date: '2026-09-30 21:44'
-updated_date: '2026-10-03 18:12'
+updated_date: '2026-10-05 21:03'
 labels:
   - rum
   - platform
@@ -41,6 +41,8 @@ The latest RUM p75 gauge value is 0 for most site/device pairs while max_over_ti
 Loop15 implementation follows the frozen lane packet; assertion-based red witness, local just check and CodeRabbit, independent REV where required, root linear landing and sustained live evidence where applicable.
 
 Loop17 K57 root captured current source GraphQL shapes and matching Mimir values; lane attributes root causes and fixes only proven local defects with assertion-red. KV live comparison at next HOUR.
+
+Loop24: bounded root Cloudflare source read and granted Grafana current read; compare sanitized values within one export interval.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -51,4 +53,6 @@ Loop14 read-only diagnosis at 4b837286829d92db92c47b35a4e208d29c124aab proves RU
 Loop16 RECON-M1 checked source criteria 2 against landed tests at ced4edfbfb66f1b9ee45037bdb425b69820a8ebe. Evidence: codex/evidence-loop16/RECON-return.txt. No new live or browser observation is claimed.
 
 Loop17 root current source and hour-end comparison retained: RUM historical missing-point syntheticzero mechanism already fixed; current actualCLSzero valid. KV source latest5min thenpast1hour both empty/noAPIerror while exportedmaxvalues positive; exacthistoricalzero cause and source-equalityAC1/3unproved. Runtimeaccount matches private source notes. No code/temporality change justified. Resume nonempty exact source/checkpoint/correlated resource max comparison, preserve AC2 source omission test.
+
+Loop24: 0 implementation attempts. Three bounded runtime-token reads succeeded; latest collector-eligible five-minute KV source window empty, current Grafana storage gauges absent (not zero). No numeric equality or historical zero cause proved; AC1 and AC3 stay open. Resume with nonempty per-namespace source and current exported values within one export interval. RUM cause already recorded; no new code change justified.
 <!-- SECTION:NOTES:END -->
