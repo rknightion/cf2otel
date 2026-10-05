@@ -32,7 +32,6 @@ const (
 	MetricAPIRequests          = "cf2otel.api.requests"
 	MetricAPIEnvelopeErrors    = "cf2otel.api.envelope_errors"
 	MetricAPIDuration          = "cf2otel.api.duration"
-	MetricAPILimiterWait       = "cf2otel.api.limiter_wait"
 	MetricAPIRetries           = "cf2otel.api.retries"
 	SpanAPIRequest             = "cf2otel.api.request"
 	AttrAPIMethod              = "cf2otel.api.method"

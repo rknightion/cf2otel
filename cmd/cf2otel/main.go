@@ -18,6 +18,7 @@ import (
 	"time"
 
 	otellog "go.opentelemetry.io/otel/log"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
 	"github.com/rknightion/cf2otel/internal/cli"
@@ -28,6 +29,7 @@ import (
 	"github.com/rknightion/cf2otel/internal/health"
 	"github.com/rknightion/cf2otel/internal/identity"
 	"github.com/rknightion/cf2otel/internal/promexport"
+	"github.com/rknightion/cf2otel/internal/semconv"
 	"github.com/rknightion/cf2otel/internal/telemetry"
 )
 
@@ -133,10 +135,21 @@ func run(args []string) error {
 			}
 		})
 	}
+	observer := func(method, route string, status int, duration time.Duration, retry bool) {
+		_ = route // No request path, ID, or query can enter a metric dimension.
+		ended := time.Now()
+		attrs := []telemetry.Attr{{Key: semconv.AttrStatusClass, Value: fmt.Sprintf("%dxx", status/100)}}
+		_ = emitter.Counter(ctx, semconv.MetricAPIRequests, 1, attrs...)
+		_ = emitter.Histogram(ctx, semconv.MetricAPIDuration, duration.Seconds(), attrs...)
+		_ = emitter.Span(ctx, telemetry.SpanSpec{Name: semconv.SpanAPIRequest, Start: ended.Add(-duration), End: ended, Kind: trace.SpanKindClient, Attrs: append(attrs, telemetry.Attr{Key: semconv.AttrAPIMethod, Value: method})})
+		if retry {
+			_ = emitter.Counter(ctx, semconv.MetricAPIRetries, 1, attrs...)
+		}
+	}
 	if err := cfapi.ConfigureProcessRateLimit(cfg.Cloudflare.RateLimit); err != nil {
 		return err
 	}
-	api := cfapi.NewRequestObserved(cfg.Cloudflare, telemetry.APIRequestObserver(emitter))
+	api := cfapi.NewObserved(cfg.Cloudflare, observer)
 	if opts.Explore != "" {
 		return explore(ctx, api, cfg, opts.Explore)
 	}

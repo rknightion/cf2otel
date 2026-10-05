@@ -40,7 +40,6 @@ type HTTPClient struct {
 	client             *http.Client
 	cap                int64
 	observer           Observer
-	requestObserver    RequestObserver
 	mu                 sync.Mutex
 	settings           map[string]cachedSettings
 	now                func() time.Time
@@ -149,31 +148,13 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, query url.Valu
 // before Do starts that timer. The original caller context bounds the whole chain.
 func (c *HTTPClient) doRedirects(req *http.Request) (*http.Response, error) {
 	for hops := 0; ; hops++ {
-		waiting := time.Now()
 		if err := processBudget.acquire(req.Context()); err != nil {
 			if req.Body != nil {
 				_ = req.Body.Close()
 			}
 			return nil, err
 		}
-		started := time.Now()
-		wait := started.Sub(waiting)
 		resp, err := c.client.Do(req)
-		if c.requestObserver != nil {
-			status := 0
-			if resp != nil {
-				status = resp.StatusCode
-			}
-			method := "rest"
-			if req.Method == http.MethodPost {
-				method = "graphql"
-			}
-			c.requestObserver(req.Context(), RequestObservation{
-				Method: method, Status: status, Started: started,
-				Duration: time.Since(started), LimiterWait: wait,
-				ErrorClass: requestErrorClass(status, err),
-			})
-		}
 		if err != nil {
 			return resp, err
 		}

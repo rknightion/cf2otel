@@ -2,42 +2,6 @@
 
 All signals carry `service.name=cf2otel`. Cloudflare-specific names begin `cloudflare.*`; GenAI names follow `gen_ai.*`; the poller's own measurements begin `cf2otel.*`. Names are declared in `internal/semconv` and this page is the public inventory.
 
-## Cloudflare physical-request self-metrics
-
-`cf2otel.api.requests` is a monotonic Counter with unit `{request}`;
-`cf2otel.api.duration` and `cf2otel.api.limiter_wait` are Histograms with unit
-`s`. Each physical HTTP exchange records exactly one count and one sample in
-both histograms, including REST pagination, GraphQL settings and query calls,
-retry attempts and followed redirect hops. A cache hit makes no HTTP request
-and records nothing. Cancellation while acquiring quota also records nothing.
-The existing read-only guard, limiter rate, retries and collector cadence are
-unchanged.
-
-These three metrics carry only `cf2otel.collector` (the scheduler's registered
-collector name, or `unattributed` outside scheduled/one-shot/range collection),
-`cf2otel.api.method` (`rest` or `graphql`) and, only on a failed HTTP exchange,
-`cf2otel.error.class`. HTTP 429 is `rate_limited`, HTTP 401/403 is `auth`,
-context deadlines and network timeouts are `timeout`, and other transport errors
-or HTTP 4xx/5xx responses are `other`. Followed HTTP redirects and HTTP 2xx
-responses carry no error class. Logical errors in HTTP 2xx envelopes, body
-reads and schema decoding are not transport-header outcomes; collector scrape
-errors and the separate envelope-error metric retain their existing semantics.
-No HTTP verb, route, URL, scope ID, query, status code or response/error text is
-an attribute on these three metrics. Registered collector names are trusted
-application identifiers, never populated from upstream responses.
-
-Duration runs from the start of the HTTP call through response headers or a
-transport error. Limiter wait measures that hop's process-budget acquisition
-before the HTTP call (including the negligible immediate-acquisition time),
-excluding retry backoff and response-body processing. Both use the explicit
-second boundaries: 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 7.5, 10, 15, 20, 30, 45,
-60, 90, 120. Metrics emit directly, even when the collector later fails or
-retains its checkpoint; they do not measure successful logical polls or rows.
-Existing `cf2otel.api.request` spans and `cf2otel.api.retries` retain their
-status-class attributes; spans retain the HTTP verb on `cf2otel.api.method`.
-Aggregate request queries remain valid, but the old request/duration
-`cf2otel.status_class` dimension is replaced by the bounded dimensions above.
-
 ## Source deny-lists
 
 The [source deny-list settings](configuration.md#source-metric-and-attribute-deny-lists)
@@ -345,10 +309,9 @@ The seat source is `GET /accounts/{account}/access/users`. Cloudflare's [officia
 | `cf2otel.export.errors` | `1` | Failed OTLP exports. |
 | `cf2otel.build.info` | `1` | Build identity. |
 | `cf2otel.checkpoint.age` | `s` | Age of the oldest collector checkpoint. |
-| `cf2otel.api.requests` | `{request}` | Physical Cloudflare HTTP exchanges by scheduler collector, `rest`/`graphql` method and failure-only error class. |
-| `cf2otel.api.envelope_errors` | `{error}` | Logical errors in unsuccessful Cloudflare API envelopes returned with successful HTTP status. Certificate pack permission code 9109 increments once with `cf2otel.status_class=4xx`; the physical HTTP 2xx request carries no error class. HTTP 403 is counted only by the shared HTTP request observer with error class `auth`, not by this counter. |
-| `cf2otel.api.duration` | `s` | Physical Cloudflare HTTP duration through response headers, excluding limiter wait; same dimensions as `cf2otel.api.requests`. Explicit histogram boundaries in seconds: 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 7.5, 10, 15, 20, 30, 45, 60, 90, 120. |
-| `cf2otel.api.limiter_wait` | `s` | Process-budget acquisition duration for each physical HTTP exchange; same dimensions and explicit histogram boundaries as `cf2otel.api.duration`. |
+| `cf2otel.api.requests` | `{request}` | Cloudflare API requests, classified by actual HTTP status. |
+| `cf2otel.api.envelope_errors` | `{error}` | Logical errors in unsuccessful Cloudflare API envelopes returned with successful HTTP status. Certificate pack permission code 9109 increments once with `cf2otel.status_class=4xx`; the HTTP request remains classified as 2xx. HTTP 403 is counted only by the shared HTTP request observer, not by this counter. |
+| `cf2otel.api.duration` | `s` | Cloudflare API request duration. Explicit histogram boundaries in seconds: 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 7.5, 10, 15, 20, 30, 45, 60, 90, 120. |
 | `cf2otel.api.retries` | `1` | Cloudflare API retries. |
 | `cf2otel.window.gap` | `s` | Skipped retention-gap seconds by collector. |
 | `cf2otel.window.commit_failures` | `1` | Failed window commits by retry or dropped outcome. |
@@ -410,7 +373,6 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Event | `cloudflare.http.request` |
 | Event | `gen_ai.client.inference.operation.details` |
 | Metric | `cf2otel.api.duration` |
-| Metric | `cf2otel.api.limiter_wait` |
 | Metric | `cf2otel.api.requests` |
 | Metric | `cf2otel.api.envelope_errors` |
 | Metric | `cf2otel.api.retries` |
@@ -746,9 +708,8 @@ other HTTP failures and unknown errors are `other`; message text is never used
 to infer a class. Classification observes failures without changing retries,
 permission handling, checkpoint decisions or collector scheduling.
 
-The full classification above applies to collector scrape errors, not export
-errors or scrape duration/success metrics. Physical-request metrics use the
-transport-only subset documented above. Existing aggregate queries can continue to sum scrape
+These labels apply only to collector scrape errors, not export errors or scrape
+duration/success metrics. Existing aggregate queries can continue to sum scrape
 errors across classes. This is the code/documentation portion of CFO-0051.03
 (classify collector errors); the dashboard panel is delivered separately.
 
