@@ -1,11 +1,11 @@
 ---
 id: CFO-0079
 title: Diagnose missing scrape series after shared-limiter deployment
-status: Parked
+status: In Progress
 assignee:
-  - '@loop23-root'
+  - '@claude'
 created_date: '2026-10-03 15:23'
-updated_date: '2026-10-05 17:31'
+updated_date: '2026-10-05 18:30'
 labels:
   - ops
   - limiter
@@ -23,8 +23,8 @@ Loop17 deployed0.16.1 with default shared0.5rps/burst1, process remained healthy
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Missing or never-successful collectors and their precise cause are attributed with sanitized timestamped evidence
-- [ ] #2 Any required correction has an authentic registered-collector or public-client reproduction and candidate pass without weakening49collector coverage or timeout/window guarantees
+- [x] #1 Missing or never-successful collectors and their precise cause are attributed with sanitized timestamped evidence
+- [x] #2 Any required correction has an authentic registered-collector or public-client reproduction and candidate pass without weakening49collector coverage or timeout/window guarantees
 - [x] #3 A deployed sustained-hour proof shows attempts equal successes for affected collectors, or remaining live criteria are parked with both receipts
 <!-- AC:END -->
 
@@ -83,4 +83,6 @@ Loop22 L1 observation notstarted, AC1unchecked: final3e85282a exactCI37305970420
 Loop23 adopted: H1 limiter hardening precedes L1 on exact green main SHA; revised publication-linked reset fence and conditional one-shot restart authorized. No tracker pushes during L1; AC1 remains open until complete attribution.
 
 Loop23 L1: no implementation attempt (parent historical5 unchanged). H1 limiter hardening parked at lint infrastructure retry ceiling and did not land; measured current main d936bef5afbfb8fbaec49c237ac46d743a269f29. Exact CI37332966344 ci-success green, autoRC37334986467 complete15:48:55UTC, process reset bracket15:50:01.925-15:51:03.425UTC after RCstart15:42:27UTC; no further observed reset/gap or main change. Original90min epoch15:51:03.425-17:21:03.425UTC closes48/49 completed,47 firstdurations. httpreq.metrics completion absent; tunnels.status completed but firstcount2 makes firstduration unproved, not failure. Nine firstpolls exceed300s; email.routing870.307s vs2337.420s baseline, firewall.metrics795.169s vs1748.335s. httpreq.metrics GraphQL409cumulative/408observed-increase requests,5202.122/5174.378s limiterwait,117.633/117.560s APIduration; wait97.79percent of those two recorded cumulative components, not critical-path/wall-share proof. Other-class aigateway.logs REST28cumulative/26increase followed by unclassified-error request and collector successes; no exact retry/application recovery asserted. No rate_limited series observed/no rate-limit recovery claim. AC1 remains unchecked: precise slow/missing cause incomplete; need separately authorized registered/runtime inflight diagnostic evidence, not an assumed observation retry or fairqueue correction. Sanitized receipt /Users/rob/repos/cf2otel/codex/live-loop23/attribution.json with detailed history and independent partial-evidence review. No restart, rollback, push or source landing. Tracker edits remain local pending publication with next authorized code push; never pushed during L1.
+
+Main-thread diagnosis 2026-10-05 (no new live window). Cause attributed from the loop23 epoch receipt /Users/rob/repos/cf2otel/codex/live-loop23/attribution.json, 15:51:03-17:21:03 UTC: GraphQL requests across all 49 collectors were 4328 in 5400s = 0.8015 req/s against the 0.8 req/s process bucket, i.e. saturated for the whole epoch; REST was 508 (0.094 req/s). Nine per-zone collectors (firewall.events, dns.metrics, httpreq.metrics, email.sending, firewall.metrics, httpreq.events, dns.events, logpush.failures, email.routing) issued 351-414 GraphQL requests each, 79% of the total. Source mapping: each issues one query per zone per poll, httpreq.metrics about three (breakdown batch, Groups, latency), plus settings probes per zone and dataset every 15 min. httpreq.metrics spent 97.8% of its recorded time in the limiter and never returned a poll in 90 min; the slow and missing collectors were all queue-bound on one per-token quota, not erroring. Cloudflare docs: default GraphQL quota is 300 queries per 5 min per token; with X-Rate-Limit-Type: account-based it is 300 per 5 min per zone and per account. Correction 9c3dec1: header sent, per zone/account buckets 0.9 rps, process GraphQL cap 2.5 rps, REST 1.25 rps (general limit 4 rps), resource-scoped budget pauses, per-token fallback clamp to 0.9 rps, settings cache 45-75 min. Public-client fake-upstream test TestAccountBasedGraphQLBudgetIsPerResource is red on base (8 distinct zones took 7.5s on one shared quota) and green on the candidate; scope-pause and clamp assertions mutation-checked. just check green, CodeRabbit complete with 0 findings on 14 files, independent review findings fixed (apidrift floor, false-pass assertion, per-token fallback, REST bucket default). Live proof pending after the deploy.
 <!-- SECTION:NOTES:END -->
