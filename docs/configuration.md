@@ -16,7 +16,7 @@ Settings load in this order: built-in defaults, YAML, then `CF2OTEL_` environmen
 | `state` | Persistent checkpoint directory; default `/var/lib/cf2otel`. |
 | `health`, `log` | Loopback health listener and application logging. |
 | `firewall` | `rule_dimensions` defaults to false; `max_metric_series_per_window` is a positive total cap, default 500. |
-| `cloudflare.rate_limit` | `requests_per_second` defaults to `0.5` (finite and positive); `burst` defaults to `1` (integer in `[1, 1000]`, checked before decoding YAML or environment overrides). One process-wide token bucket covers all Cloudflare clients, accounts, REST and GraphQL requests, pagination, retries and redirect hops. |
+| `cloudflare.rate_limit` | `rest.requests_per_second` defaults to `3`, `rest.burst` to `5`; `graphql.requests_per_second` defaults to `0.8`, `graphql.burst` to `2`. Rates must be finite and positive; bursts must be integers in `[1, 1000]`, checked before weak decoding. Separate process-wide REST and GraphQL buckets cover all clients, accounts, pagination, retries and permitted redirect hops. |
 | `cloudflare.entitlement_backoff` | Positive duration, default `1h`. Disabled or absent GraphQL zone datasets share a timed settings decision across aliases and collectors using the same client, independently per zone and dataset. Override with `CF2OTEL_CLOUDFLARE__ENTITLEMENT_BACKOFF`. |
 
 Collector keys are `access.logins`, `access.login_metrics`, `access.scim`, `access.seats`, `inventory.access`, `httpreq.events`, `httpreq.metrics`, `aigateway.logs`, `aigateway.metrics`, `aigateway.coverage`, `audit.logs`, `firewall.events`, `firewall.metrics`, `dns.events`, `dns.metrics`, `rum.pageloads`, `rum.web_vitals`, `gateway.dns`, `workers.overview`, `workers.invocations`, `turnstile.events`, `logpush.health`, `d1.analytics`, `d1.queries`, `d1.storage`, `kv.operations`, `kv.storage`, `r2.bandwidth`, `r2.catalog_data`, `r2.catalog_maintenance`, `r2.operations`, `r2.storage`, `r2.sql`, `durableobjects.invocations`, `durableobjects.periodic`, `durableobjects.sql_storage`, `durableobjects.subrequests`, `queues.backlog`, `queues.consumer`, `queues.delayed_backlog`, `queues.message_operations`, `email.routing`, `email.sending`, `selfobs`, `certs.packs`, and `tunnels.status`. Enabled collectors default to five-minute intervals. `access.seats` is enabled by default and polls every 15 minutes as a snapshot, without windows or checkpoints. It counts the independent `access_seat` and `gateway_seat` user flags across the complete paginated Access users list, emitting only the bounded seat-type attribute. Both flags may be true for one user; do not sum the two series as a unique billing-user total. An empty list publishes two zeros; missing, null or nonboolean flags, HTTP errors and incomplete pagination fail the scrape without publishing partial counts. To disable it, set `CF2OTEL_COLLECTORS__ACCESS_SEATS__ENABLED=false`; to override its interval, set `CF2OTEL_COLLECTORS__ACCESS_SEATS__INTERVAL=30m`. The email collectors sum Groups counts across account-owned zones over complete five-minute buckets; they emit no zone metric attributes. DMARC is excluded. `aigateway.metrics` is disabled and unscheduled because its GraphQL Groups ingestion lag is not bounded; `aigateway.logs` emits the AI Gateway metrics from REST rows. The default initial lookback is 30 minutes and maximum window is one hour. `aigateway.coverage` is present but disabled by default. The scheduler advances a checkpoint after a successful window or after it drops a window following three payload rejections.
@@ -29,11 +29,30 @@ See [Security and PII](security.md) before enabling AI Gateway body capture or w
 
 ## Cloudflare request pacing
 
-Override the process budget with `CF2OTEL_CLOUDFLARE__RATE_LIMIT__REQUESTS_PER_SECOND`
-and `CF2OTEL_CLOUDFLARE__RATE_LIMIT__BURST`, or the corresponding YAML keys.
-The default sustained rate is 150 calls per five minutes, below the documented
-GraphQL limit of 300 queries per five minutes. Other applications using the same
-upstream quota are not coordinated by this process-local budget.
+Override each process-wide class budget with
+`CF2OTEL_CLOUDFLARE__RATE_LIMIT__REST__REQUESTS_PER_SECOND`,
+`CF2OTEL_CLOUDFLARE__RATE_LIMIT__REST__BURST`,
+`CF2OTEL_CLOUDFLARE__RATE_LIMIT__GRAPHQL__REQUESTS_PER_SECOND` and
+`CF2OTEL_CLOUDFLARE__RATE_LIMIT__GRAPHQL__BURST`, or corresponding YAML keys.
+The default GraphQL sustained rate is 240 queries per five minutes, below the
+documented limit of 300. Saturated GraphQL does not block REST. Other applications
+using the same upstream quota are not coordinated by these process-local buckets.
+
+Explicit legacy flat `cloudflare.rate_limit.requests_per_second` and
+`cloudflare.rate_limit.burst` remain accepted and apply the supplied property to
+both classes, with one deprecation warning naming the replacement keys. Normal
+validation still applies. Within one source, explicit class keys take precedence;
+environment values override YAML, including legacy environment values.
+
+REST `Retry-After` (nonnegative seconds or HTTP date) pauses the shared REST bucket,
+including sibling clients, not just the failed call. REST `Ratelimit` policies such
+as `default;r=0;t=1` defer the next REST token for `t` seconds whenever the remaining
+`r` is at or below the configured REST burst. Malformed or overflowing header
+values are ignored. Pauses only extend an existing pause, never shorten it.
+GraphQL `errors[].extensions.code="budget"` pauses only GraphQL for exactly 300
+seconds and retries once after that pause if the caller's context allows. Budget
+failures retain the bounded `rate_limited` collector error class even when the
+context expires during the retry wait; upstream messages are never exposed.
 
 Quota waiting happens before each HTTP exchange starts its `cloudflare.timeout`,
 including every redirect hop. The timeout still bounds network headers and body
@@ -41,8 +60,8 @@ reads. The caller's context deadline bounds the entire queue, redirects, retries
 and network operation; a cancelled queued call never reaches the network.
 The application configures the budget once before Cloudflare traffic begins.
 Package users constructing clients directly must call `cfapi.ConfigureProcessRateLimit`
-before traffic to override the default; `New` and `NewObserved` share the same
-budget and never reset it. Reapplying identical configuration is a no-op, even after
+before traffic to override the defaults; `New` and `NewObserved` share the same
+per-class budgets and never reset them. Reapplying identical configuration is a no-op, even after
 traffic; changing configuration after the first acquisition is rejected.
 
 ## Zone entitlement retry

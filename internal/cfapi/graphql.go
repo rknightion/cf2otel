@@ -89,6 +89,12 @@ func (e *FieldLimitError) Error() string {
 	return fmt.Sprintf("dataset %s needs %d fields, limit %d; no stable join key for split selections", e.Dataset, e.Wanted, e.Limit)
 }
 
+// GraphQLBudgetError is a bounded, private-data-free quota failure. A joined
+// cancellation retains this class while allowing callers to inspect context errors.
+type GraphQLBudgetError struct{}
+
+func (*GraphQLBudgetError) Error() string { return "graphql rate limited: budget exhausted" }
+
 type graphResponse struct {
 	Data struct {
 		Viewer struct {
@@ -104,12 +110,31 @@ type graphResponse struct {
 func (c *HTTPClient) graph(ctx context.Context, q string) (graphResponse, error) {
 	var out graphResponse
 	b, _ := json.Marshal(map[string]string{"query": q})
-	raw, err := c.do(ctx, "POST", "/graphql", nil, b)
-	if err != nil {
-		return out, err
+	var budgetErr *GraphQLBudgetError
+	for attempt := 0; attempt < 2; attempt++ {
+		raw, err := c.do(ctx, "POST", "/graphql", nil, b)
+		if err != nil {
+			if budgetErr != nil {
+				return out, errors.Join(budgetErr, err)
+			}
+			return out, err
+		}
+		out = graphResponse{}
+		// A valid budget code is authoritative even if accompanying data has
+		// an invalid shape. Non-budget responses keep normal schema validation.
+		if !hasBudgetError(raw) {
+			err := json.Unmarshal(raw, &out)
+			return out, err
+		}
+		budgetErr = &GraphQLBudgetError{}
+		graphqlBudget.pause(300 * time.Second)
+		if attempt == 1 {
+			return out, budgetErr
+		}
+		// The next HTTP attempt acquires the shared GraphQL bucket; its 300s
+		// pause is outside the network timeout and bounded by the caller context.
 	}
-	err = json.Unmarshal(raw, &out)
-	return out, err
+	return out, budgetErr
 }
 func scopeName(s Scope) string {
 	if s == ZoneScope {
@@ -135,6 +160,26 @@ func firstNode(r graphResponse, s Scope) (map[string]json.RawMessage, error) {
 	}
 	return nodes[0], nil
 }
+func hasBudgetError(raw []byte) bool {
+	var envelope struct {
+		Errors []struct {
+			Extensions struct {
+				Code json.RawMessage `json:"code"`
+			} `json:"extensions"`
+		} `json:"errors"`
+	}
+	if json.Unmarshal(raw, &envelope) != nil {
+		return false
+	}
+	for _, failure := range envelope.Errors {
+		var code string
+		if json.Unmarshal(failure.Extensions.Code, &code) == nil && code == "budget" {
+			return true
+		}
+	}
+	return false
+}
+
 func gqlErrors(r graphResponse) error {
 	if len(r.Errors) > 0 {
 		if match := graphQLErrField.FindStringSubmatch(r.Errors[0].Message); len(match) == 2 && identifier.MatchString(match[1]) {

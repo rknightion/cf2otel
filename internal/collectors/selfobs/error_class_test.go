@@ -34,6 +34,18 @@ func TestRegisteredScrapeErrorClasses(t *testing.T) {
 	if denied == nil {
 		t.Fatal("GraphQL entitlement fixture unexpectedly succeeded")
 	}
+	budgetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"errors":[{"message":"private upstream text","extensions":{"code":"budget"}}]}`))
+	}))
+	t.Cleanup(budgetServer.Close)
+	budgetClient := cfapi.New(config.CloudflareConfig{APIBase: budgetServer.URL, Timeout: time.Second, MaxResponseBytes: 1024})
+	limitedCtx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	_, budget := budgetClient.DatasetSettings(limitedCtx, cfapi.ZoneScope, "fixture", "fixture")
+	var budgetError *cfapi.GraphQLBudgetError
+	if !errors.As(budget, &budgetError) || !errors.Is(budget, context.DeadlineExceeded) {
+		t.Fatalf("fake-upstream budget class lost: %v", budget)
+	}
 	cases := []struct {
 		name  string
 		err   error
@@ -44,6 +56,7 @@ func TestRegisteredScrapeErrorClasses(t *testing.T) {
 		{"disabled", &cfapi.UnentitledError{Dataset: "fixture", Disabled: true}, "unentitled"},
 		{"unavailable-fields", &cfapi.UnentitledError{Dataset: "fixture"}, "unentitled"},
 		{"limited", &cfapi.HTTPError{Status: 429}, "rate_limited"},
+		{"graphql-budget-http", budget, "rate_limited"},
 		{"unauthorized", &cfapi.HTTPError{Status: 401}, "auth"},
 		{"forbidden", &cfapi.HTTPError{Status: 403}, "auth"},
 		{"deadline", context.DeadlineExceeded, "timeout"},

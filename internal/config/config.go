@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/big"
 	"net"
@@ -69,11 +70,43 @@ type Config struct {
 	Zones      ZonesConfig                `yaml:"zones" json:"zones"`
 }
 type RateLimitConfig struct {
+	// Legacy fields remain available to package users; explicit values apply to both classes.
+	RequestsPerSecond float64      `yaml:"requests_per_second" json:"requests_per_second,omitempty"`
+	Burst             int          `yaml:"burst" json:"burst,omitempty"`
+	REST              BucketConfig `yaml:"rest" json:"rest"`
+	GraphQL           BucketConfig `yaml:"graphql" json:"graphql"`
+}
+
+type BucketConfig struct {
 	RequestsPerSecond float64 `yaml:"requests_per_second" json:"requests_per_second"`
 	Burst             int     `yaml:"burst" json:"burst"`
 }
 
+func (c RateLimitConfig) Buckets() (BucketConfig, BucketConfig) {
+	rest, graphql := c.REST, c.GraphQL
+	if c.RequestsPerSecond != 0 {
+		rest.RequestsPerSecond, graphql.RequestsPerSecond = c.RequestsPerSecond, c.RequestsPerSecond
+	}
+	if c.Burst != 0 {
+		rest.Burst, graphql.Burst = c.Burst, c.Burst
+	}
+	return rest, graphql
+}
+
 func (c RateLimitConfig) Validate() error {
+	rest, graphql := c.Buckets()
+	for _, item := range []struct {
+		name   string
+		bucket BucketConfig
+	}{{"rest", rest}, {"graphql", graphql}} {
+		if err := item.bucket.Validate(); err != nil {
+			return fmt.Errorf("cloudflare.rate_limit.%s: %w", item.name, err)
+		}
+	}
+	return nil
+}
+
+func (c BucketConfig) Validate() error {
 	if math.IsNaN(c.RequestsPerSecond) || math.IsInf(c.RequestsPerSecond, 0) || c.RequestsPerSecond <= 0 {
 		return errors.New("cloudflare.rate_limit.requests_per_second must be finite and positive")
 	}
@@ -198,7 +231,7 @@ var disabledCollectorNames = []string{"aigateway.coverage", "logpush.failures", 
 
 func Default() Config {
 	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{RequestSource: "eyeball", Breakdowns: []string{"status", "origin_status", "country", "protocol", "tls_protocol", "method", "content_type"}, Scope: "access_protected", MaxMetricHostsPerZone: 1000, MaxMetricSeriesPerWindow: 10000}, Platform: PlatformConfig{MaxMetricSeriesPerWindow: 500}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{MetricCardinalityLimit: 10000, Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
-	c.Cloudflare.RateLimit = RateLimitConfig{RequestsPerSecond: 0.5, Burst: 1}
+	c.Cloudflare.RateLimit = RateLimitConfig{REST: BucketConfig{RequestsPerSecond: 3, Burst: 5}, GraphQL: BucketConfig{RequestsPerSecond: 0.8, Burst: 2}}
 	c.Cloudflare.EntitlementBackoff = time.Hour
 	c.HTTP.HighCardinalityLimit = 500
 	c.HTTP.HighCardinalityHosts = []string{}
@@ -243,6 +276,10 @@ func Load(path string) (*Config, error) {
 	if err := k.Load(structs.Provider(Default(), "yaml"), nil); err != nil {
 		return nil, fmt.Errorf("defaults: %w", err)
 	}
+	// Do not let zero-valued compatibility fields look explicitly configured.
+	k.Delete("cloudflare.rate_limit.requests_per_second")
+	k.Delete("cloudflare.rate_limit.burst")
+	legacy := false
 	if path != "" {
 		only := koanf.New(".")
 		if err := only.Load(file.Provider(path), burstYAMLParser{}); err != nil {
@@ -258,11 +295,17 @@ func Load(path string) (*Config, error) {
 				return nil, fmt.Errorf("%s is secret and must be supplied through environment", key)
 			}
 		}
+		if used, err := expandLegacyRateLimit(only); err != nil {
+			return nil, err
+		} else {
+			legacy = used
+		}
 		if err := k.Merge(only); err != nil {
 			return nil, fmt.Errorf("config YAML: %w", err)
 		}
 	}
-	if err := k.Load(env.Provider(".", env.Opt{Prefix: EnvPrefix, TransformFunc: func(key, value string) (string, any) {
+	environment := koanf.New(".")
+	if err := environment.Load(env.Provider(".", env.Opt{Prefix: EnvPrefix, TransformFunc: func(key, value string) (string, any) {
 		if strings.HasPrefix(key, EnvPrefix+"COLLECTORS__") {
 			return "", nil
 		}
@@ -277,18 +320,31 @@ func Load(path string) (*Config, error) {
 	}}), nil); err != nil {
 		return nil, fmt.Errorf("environment: %w", err)
 	}
-	// Check after all overrides, before weak decoding can truncate fractions or
-	// coerce booleans. Normalize the checked value to avoid decoder overflow.
-	burst, err := integerBurst(k.Get("cloudflare.rate_limit.burst"))
-	if err != nil {
+	if used, err := expandLegacyRateLimit(environment); err != nil {
+		return nil, err
+	} else {
+		legacy = legacy || used
+	}
+	if err := k.Merge(environment); err != nil {
 		return nil, err
 	}
-	if err := k.Set("cloudflare.rate_limit.burst", burst); err != nil {
-		return nil, fmt.Errorf("cloudflare.rate_limit.burst: %w", err)
+	// Check effective values before weak decoding can truncate fractions or coerce booleans.
+	for _, class := range []string{"rest", "graphql"} {
+		key := "cloudflare.rate_limit." + class + ".burst"
+		burst, err := integerBurst(k.Get(key))
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", key, err)
+		}
+		if err := k.Set(key, burst); err != nil {
+			return nil, err
+		}
 	}
 	var c Config
 	if err := k.UnmarshalWithConf("", &c, koanf.UnmarshalConf{Tag: "yaml", DecoderConfig: &mapstructure.DecoderConfig{Result: &c, WeaklyTypedInput: true, ErrorUnused: true, DecodeHook: mapstructure.StringToTimeDurationHookFunc()}}); err != nil {
 		return nil, fmt.Errorf("decode config: %w", err)
+	}
+	if err := c.Cloudflare.RateLimit.Validate(); err != nil {
+		return nil, err
 	}
 	if err := applyCollectorEnvironment(&c); err != nil {
 		return nil, fmt.Errorf("environment: %w", err)
@@ -296,7 +352,34 @@ func Load(path string) (*Config, error) {
 	if err := c.OTLP.normalizeDenylists(); err != nil {
 		return nil, err
 	}
+	if legacy {
+		slog.Warn("cloudflare.rate_limit.requests_per_second and cloudflare.rate_limit.burst are deprecated; use cloudflare.rate_limit.rest.requests_per_second, cloudflare.rate_limit.rest.burst, cloudflare.rate_limit.graphql.requests_per_second and cloudflare.rate_limit.graphql.burst")
+	}
 	return &c, nil
+}
+
+// Expand each source separately: environment wins over YAML, while explicit
+// per-class keys win over compatibility keys within the same source.
+func expandLegacyRateLimit(k *koanf.Koanf) (bool, error) {
+	used := false
+	for _, field := range []string{"requests_per_second", "burst"} {
+		key := "cloudflare.rate_limit." + field
+		if !k.Exists(key) {
+			continue
+		}
+		used = true
+		value := k.Get(key)
+		for _, class := range []string{"rest", "graphql"} {
+			target := "cloudflare.rate_limit." + class + "." + field
+			if !k.Exists(target) {
+				if err := k.Set(target, value); err != nil {
+					return false, err
+				}
+			}
+		}
+		k.Delete(key)
+	}
+	return used, nil
 }
 
 // burstYAMLParser retains the effective burst scalar before numeric decoding.
@@ -322,29 +405,24 @@ func (burstYAMLParser) Unmarshal(data []byte) (map[string]any, error) {
 	if err := k.Load(rawBurstProvider(values), nil); err != nil {
 		return nil, err
 	}
-	const burstKey = "cloudflare.rate_limit.burst"
-	if k.Exists(burstKey) && !burstEnvironmentOverride() {
-		if _, err := integerBurst(k.Get(burstKey)); err != nil {
-			return nil, err
-		}
-	}
 	// Only now decode ordinary numeric values. A superseded YAML burst need
 	// not be valid, but syntax, secret and unknown-key checks still apply.
 	out, err := yaml.Parser().Unmarshal(data)
 	if err != nil {
 		return nil, err
 	}
-	if k.Exists(burstKey) {
-		// Set via koanf so dotted YAML keys behave exactly like the loader.
-		decoded := koanf.New(".")
-		if err := decoded.Load(rawBurstProvider(out), nil); err != nil {
-			return nil, err
-		}
-		if err := decoded.Set("cloudflare.rate_limit.burst", k.Get("cloudflare.rate_limit.burst")); err != nil {
-			return nil, err
-		}
-		out = decoded.Raw()
+	decoded := koanf.New(".")
+	if err := decoded.Load(rawBurstProvider(out), nil); err != nil {
+		return nil, err
 	}
+	for _, key := range []string{"cloudflare.rate_limit.burst", "cloudflare.rate_limit.rest.burst", "cloudflare.rate_limit.graphql.burst"} {
+		if k.Exists(key) {
+			if err := decoded.Set(key, k.Get(key)); err != nil {
+				return nil, err
+			}
+		}
+	}
+	out = decoded.Raw()
 	return out, nil
 }
 
@@ -359,16 +437,6 @@ func (rawBurstProvider) ReadBytes() ([]byte, error) {
 	return nil, errors.New("raw YAML map has no bytes")
 }
 
-func burstEnvironmentOverride() bool {
-	for _, entry := range os.Environ() {
-		key, _, _ := strings.Cut(entry, "=")
-		if strings.HasPrefix(key, EnvPrefix) && strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(key, EnvPrefix)), "__", ".") == "cloudflare.rate_limit.burst" {
-			return true
-		}
-	}
-	return false
-}
-
 type rawBurstYAML struct{ node *yamlv3.Node }
 
 func (r *rawBurstYAML) UnmarshalYAML(node *yamlv3.Node) error {
@@ -381,7 +449,7 @@ func (r *rawBurstYAML) UnmarshalYAML(node *yamlv3.Node) error {
 // also avoids recursively expanding arbitrary alias graphs in other settings.
 func (r rawBurstYAML) atPath(path string) (any, error) {
 	node := r.node
-	if node != nil && node.Kind == yamlv3.MappingNode && (path == "cloudflare" || path == "cloudflare.rate_limit") {
+	if node != nil && node.Kind == yamlv3.MappingNode && (path == "cloudflare" || path == "cloudflare.rate_limit" || path == "cloudflare.rate_limit.rest" || path == "cloudflare.rate_limit.graphql") {
 		// Match yaml.v3's string-map rule. Other maps remain opaque to koanf.
 		stringMap := true
 		for i := 0; i < len(node.Content); i += 2 {

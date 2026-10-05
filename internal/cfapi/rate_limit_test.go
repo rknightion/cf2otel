@@ -44,10 +44,10 @@ func TestProcessRateLimitReviewIntegerCollision(t *testing.T) {
 	secondBurst := "9223372036854775806"
 	first, err := load("9223372036854775807")
 	if err != nil {
-		if !strings.Contains(err.Error(), "cloudflare.rate_limit.burst") {
+		if !strings.Contains(err.Error(), "cloudflare.rate_limit.") {
 			t.Fatal(err)
 		}
-		if _, err := load("9223372036854775806"); err == nil || !strings.Contains(err.Error(), "cloudflare.rate_limit.burst") {
+		if _, err := load("9223372036854775806"); err == nil || !strings.Contains(err.Error(), "cloudflare.rate_limit.") {
 			t.Fatalf("second oversized burst not rejected: %v", err)
 		}
 		// Under the bounded contract, also exercise exact integer identity
@@ -105,15 +105,17 @@ func TestProcessRateLimitRepeatedConfiguration(t *testing.T) {
 	defer server.Close()
 	cfg.APIBase = server.URL
 	var out []any
-	if err := New(cfg).Get(context.Background(), "/first", nil, &out); err != nil {
-		t.Fatal(err)
+	for range cfg.RateLimit.REST.Burst {
+		if err := New(cfg).Get(context.Background(), "/first", nil, &out); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := ConfigureProcessRateLimit(cfg.RateLimit); err != nil {
 		t.Fatalf("identical active configuration rejected: %v", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	if err := NewObserved(cfg, nil).Get(ctx, "/second", nil, &out); !errors.Is(err, context.DeadlineExceeded) || calls.Load() != 1 {
+	if err := NewObserved(cfg, nil).Get(ctx, "/second", nil, &out); !errors.Is(err, context.DeadlineExceeded) || calls.Load() != int32(cfg.RateLimit.REST.Burst) {
 		t.Fatalf("reconfiguration reset active bucket: err=%v calls=%d", err, calls.Load())
 	}
 	if err := ConfigureProcessRateLimit(config.RateLimitConfig{RequestsPerSecond: 20, Burst: 2}); err == nil {
@@ -264,14 +266,16 @@ func TestReviewSharedBudgetPublicBoundary(t *testing.T) {
 	cfg.APIBase = server.URL
 	a, b := New(cfg), NewObserved(cfg, nil)
 	var out []any
-	if err := a.Get(context.Background(), "/zones", nil, &out); err != nil {
-		t.Fatal(err)
+	for range cfg.RateLimit.REST.Burst {
+		if err := a.Get(context.Background(), "/zones", nil, &out); err != nil {
+			t.Fatal(err)
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	err := b.Get(ctx, "/accounts", nil, &out)
-	if !errors.Is(err, context.DeadlineExceeded) || calls.Load() != 1 {
-		t.Fatalf("shared limiter missing: err=%v upstreamAttempts=%d; want deadline and exactly one attempt", err, calls.Load())
+	if !errors.Is(err, context.DeadlineExceeded) || calls.Load() != int32(cfg.RateLimit.REST.Burst) {
+		t.Fatalf("shared limiter missing: err=%v upstreamAttempts=%d; want deadline after the REST burst is exhausted", err, calls.Load())
 	}
 }
 
@@ -279,9 +283,7 @@ func TestReviewRedirectQueueOutsideNetworkTimeout(t *testing.T) {
 	if runDefaultBudgetProcess(t) {
 		return
 	}
-	// Allow the shared default burst to refill after earlier tests; do not replace
-	// the process budget or bypass the real constructors.
-	time.Sleep(2 * time.Second)
+	// Exhaust the real REST burst before redirecting; quota waits remain outside HTTP timeout.
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
@@ -299,9 +301,14 @@ func TestReviewRedirectQueueOutsideNetworkTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	var out []any
+	for range cfg.RateLimit.REST.Burst {
+		if err := api.Get(ctx, "/zones", nil, &out); err != nil {
+			t.Fatal(err)
+		}
+	}
 	started := time.Now()
 	err := api.Get(ctx, "/redirect", nil, &out)
-	if err != nil || calls.Load() != 2 || time.Since(started) < 1800*time.Millisecond {
+	if err != nil || calls.Load() != int32(cfg.RateLimit.REST.Burst+2) || time.Since(started) < 600*time.Millisecond {
 		t.Fatalf("quota waiting consumed network timeout: err=%v attempts=%d elapsed=%s callerContext=%v; want successful paced redirect within caller deadline", err, calls.Load(), time.Since(started), ctx.Err())
 	}
 }

@@ -114,12 +114,8 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, query url.Valu
 		}
 		if retry && attempt < 4 {
 			delay := time.Duration(1<<attempt) * 100 * time.Millisecond
-			if h := resp.Header.Get("Retry-After"); h != "" {
-				if s, e := strconv.Atoi(h); e == nil {
-					delay = time.Duration(s) * time.Second
-				} else if when, e := http.ParseTime(h); e == nil {
-					delay = time.Until(when)
-				}
+			if parsed, ok := retryAfterDelay(resp.Header.Get("Retry-After"), time.Now()); ok {
+				delay = parsed
 			}
 			if delay < 0 {
 				delay = 0
@@ -148,9 +144,13 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, query url.Valu
 // timeout on every hop bounds headers and body reads, while quota waits happen
 // before Do starts that timer. The original caller context bounds the whole chain.
 func (c *HTTPClient) doRedirects(req *http.Request) (*http.Response, error) {
+	budget := restBudget
+	if req.Method == http.MethodPost {
+		budget = graphqlBudget
+	}
 	for hops := 0; ; hops++ {
 		waiting := time.Now()
-		if err := processBudget.acquire(req.Context()); err != nil {
+		if err := budget.acquire(req.Context()); err != nil {
 			if req.Body != nil {
 				_ = req.Body.Close()
 			}
@@ -159,6 +159,9 @@ func (c *HTTPClient) doRedirects(req *http.Request) (*http.Response, error) {
 		started := time.Now()
 		wait := started.Sub(waiting)
 		resp, err := c.client.Do(req)
+		if resp != nil && budget == restBudget {
+			budget.observeRESTHeaders(resp.Header)
+		}
 		if c.requestObserver != nil {
 			status := 0
 			if resp != nil {

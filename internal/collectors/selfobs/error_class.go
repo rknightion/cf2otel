@@ -18,6 +18,10 @@ func errorClass(err error) string {
 	if errors.As(err, &entitlement) {
 		return "unentitled"
 	}
+	var budget *cfapi.GraphQLBudgetError
+	if errors.As(err, &budget) {
+		return "rate_limited"
+	}
 	var response *cfapi.HTTPError
 	if errors.As(err, &response) {
 		switch response.Status {
