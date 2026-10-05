@@ -50,6 +50,21 @@ Dropping dimensions merges counter/histogram series and loses their distinction;
 gauge and retained-snapshot collisions use the last input point. Denying metrics
 does not disable their collectors or upstream reads.
 
+## Public vendor status
+
+Both public status collectors are opt-in and off by default. They use an isolated unauthenticated HTTP client, not the tenant Cloudflare API client.
+
+| Name | Kind / unit | Meaning |
+| --- | --- | --- |
+| `cloudflare.status.component.status` | Gauge / `1` | Current component status: `0` operational, `1` under_maintenance, `2` degraded_performance, `3` partial_outage, `4` major_outage, `5` unknown. Unknown strings are never treated as healthy. |
+| `cloudflare.status.incident.update` | Log event | Updates from the 50 latest incidents, including resolved incidents; timestamp is source `updated_at`, strictly newer than the checkpoint and no later than the source bound `(from,to]`. Best-effort, not a complete historical feed. |
+
+The gauge carries only string `cloudflare.status.component.name` (public vendor name) and `cloudflare.status.component.type` (`group`, `component`, or reserved `remainder`). Distinct `(name,type)` labels are sorted lexically; duplicates take the worst numeric status. Up to `statuspage.component_cap` ordinary series (default 500) are retained, plus one `name=other,type=remainder` series with the worst status of **all** overflow rows. The reserved type cannot collide with real components named `other`. No component IDs or guessed region labels are emitted; status codes are not averaged. A successful full snapshot replaces all points, including clearing retired components or a valid empty array. TTL is three configured polling intervals; failed reads do not refresh it. Absence or expiry is unavailable state, not proof of health.
+
+Incident logs carry string attributes `cloudflare.status.incident.id`, `.name`, `.status`, `.impact`, and `cloudflare.status.update.id`, `.status`. These identifiers never become metric labels. Body text is capped at 8192 UTF-8 bytes without splitting a rune. `cloudflare.status.update.truncated` is the **string enum** `"true"` when clipped; an unclipped body leaves it absent (consumers may also accept `"false"`). It is not a boolean attribute. Duplicate update IDs at the same source timestamp emit once per response, while edited revisions with a new timestamp emit separately. There is no publication-latency holdback or persistent seen-ID ledger. Successful commits advance the durable checkpoint to the source bound (UTC seconds), including empty polls; restarting with FileStore does not reemit committed updates. Newly visible updates whose `updated_at` is at or older than that checkpoint are intentionally not emitted. Late older updates may therefore be missed even while still on the latest page. A newer revision after restart is emitted. Selected updates retain the scheduler's at-least-once commit semantics; partial export/checkpoint failures can replay them.
+
+Components and incident windows are independent: a valid component snapshot can publish while incident delivery is unavailable. Neither channel establishes the other's freshness. The vendor's latest-50 limit can permanently omit off-page updates after an outage or a busy period. No complete backfill or arbitrary-latency once-only guarantee is claimed. The Workers and platform dashboard tab includes a component status table and an incident-update log panel with all status attributes. Prometheus translates the unit-`1` gauge to `cloudflare_status_component_status_ratio`; the suffix does not mean an availability ratio. Its instant query may retain a last sample during Prometheus lookback after SDK snapshot expiry. No live runtime enablement or dashboard provisioning is implied.
+
 ## Zone selection and poll gauges
 
 `zones.exclude` (or comma-separated `CF2OTEL_ZONES__EXCLUDE`) defaults to empty.
@@ -179,6 +194,7 @@ panels and live canary/proof delivery are separate root-owned work.
 
 | Event or span | Source | Notes |
 | --- | --- | --- |
+| `cloudflare.status.incident.update` | Public Status API `/api/v2/incidents.json` | Latest 50 incidents including resolved updates; UTC source timestamp, log-only IDs and UTF-8-bounded body. |
 | `cloudflare.tunnel.status_change` | Tunnel REST snapshot | ID, name, status and previous status; first poll emits none. (CFO-0048.01) |
 | `cloudflare.access.login` | Access REST request log | Login action, decision (`cloudflare.access.allowed`: `true`/`false`), app, uppercase ISO 3166-1 alpha-2 country and available identity details. The source has short history. |
 | `cloudflare.access.scim_update` | Access SCIM update log | Resource type, HTTP method, status and available identifiers. |

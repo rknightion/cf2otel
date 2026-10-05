@@ -1,0 +1,72 @@
+package config
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestStatuspageValidation(t *testing.T) {
+	good := Default().Statuspage
+	if err := good.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, url := range []string{"relative", "ftp://opaque", "https://opaque/?q=1", "https://opaque/#fragment", "https://opaque/#", "https://opaque/?", "https://opaque@opaque/"} {
+		t.Run(url, func(t *testing.T) {
+			c := good
+			c.BaseURL = url
+			if err := c.Validate(); err == nil {
+				t.Fatal("ambiguous or unsafe origin accepted")
+			}
+		})
+	}
+	for _, cap := range []int{0, 5001} {
+		t.Run(fmt.Sprint(cap), func(t *testing.T) {
+			c := good
+			c.ComponentCap = cap
+			if err := c.Validate(); err == nil {
+				t.Fatal("unbounded component cap accepted")
+			}
+		})
+	}
+	c := good
+	c.Timeout = 0
+	if err := c.Validate(); err == nil {
+		t.Fatal("unbounded timeout accepted")
+	}
+	c = good
+	c.MaxResponseBytes = 0
+	if err := c.Validate(); err == nil {
+		t.Fatal("unbounded response accepted")
+	}
+}
+
+func TestStatuspageDefaultModesAndEnvironment(t *testing.T) {
+	c := Default()
+	if got := c.Collector("statuspage.components"); got != (CollectorConfig{Interval: 5 * time.Minute}) {
+		t.Fatalf("independent off snapshot defaults: %+v", got)
+	}
+	if got := c.Collector("statuspage.incidents"); got != (CollectorConfig{Interval: 5 * time.Minute, InitialLookback: 15 * time.Minute, MaxWindow: time.Hour}) {
+		t.Fatalf("independent off window defaults: %+v", got)
+	}
+	t.Setenv("CF2OTEL_COLLECTORS__STATUSPAGE_COMPONENTS__ENABLED", "true")
+	t.Setenv("CF2OTEL_COLLECTORS__STATUSPAGE_INCIDENTS__INTERVAL", "9m")
+	t.Setenv("CF2OTEL_STATUSPAGE__COMPONENT_CAP", "17")
+	loaded, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.Collector("statuspage.components").Enabled || loaded.Collector("statuspage.incidents").Enabled || loaded.Collector("statuspage.incidents").Interval != 9*time.Minute {
+		t.Fatal("independent environment overrides lost")
+	}
+	// JSON checks public config encoding without requiring an undeclared type on
+	// the red base. Runtime collectors also exercise the loader through YAML.
+	b, err := loaded.RedactedJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"component_cap": 17`) {
+		t.Fatal("statuspage environment override absent")
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/big"
 	"net"
+	"net/url"
 	"os"
 	"reflect"
 	"regexp"
@@ -55,6 +56,7 @@ type Config struct {
 	DEX        DEXConfig                  `yaml:"dex" json:"dex"`
 	WARP       WARPConfig                 `yaml:"warp" json:"warp"`
 	Prometheus PrometheusConfig           `yaml:"prometheus" json:"prometheus"`
+	Statuspage StatuspageConfig           `yaml:"statuspage" json:"statuspage"`
 	Firewall   FirewallConfig             `yaml:"firewall" json:"firewall"`
 	Cloudflare CloudflareConfig           `yaml:"cloudflare" json:"cloudflare"`
 	Collectors map[string]CollectorConfig `yaml:"collectors" json:"collectors"`
@@ -132,6 +134,29 @@ func (c BucketConfig) Validate() error {
 	}
 	if c.Burst < 1 || c.Burst > 1000 {
 		return errors.New("cloudflare.rate_limit.burst must be an integer in [1, 1000]")
+	}
+	return nil
+}
+
+// StatuspageConfig controls the independent, unauthenticated public status API.
+type StatuspageConfig struct {
+	BaseURL          string        `yaml:"base_url" json:"base_url"`
+	Timeout          time.Duration `yaml:"timeout" json:"timeout"`
+	MaxResponseBytes int64         `yaml:"max_response_bytes" json:"max_response_bytes"`
+	ComponentCap     int           `yaml:"component_cap" json:"component_cap"`
+}
+
+// Validate rejects ambiguous endpoint URLs and unbounded response settings.
+func (c StatuspageConfig) Validate() error {
+	u, err := url.Parse(c.BaseURL)
+	if err != nil || u == nil || !u.IsAbs() || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(c.BaseURL, "#") {
+		return errors.New("statuspage.base_url must be absolute http/https without userinfo, query or fragment")
+	}
+	if c.Timeout <= 0 || c.MaxResponseBytes <= 0 || c.MaxResponseBytes == int64(^uint64(0)>>1) {
+		return errors.New("statuspage timeout and max_response_bytes must be positive and bounded")
+	}
+	if c.ComponentCap < 1 || c.ComponentCap > 5000 {
+		return errors.New("statuspage.component_cap must be between 1 and 5000")
 	}
 	return nil
 }
@@ -262,6 +287,9 @@ func Default() Config {
 	c.OTLP.MetricDenylist = []string{}
 	c.OTLP.AttributeDenylist = []string{}
 	c.Prometheus = PrometheusConfig{Listen: "127.0.0.1:9465"}
+	c.Statuspage = StatuspageConfig{BaseURL: "https://www.cloudflarestatus.com", Timeout: 15 * time.Second, MaxResponseBytes: 2 << 20, ComponentCap: 500}
+	c.Collectors[semconv.CollectorNameStatuspageComponents] = CollectorConfig{Interval: 5 * time.Minute}
+	c.Collectors[semconv.CollectorNameStatuspageIncidents] = CollectorConfig{Interval: 5 * time.Minute, InitialLookback: 15 * time.Minute, MaxWindow: time.Hour}
 	c.Firewall = FirewallConfig{MaxMetricSeriesPerWindow: 500}
 	for _, name := range collectorNames {
 		c.Collectors[name] = CollectorConfig{Enabled: true, Interval: 5 * time.Minute, InitialLookback: 30 * time.Minute, MaxWindow: time.Hour}
@@ -638,6 +666,12 @@ func (c Config) Validate() error {
 			issues = append(issues, msg)
 		}
 	}
+	if err := c.Statuspage.Validate(); err != nil {
+		issues = append(issues, err.Error())
+	}
+	if v := c.Collector("statuspage.components"); v.Enabled {
+		add(v.Interval <= time.Duration(1<<63-1)/3, "statuspage.components.interval is too large for snapshot TTL")
+	}
 	add(c.Cloudflare.APIToken != "", "cloudflare.api_token is required")
 	add(c.Cloudflare.AccountID != "", "cloudflare.account_id is required")
 	if err := c.Cloudflare.RateLimit.Validate(); err != nil {
@@ -700,7 +734,7 @@ func (c Config) Validate() error {
 		if v.Enabled {
 			add(v.Interval > 0, name+".interval must be positive")
 			add(v.InitialLookback >= 0, name+".initial_lookback must be nonnegative")
-			if name != "certs.packs" && name != "tunnels.status" && name != "httpreq.transfer" && name != "access.seats" && name != "warp.fleet" && name != semconv.CollectorNameDEXTests && name != semconv.CollectorNameLBHealth {
+			if name != "certs.packs" && name != "tunnels.status" && name != "httpreq.transfer" && name != "access.seats" && name != "warp.fleet" && name != semconv.CollectorNameDEXTests && name != semconv.CollectorNameLBHealth && name != semconv.CollectorNameStatuspageComponents {
 				if name == "workersai.metrics" {
 					add(v.MaxWindow >= 10*time.Minute, name+".max_window must be at least 10m for complete source buckets with unaligned cursors")
 				} else {

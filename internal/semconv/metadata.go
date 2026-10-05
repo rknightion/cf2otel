@@ -25,6 +25,7 @@ var metricSpecs = map[string]MetricSpec{
 	MetricWorkersAIOutputTokens:            {Unit: "{token}", Description: "Total output tokens for an account from complete five-minute Groups buckets."},
 	MetricWorkersAIInferenceTime:           {Unit: "s", Description: "Total inference time for an account, converted from milliseconds."},
 	MetricWARPDevices:                      {Unit: "1", Description: "Unique recently seen WARP devices by observed network status, platform, client version, mode and colo; bounded remainder preserves the total, without device/user identity."},
+	MetricStatusComponentStatus:            {Unit: "1", Description: "Current public vendor component status: 0 operational, 1 under maintenance, 2 degraded performance, 3 partial outage, 4 major outage, 5 unknown; bounded name/type labels, worst-status remainder and expiring snapshots."},
 	MetricLogpushFailedUploads:             {Unit: "{upload}", Description: "Failed upload count by account/zone scope, zone name, job ID, destination type, status code and final attempt; explicit high-cardinality opt-in."},
 	MetricHTTPVisits:                       {Unit: "{visit}", Description: "Additive visit sum by zone from adaptive Groups, following the configured request-source policy."},
 	MetricHTTPThreats:                      {Unit: "{request}", Description: "Threat sum by zone from complete UTC-hour rollups held back at least ten minutes; not assumed eyeball-filterable."},

@@ -23,6 +23,7 @@ import (
 	"github.com/rknightion/cf2otel/internal/collectors/r2"
 	"github.com/rknightion/cf2otel/internal/collectors/rum"
 	"github.com/rknightion/cf2otel/internal/collectors/selfobs"
+	"github.com/rknightion/cf2otel/internal/collectors/statuspage"
 	"github.com/rknightion/cf2otel/internal/collectors/tunnels"
 	"github.com/rknightion/cf2otel/internal/collectors/turnstile"
 	"github.com/rknightion/cf2otel/internal/collectors/warp"
@@ -59,4 +60,5 @@ func registerCollectors(deps collector.Deps) {
 	workersai.Register(deps)
 	dex.Register(deps)
 	loadbalancers.Register(deps)
+	statuspage.Register(deps)
 }

@@ -63,6 +63,12 @@ config:
   cloudflare:
     account_id: ""
     zones: []
+  # Independent public status API; never receives the Cloudflare token.
+  statuspage:
+    base_url: https://www.cloudflarestatus.com
+    timeout: 15s
+    max_response_bytes: 2097152
+    component_cap: 500
   access:
     include_service_tokens: false
   http:
@@ -91,6 +97,14 @@ config:
   # Escape the dot in a collector key when overriding it with Helm --set, e.g.
   # --set 'config.collectors.audit\.logs.enabled=false'.
   collectors:
+    statuspage.components: # Current snapshot, expiry after three poll intervals; no checkpoint.
+      enabled: false
+      interval: 5m
+    statuspage.incidents: # Latest 50 incidents only, including resolved updates.
+      enabled: false
+      interval: 5m
+      initial_lookback: 15m
+      max_window: 1h
     dex.tests:
       enabled: false
       interval: 5m

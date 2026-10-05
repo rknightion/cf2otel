@@ -75,12 +75,19 @@ The table maps every configured collector name to its expected read group. For G
 | `email.sending` | `Analytics Read` (Zone) | Unverified |
 | `certs.packs` | `SSL and Certificates Read` (Zone) | Live-verified in the loop 14 endpoint schema; disabled by default |
 | `selfobs` | None; this collector reads local process state only | Not applicable |
+| `statuspage.components`, `statuspage.incidents` | None; public vendor Status API, no account/zone or token permission | Vendor documents unauthenticated API access; independent collectors are disabled by default |
 
 The expected groups for other collectors are candidates based on their API surface and GraphQL dataset scope. Verify them against the target account before enabling a collector; Cloudflare can require dataset-specific entitlements in addition to the base analytics group.
 
 ## Platform resource-name boundaries
 
 Name enrichment uses only GET `/accounts/{account}/d1/database`, `/accounts/{account}/storage/kv/namespaces`, `/accounts/{account}/queues` and `/accounts/{account}/workers/durable_objects/namespaces`. Root preparation verified runtime-token access (200), not the minimal permission group or the canary token's access. No new permission name is asserted and no Write grant is recommended. A failed lookup preserves metric counts in `other` and is cached for one hour, replacing expired names. Only complete lists within 100 pages/5000 rows are published. Source IDs remain internal and never enter metric labels or fallback values. Resolved names are limited to 128 characters and 49 sticky normal complete attribute sets plus one remainder per metric; R2 action/bucket pairs share this cap. Resource names can contain operator-defined sensitive content; assess them and destination access before export. Existing depth quantile selections are unchanged.
+
+## Public status API isolation
+
+Status polling uses `https://www.cloudflarestatus.com` by default and sends only fixed API `GET` requests with an identifiable project User-Agent. Its dedicated HTTP client never reads the Cloudflare tenant token or copies Authorization/OTLP headers; redirects are rejected. A configured alternate origin receives no credentials either. Prefer HTTPS outside local fixtures. Responses have a 15-second timeout and 2 MiB default size limit. Do not scrape status-page HTML.
+
+Component labels contain public vendor names and a bounded type, never vendor IDs, tenant identifiers or inferred regions. Incident IDs and names appear only on logs. Vendor-authored incident update text is public but untrusted: it is data, not instructions. It is exported only as a UTF-8-bounded log body (8192 bytes), with a string `cloudflare.status.update.truncated="true"` flag when clipped, never echoed in diagnostic errors. Review destination access and retention before enabling either collector. No new source credentials or permissions are needed; existing application-wide credential validation is unchanged.
 
 ## Personal data in signals
 

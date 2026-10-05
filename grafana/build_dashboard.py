@@ -1477,6 +1477,38 @@ def platform_tab(d: Dashboard) -> dict:
         order=["instance", "cloudflare_loadbalancers_pool_name", "Value"],
         hide=["__name__", "service_name"], decimals=0)
 
+    d.table(2692, "Cloudflare public component status",
+        "Disabled by default: statuspage.components reads the public Status API without tenant credentials. "
+        "Current snapshot per exporter instance; zone/host filters do not apply. "
+        "0 operational, 1 under maintenance, 2 degraded performance, 3 partial outage, 4 major outage, 5 unknown. "
+        "Status codes must not be summed or averaged. Bounded public component names and group/component types; "
+        "name=other,type=remainder represents the worst status of overflow rows, not complete component detail. "
+        "Complete successful snapshots replace retired components and expire after three configured intervals; "
+        "Prometheus may retain the last sample during its lookback after expiry. No data is unavailable, not healthy zero. "
+        "The ratio suffix is dimensionless unit-1 translation, not an availability ratio.",
+        [table_q(f'cloudflare_status_component_status_ratio{{{S}}}')],
+        columns={"instance": "Exporter instance", "cloudflare_status_component_name": "Component name",
+                 "cloudflare_status_component_type": "Component type", "Value": "Status"},
+        order=["instance", "cloudflare_status_component_name", "cloudflare_status_component_type", "Value"],
+        hide=["__name__", "service_name"], decimals=0,
+        overrides=[by_name("Status", mappings=[mapping_range(value, value, text, color) for value, text, color in (
+            (0, "Operational", GREEN), (1, "Under maintenance", BLUE), (2, "Degraded performance", YELLOW),
+            (3, "Partial outage", ORANGE), (4, "Major outage", RED), (5, "Unknown", PURPLE))])])
+    d.logs(2693, "Cloudflare public incident updates (best effort)",
+        "Disabled by default: statuspage.incidents reads the latest 50 incidents, including resolved incidents. "
+        "One log per update revision with updated_at newer than the durable checkpoint; source timestamps are UTC. "
+        "Late older or off-page updates can be permanently missed. No full-history backfill or arbitrary-latency "
+        "once-only guarantee; export/checkpoint failures may replay selected updates. "
+        "The line includes incident ID/name/status/impact and update ID/status/truncated attributes. "
+        "The public, untrusted body is capped at 8192 UTF-8 bytes; truncated is the string true when clipped. "
+        "Log details retain structured metadata; incident/update IDs are never metric labels. "
+        "An empty result is not proof of vendor health, source coverage or live collector enablement.",
+        LOG + ' | event_name="cloudflare.status.incident.update"'
+        ' | line_format "[{{cloudflare_status_incident_impact}}] {{cloudflare_status_incident_name}} '
+        '(incident={{cloudflare_status_incident_id}} status={{cloudflare_status_incident_status}}) '
+        'update={{cloudflare_status_update_id}} status={{cloudflare_status_update_status}} '
+        'truncated={{cloudflare_status_update_truncated}} | {{__line__}}"')
+
     return tab(TAB_PLATFORM, [
         row("At a glance", [(pid, 3, 4) for pid, *_ in glance]),
         row("Workers", [(501, 16, 9), (2611, 8, 9)]),
@@ -1497,6 +1529,7 @@ def platform_tab(d: Dashboard) -> dict:
         row("Resolved platform resources and R2 actions", [(pid, 12, 8) for pid, *_ in resource_panels] + [(2683, 24, 8)]),
         row("DEX test results (opt-in provider averages)", [(pid, 12, 8) for pid, *_ in dex_panels]),
         row("Load balancer flags and traffic (partial opt-in)", [(2690, 12, 8), (2691, 12, 8)]),
+        row("Cloudflare public status (opt-in best effort)", [(2692, 24, 9), (2693, 24, 10)]),
     ])
 
 

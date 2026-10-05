@@ -19304,6 +19304,254 @@
           }
         }
       },
+      "panel-2692": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "cloudflare_status_component_status_ratio{service_name=\"cf2otel\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "",
+                        "range": false,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "organize",
+                  "spec": {
+                    "id": "organize",
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true,
+                        "service_name": true
+                      },
+                      "indexByName": {
+                        "Value": 3,
+                        "cloudflare_status_component_name": 1,
+                        "cloudflare_status_component_type": 2,
+                        "instance": 0
+                      },
+                      "renameByName": {
+                        "Value": "Status",
+                        "cloudflare_status_component_name": "Component name",
+                        "cloudflare_status_component_type": "Component type",
+                        "instance": "Exporter instance"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "description": "Disabled by default: statuspage.components reads the public Status API without tenant credentials. Current snapshot per exporter instance; zone/host filters do not apply. 0 operational, 1 under maintenance, 2 degraded performance, 3 partial outage, 4 major outage, 5 unknown. Status codes must not be summed or averaged. Bounded public component names and group/component types; name=other,type=remainder represents the worst status of overflow rows, not complete component detail. Complete successful snapshots replace retired components and expire after three configured intervals; Prometheus may retain the last sample during its lookback after expiry. No data is unavailable, not healthy zero. The ratio suffix is dimensionless unit-1 translation, not an availability ratio.",
+          "id": 2692,
+          "links": [],
+          "title": "Cloudflare public component status",
+          "vizConfig": {
+            "group": "table",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": false
+                  },
+                  "decimals": 0,
+                  "unit": "short"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Status"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "options": {
+                              "from": 0,
+                              "result": {
+                                "color": "green",
+                                "index": 0,
+                                "text": "Operational"
+                              },
+                              "to": 0
+                            },
+                            "type": "range"
+                          },
+                          {
+                            "options": {
+                              "from": 1,
+                              "result": {
+                                "color": "blue",
+                                "index": 0,
+                                "text": "Under maintenance"
+                              },
+                              "to": 1
+                            },
+                            "type": "range"
+                          },
+                          {
+                            "options": {
+                              "from": 2,
+                              "result": {
+                                "color": "yellow",
+                                "index": 0,
+                                "text": "Degraded performance"
+                              },
+                              "to": 2
+                            },
+                            "type": "range"
+                          },
+                          {
+                            "options": {
+                              "from": 3,
+                              "result": {
+                                "color": "orange",
+                                "index": 0,
+                                "text": "Partial outage"
+                              },
+                              "to": 3
+                            },
+                            "type": "range"
+                          },
+                          {
+                            "options": {
+                              "from": 4,
+                              "result": {
+                                "color": "red",
+                                "index": 0,
+                                "text": "Major outage"
+                              },
+                              "to": 4
+                            },
+                            "type": "range"
+                          },
+                          {
+                            "options": {
+                              "from": 5,
+                              "result": {
+                                "color": "purple",
+                                "index": 0,
+                                "text": "Unknown"
+                              },
+                              "to": 5
+                            },
+                            "type": "range"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "options": {
+                "cellHeight": "sm",
+                "footer": {
+                  "countRows": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "show": false
+                },
+                "showHeader": true
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2693": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_loki}"
+                      },
+                      "group": "loki",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "{service_name=\"cf2otel\"} | event_name=\"cloudflare.status.incident.update\" | line_format \"[{{cloudflare_status_incident_impact}}] {{cloudflare_status_incident_name}} (incident={{cloudflare_status_incident_id}} status={{cloudflare_status_incident_status}}) update={{cloudflare_status_update_id}} status={{cloudflare_status_update_status}} truncated={{cloudflare_status_update_truncated}} | {{__line__}}\"",
+                        "legendFormat": "",
+                        "queryType": "range",
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Disabled by default: statuspage.incidents reads the latest 50 incidents, including resolved incidents. One log per update revision with updated_at newer than the durable checkpoint; source timestamps are UTC. Late older or off-page updates can be permanently missed. No full-history backfill or arbitrary-latency once-only guarantee; export/checkpoint failures may replay selected updates. The line includes incident ID/name/status/impact and update ID/status/truncated attributes. The public, untrusted body is capped at 8192 UTF-8 bytes; truncated is the string true when clipped. Log details retain structured metadata; incident/update IDs are never metric labels. An empty result is not proof of vendor health, source coverage or live collector enablement.",
+          "id": 2693,
+          "links": [],
+          "title": "Cloudflare public incident updates (best effort)",
+          "vizConfig": {
+            "group": "logs",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              },
+              "options": {
+                "dedupStrategy": "none",
+                "enableInfiniteScrolling": true,
+                "enableLogDetails": true,
+                "prettifyLogMessage": false,
+                "showCommonLabels": false,
+                "showLabels": false,
+                "showTime": true,
+                "sortOrder": "Descending",
+                "wrapLogMessage": true
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
       "panel-2701": {
         "kind": "Panel",
         "spec": {
@@ -30848,6 +31096,46 @@
                           }
                         },
                         "title": "Load balancer flags and traffic (partial opt-in)"
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "collapse": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2692"
+                                  },
+                                  "height": 9,
+                                  "width": 24,
+                                  "x": 0,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2693"
+                                  },
+                                  "height": 10,
+                                  "width": 24,
+                                  "x": 0,
+                                  "y": 9
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "title": "Cloudflare public status (opt-in best effort)"
                       }
                     }
                   ]

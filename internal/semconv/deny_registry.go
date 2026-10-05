@@ -9,6 +9,15 @@ func IsAttribute(name string) bool {
 }
 
 var denyAttributes = map[string]struct{}{
+	AttrStatusComponentName:              {},
+	AttrStatusComponentType:              {},
+	AttrStatusIncidentID:                 {},
+	AttrStatusIncidentName:               {},
+	AttrStatusIncidentStatus:             {},
+	AttrStatusIncidentImpact:             {},
+	AttrStatusUpdateID:                   {},
+	AttrStatusUpdateStatus:               {},
+	AttrStatusUpdateTruncated:            {},
 	AttrLBPoolName:                       {},
 	AttrDEXTestName:                      {},
 	AttrDEXTestKind:                      {},

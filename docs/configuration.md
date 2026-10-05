@@ -5,6 +5,7 @@ Settings load in this order: built-in defaults, YAML, then `CF2OTEL_` environmen
 | Section | Important settings |
 | --- | --- |
 | `cloudflare` | `account_id`, optional `zones`, API base, timeout and response limit. `api_token` is environment-only. |
+| `statuspage` | Independent public API origin, `timeout` (15s), `max_response_bytes` (2097152), and `component_cap` (500; 1–5000). No authentication. |
 | `collectors` | `enabled`, `interval`, `initial_lookback` and `max_window` per named collector. |
 | `access` | `include_service_tokens` keeps service-token activity separate from human logins. |
 | `http` | `scope` controls request events and defaults to `access_protected`. `metrics_scope` inherits it by default; set `metrics_scope: all` to collect Groups metrics across account zones without widening events. `hosts` is required for either `hosts` scope. `max_metric_hosts_per_zone` (1000) and `max_metric_series_per_window` (10000) reject oversized metric windows before checkpoint advance. |
@@ -286,6 +287,18 @@ that is too short can reset the five-minute pending period between successful po
 too long can treat stale snapshots as current. Stale or never-successful collectors do not establish
 health, and this setting does not enable the disabled-by-default collector.
 
+## Public vendor status
+
+`statuspage.components` and `statuspage.incidents` are independently disabled by default; each polls every `5m` when enabled. There is no `statuspage.status` alias or parent enable flag. Enable either with `CF2OTEL_COLLECTORS__STATUSPAGE_COMPONENTS__ENABLED=true` or `CF2OTEL_COLLECTORS__STATUSPAGE_INCIDENTS__ENABLED=true`.
+
+`statuspage.base_url` defaults to `https://www.cloudflarestatus.com` and must be an absolute HTTP/HTTPS URL without userinfo, query or fragment. HTTP is supported for local fixtures; use the public HTTPS origin in production. Requests use fixed API-root paths, never scrape HTML, and send `User-Agent: cf2otel (+https://github.com/rknightion/cf2otel)`. Redirects are rejected. The isolated HTTP client never reads the Cloudflare API token or copies authorization headers. Each response is bounded by `statuspage.max_response_bytes`, checked before parsing; the network timeout is `statuspage.timeout`. Both bounds must be positive.
+
+The components snapshot reads `/api/v2/summary.json` only. It has no checkpoint or historical lookback. Complete validated reads atomically replace the gauge generation and remove retired components; a genuine empty array clears it. Missing/null arrays, invalid fields, HTTP errors and canceled reads preserve the old snapshot without refreshing its expiry. Points expire three configured component intervals after successful publication. The current SDK publication time is used, not a historical source window. Snapshot-capable emission is required; ordinary gauges are not a fallback.
+
+The incidents collector reads `/api/v2/incidents.json` only, including resolved incidents absent from the summary. Each successful poll emits one log per distinct incident update on that latest page whose `updated_at` is **newer than the durable checkpoint** and no later than the current source-window upper bound, using `(from,to]` intervals. There is no latency holdback or cross-poll seen-ID ledger. Defaults are `15m` initial lookback and `1h` maximum window; the scheduler bounds catch-up windows and truncates the upper bound to UTC seconds. A successful commit advances the checkpoint to that upper bound, including for a valid empty array; a FileStore restart therefore does not replay already committed updates. Late-published updates at or older than the checkpoint are intentionally not emitted, even if they are newly visible on the page. Increasing lookback does not recover them after a checkpoint is established. This is best-effort coverage, not arbitrary-latency once-only delivery. Every incident/update field and `updated_at` timestamp is validated before replay; a failed read emits no records and leaves the established cursor unchanged. Events use source `updated_at` in UTC. Duplicate `(update ID, updated_at)` pairs within one response emit once; a later edit timestamp is a new revision.
+
+The [vendor API](https://www.cloudflarestatus.com/api) exposes the **50 latest incidents**, not full history. Older missing incidents cannot be reconstructed by increasing the lookback; outages or busy periods can cause permanent gaps. No pagination or complete backfill is claimed. Scheduled maintenance events are not separately collected. Component state and incident delivery are independent: valid current component snapshots continue when incident reads or exports fail. Neither an absent/expired gauge nor an empty incident window proves vendor health. These collectors need no source token, although the application's existing global configuration validation still requires its ordinary Cloudflare and OTLP settings.
+
 ## Delivery semantics
 
 Collected logs and spans have at-least-once delivery when their window is ultimately committed. The
@@ -315,6 +328,7 @@ span; its content logs use the content side to distinguish request and response 
 | `EventFirewallEvent` | Log | `cloudflare.firewall.zone`, `cloudflare.firewall.ray_id` and record timestamp. |
 | `EventDNSQuery` | Log | `cloudflare.dns.zone`, record timestamp and a deterministic hash of the complete event body and attributes; the source row has no event ID, so this is best-effort and cannot distinguish identical queries. Do not rely on it for exact query counts. |
 | `EventTunnelStatusChange` | Log | `cloudflare.tunnel.id`, `cloudflare.tunnel.status` and observed time (record timestamp). (CFO-0048.01) |
+| `EventStatusIncidentUpdate` | Log | `cloudflare.status.update.id` and source `updated_at` (record timestamp); edited updates retain their ID with a new timestamp. |
 | `EventWindowGap` | Log | `cf2otel.collector`, `cf2otel.window.from`, `cf2otel.window.floor` and `cloudflare.dns.zone` when present. |
 
 cf2otel also emits two span families. Deduplicate the AI Gateway request span by
