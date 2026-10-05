@@ -2,6 +2,14 @@
   "version": 1,
   "graphql": [
     {
+      "scope": "zone",
+      "dataset": "loadBalancingRequestsAdaptiveGroups",
+      "allow_disabled": true,
+      "required_fields": ["count", "dimensions_selectedPoolName"],
+      "minimum_max_duration_seconds": 300,
+      "minimum_not_older_than_seconds": 600
+    },
+    {
       "scope": "account",
       "dataset": "aiInferenceAdaptiveGroups",
       "required_fields": ["count", "dimensions_datetimeFiveMinutes", "sum_totalInputTokens", "sum_totalOutputTokens", "sum_totalInferenceTimeMs"],

@@ -35,6 +35,17 @@ func TestMain(m *testing.M) {
 // Literal names keep the base witness compilable with only an inert domain seam.
 func setup(t *testing.T, h http.HandlerFunc, interval time.Duration, cap int) (collector.SnapshotCollector, telemetry.Emitter, *sdkmetric.ManualReader) {
 	t.Helper()
+	return setupAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/zones" {
+			respond(w, []any{})
+			return
+		}
+		h(w, r)
+	}, interval, cap)
+}
+
+func setupAPI(t *testing.T, h http.HandlerFunc, interval time.Duration, cap int) (collector.SnapshotCollector, telemetry.Emitter, *sdkmetric.ManualReader) {
+	t.Helper()
 	s := httptest.NewServer(h)
 	t.Cleanup(s.Close)
 	cfg := config.Default()

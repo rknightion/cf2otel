@@ -122,16 +122,16 @@ func TestBudgetDefaultLimiterContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	graphql := cfg.RateLimit.GraphQL
-	t.Logf("settings=307 selection=1 class=graphql rate=%g burst=%d budget=%s elapsed=%s physical_requests=%d", graphql.RequestsPerSecond, graphql.Burst, duration, time.Since(started), calls.Load())
+	t.Logf("settings=330 selection=1 class=graphql rate=%g burst=%d budget=%s elapsed=%s physical_requests=%d", graphql.RequestsPerSecond, graphql.Burst, duration, time.Since(started), calls.Load())
 	if len(diffs) != 0 {
 		t.Fatalf("contract probe differences: %v", diffs)
 	}
-	if calls.Load() != 308 {
-		t.Fatalf("want all 307 settings and singleton selection, got %d", calls.Load())
+	if calls.Load() != 331 {
+		t.Fatalf("want all 330 settings and singleton selection, got %d", calls.Load())
 	}
-	// 308 requests through the default process GraphQL bucket: the burst is free,
+	// 331 requests through the default process GraphQL bucket: the burst is free,
 	// every later request waits 1/rate. Allow 5% for timer slack.
-	floor := time.Duration(float64(308-graphql.Burst) / graphql.RequestsPerSecond * 0.95 * float64(time.Second))
+	floor := time.Duration(float64(331-graphql.Burst) / graphql.RequestsPerSecond * 0.95 * float64(time.Second))
 	if time.Since(started) < floor {
 		t.Fatal("default pacing was bypassed")
 	}
@@ -143,7 +143,7 @@ func TestProbeBudgetCountsAndClasses(t *testing.T) {
 		t.Fatal(err)
 	}
 	rest, graph := probeRequestCounts(c, 1, 23)
-	if rest != 104 || graph != 308 {
+	if rest != 104 || graph != 331 {
 		t.Fatalf("request count REST=%d GraphQL=%d", rest, graph)
 	}
 	rates := config.Default().Cloudflare.RateLimit

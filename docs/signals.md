@@ -784,8 +784,9 @@ The opt-in `loadbalancers.health` snapshot reads only the documented direct opti
 `result.pop_health.healthy` property of the [pool health method](https://developers.cloudflare.com/api/resources/load_balancers/subresources/pools/subresources/health/methods/get/).
 This is an **unattributed provider-reported health flag**, not regional aggregate
 pool availability: true maps to 1, false to 0, absent/null is unknown and omitted.
-No region, origin health, origin RTT, traffic counts, weights or rule totals are
-inferred. In particular, origin RTT is a string with no established unit.
+No region, origin health, origin RTT, weights or rule totals are inferred.
+The current documented RTT example has an explicit `ms` suffix, but stable regional
+and origin attribution is still undocumented and remains unimplemented.
 
 Configured pool names are the only labels, bounded to 128 UTF-8 bytes with no
 controls. Internal pool IDs are request-only; no identifier/address fallback.
@@ -801,4 +802,46 @@ known values and returns an unknown-coverage error, never a healthy classificati
 The pool catalog is live-probed by the drift canary and allows empty accounts.
 Health detail is explicitly `documented_only`, fixture-only and **unprobed** because
 root preparation observed no live pools. Populated runtime health and regional/origin
-joins remain unverified. Dashboard delivery and the remaining task signals are separate.
+joins remain unverified. The original regional/origin health and RTT acceptance
+criterion remains incomplete; the request-count addition below does not waive it.
+
+## Load balancer pool request counts
+
+| Signal | Type | Unit | Attributes |
+|---|---|---|---|
+| `cloudflare.loadbalancers.pool.requests` | Expiring snapshot gauge | `{request}` | `cloudflare.loadbalancers.pool.name` |
+
+The existing disabled-by-default `loadbalancers.health` toggle also collects documented
+`count` grouped by `dimensions.selectedPoolName` from zone-scoped
+[`loadBalancingRequestsAdaptiveGroups`](https://developers.cloudflare.com/load-balancing/reference/load-balancing-analytics/#graphql-analytics).
+**Requests mean uncached load-balancer resolutions, not all HTTP requests.** No raw
+Adaptive row counting or sample-interval multiplication is used. The gauge represents
+the trailing configured polling interval, with half-open `[from,to)` bounds rounded
+out to whole source seconds. It replaces, rather than accumulates, overlapping polls;
+use the value directly, never `rate`, `increase`, or a sum over successive snapshots.
+This is a polling snapshot, not a checkpointed backfill counter. Late-arriving data and
+polling outages may leave traffic unobserved.
+
+The collector lists pools first. An empty account makes only the pool-list request,
+clears prior snapshots and makes no zone, health-detail or GraphQL requests. With pools,
+only zones belonging to the configured account (and existing `cloudflare.zones` allowlist,
+if set) are queried. Selections use `settings.availableFields`; an absent, disabled or
+explicitly unentitled dataset, or either missing required field, is a traffic no-op
+with no fabricated zero. Auth, transport, malformed settings/rows, saturation and
+unusable duration/retention/field/page limits remain errors, with no partial traffic
+publication or refresh of prior snapshot expiry. One strict singleton batch per eligible
+zone prevents silent field renegotiation from losing the pool grouping. The canary
+contract checks these two advertised fields, permits absent/disabled plans, and is
+proved only by local fake-upstream fixtures; no live dataset proof is claimed.
+
+Public configured pool names are the only labels: no zone/account/pool ID, host, origin
+address or region is emitted. Names use the same 128-byte UTF-8/no-controls validation.
+Health takes priority within the existing combined platform series cap; remaining
+traffic slots admit pool names lexically, reserving one `other` slot. Traffic `other`
+is the **sum** of overflow counts, a literal pool named `other`, and historical names
+unresolved in the current catalog, never the health flag's minimum. If health exhausts
+the cap, traffic points are omitted. Counts from eligible zones are summed by pool;
+unentitled zones provide no contribution, so these are not necessarily complete
+account totals. Empty/denied valid traffic clears prior request counts. Both snapshots
+expire after three configured polling intervals. Regional/origin health and origin RTT
+remain explicitly unimplemented.

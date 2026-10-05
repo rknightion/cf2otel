@@ -1461,6 +1461,22 @@ def platform_tab(d: Dashboard) -> dict:
         order=["instance", "cloudflare_loadbalancers_pool_name", "Value"],
         hide=["__name__", "service_name"], decimals=0)
 
+    d.table(2691, "Load balancer uncached resolutions by pool (snapshot)",
+        "Direct trailing-window count of uncached load-balancer resolutions, not all HTTP requests. "
+        "A replaceable snapshot over the configured polling interval rounded out to source seconds; "
+        "do not apply rate/increase or sum successive snapshots. Polling gaps and late data are not "
+        "backfilled. Disabled by default with loadbalancers.health; fixture-only, no live traffic proof. "
+        "Eligible zones in the configured account contribute counts; unentitled zones do not. Zone/host "
+        "dropdowns do not apply. Exporter instances remain separate. Health has priority within the "
+        "shared series cap; other sums overflow and unresolved pool-name counts, not health flags. "
+        "Empty or unentitled traffic removes prior counts; failed polls retain original expiry. "
+        "Snapshots expire after three configured intervals. No data is unknown/disabled/expired, "
+        "not an observed zero. Regional/origin health and RTT remain unimplemented.",
+        [table_q(f'cloudflare_loadbalancers_pool_requests{{{S}}}')],
+        columns={"instance": "Exporter instance", "cloudflare_loadbalancers_pool_name": "Pool name", "Value": "Uncached resolutions in trailing window"},
+        order=["instance", "cloudflare_loadbalancers_pool_name", "Value"],
+        hide=["__name__", "service_name"], decimals=0)
+
     return tab(TAB_PLATFORM, [
         row("At a glance", [(pid, 3, 4) for pid, *_ in glance]),
         row("Workers", [(501, 16, 9), (2611, 8, 9)]),
@@ -1480,7 +1496,7 @@ def platform_tab(d: Dashboard) -> dict:
                                                      (2668, 8, 8), (2669, 8, 8), (2670, 8, 8)]),
         row("Resolved platform resources and R2 actions", [(pid, 12, 8) for pid, *_ in resource_panels] + [(2683, 24, 8)]),
         row("DEX test results (opt-in provider averages)", [(pid, 12, 8) for pid, *_ in dex_panels]),
-        row("Load balancer provider flags (partial opt-in)", [(2690, 24, 8)]),
+        row("Load balancer flags and traffic (partial opt-in)", [(2690, 12, 8), (2691, 12, 8)]),
     ])
 
 

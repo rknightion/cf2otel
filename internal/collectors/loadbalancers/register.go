@@ -1,4 +1,4 @@
-// Package loadbalancers exports documented provider health flags.
+// Package loadbalancers exports documented provider health flags and pool traffic snapshots.
 package loadbalancers
 
 import (
@@ -18,5 +18,5 @@ func Register(deps collector.Deps) {
 	if interval <= 0 {
 		interval = 5 * time.Minute
 	}
-	deps.Registry.RegisterSnapshot(&healthCollector{api: deps.API, account: deps.Config.Cloudflare.AccountID, interval: interval, limit: deps.Config.Platform.MaxMetricSeriesPerWindow, admitted: map[string]bool{}}, interval)
+	deps.Registry.RegisterSnapshot(&healthCollector{api: deps.API, account: deps.Config.Cloudflare.AccountID, zones: append([]string(nil), deps.Config.Cloudflare.Zones...), interval: interval, limit: deps.Config.Platform.MaxMetricSeriesPerWindow, admitted: map[string]bool{}}, interval)
 }

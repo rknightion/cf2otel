@@ -22,6 +22,7 @@ const maxPools = 1000
 type healthCollector struct {
 	api      cfapi.Client
 	account  string
+	zones    []string
 	interval time.Duration
 	limit    int
 	mu       sync.Mutex
@@ -159,7 +160,14 @@ func (c *healthCollector) Collect(ctx context.Context, e telemetry.Emitter) erro
 	}
 	// A valid empty catalog or all-unknown valid detail clears prior known flags.
 	// Failed fetches alone never refresh prior expiry; a valid subset replaces it.
-	if err := batch.GaugeSnapshots(ctx, 3*c.interval, map[string][]telemetry.GaugePoint{semconv.MetricLBPoolHealth: points}); err != nil {
+	requests, err := c.requests(ctx, rows, c.limit-len(points))
+	if err != nil {
+		return err
+	}
+	if err := batch.GaugeSnapshots(ctx, 3*c.interval, map[string][]telemetry.GaugePoint{
+		semconv.MetricLBPoolHealth:   points,
+		semconv.MetricLBPoolRequests: requests,
+	}); err != nil {
 		return err
 	}
 	c.admitted = admitted
