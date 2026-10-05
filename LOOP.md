@@ -8,13 +8,10 @@ receiver: https://loopwatch.m7kni.com
 grafana-stack: robknight
 
 Public repository: no hostname, account/zone/gateway ID, tenant ID, email or internal identifier in
-any tracked file or loop artifact. `just ci` adds the goreleaser snapshot and the image build and
-needs a Docker daemon. Run `just` in a clean worktree: the gitignored `codex/` holds Go files that fail fmt, lint, vet and test in the shared checkout.
+any tracked file or loop artifact. `just ci` needs a Docker daemon. Run `just` in a clean worktree: the gitignored `codex/` holds Go files that fail fmt, lint, vet and test in the shared checkout.
 
 ## Credentials
 
-- Runtime config precedence is defaults, YAML, then `CF2OTEL_` environment variables, double
-  underscore nested. Secrets are environment-only and rejected in YAML.
 - Three separate Cloudflare credentials: a read-only runtime API token, a schema-probe token, and a
   Global API Key used only for read-only GETs on gateway and Workers-observability-destination
   objects plus one narrow write path that a goal must name. Never any other Global-Key write.
@@ -30,15 +27,8 @@ needs a Docker daemon. Run `just` in a clean worktree: the gitignored `codex/` h
 
 ## Traps
 
-- One unentitled GraphQL field fails the whole query. Build field selections from the zone's
-  `settings.availableFields` (spelled `part_field`, not dotted) and respect `maxNumberOfFields`,
-  `maxDuration` and `notOlderThan`.
-- Adaptive datasets are sampled: take rates from the `*Groups` datasets, never from raw row counts.
-  Edge TTFB and ASN dimensions on `httpRequestsAdaptiveGroups` are Pro-only.
-- Per-request HTTP events carry no Access identity; flag any inferred identity as inferred. The
-  Access REST log reaches back about a day and has no backfill.
-- Loki gets OTLP log attributes as structured metadata; only `service_name` is a stream label.
-  Tempo on the m7kni stack truncates span attribute values at 2048 characters.
+- GraphQL `settings.availableFields` spells fields `part_field`, not dotted. Edge TTFB and ASN
+  dimensions on `httpRequestsAdaptiveGroups` are Pro-only.
 - `GET /accounts/{a}/cfd_tunnel` without Cloudflare Tunnel Read returns 200 with an empty list.
   Treat an empty tunnel list as unproven until the token's permissions are confirmed.
 - Live proof for a collector is 60 continuous minutes in which the increase of
