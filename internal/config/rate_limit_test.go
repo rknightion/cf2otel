@@ -10,7 +10,74 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestRateLimitMaxPauseLoad(t *testing.T) {
+	var log bytes.Buffer
+	original := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&log, nil)))
+	t.Cleanup(func() { slog.SetDefault(original) })
+	check := func(path string, want time.Duration) {
+		t.Helper()
+		c, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := c.RedactedJSON()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var decoded struct {
+			Cloudflare struct {
+				RateLimit struct {
+					MaxPause time.Duration `json:"max_pause"`
+				} `json:"rate_limit"`
+			} `json:"cloudflare"`
+		}
+		if err := json.Unmarshal(raw, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		if decoded.Cloudflare.RateLimit.MaxPause != want {
+			t.Fatalf("max_pause=%s want=%s", decoded.Cloudflare.RateLimit.MaxPause, want)
+		}
+		checkRateLimitDefaults(t, c)
+		if log.Len() != 0 {
+			t.Fatalf("max_pause is not a legacy flat key: unexpected warning: %s", log.String())
+		}
+	}
+	check("", 5*time.Minute)
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("cloudflare:\n  rate_limit:\n    max_pause: 1s\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	check(path, time.Second)
+	t.Setenv("CF2OTEL_CLOUDFLARE__RATE_LIMIT__MAX_PAUSE", "60m")
+	check(path, time.Hour)
+}
+
+func TestRateLimitMaxPauseBoundaries(t *testing.T) {
+	for _, source := range []string{"YAML", "ENV"} {
+		for _, value := range []string{"1s", "60m", "0s", "999ms", "60m1ns", "-1s", "invalid", "999999999999999999999h"} {
+			t.Run(source+"/"+value, func(t *testing.T) {
+				path := ""
+				if source == "ENV" {
+					t.Setenv("CF2OTEL_CLOUDFLARE__RATE_LIMIT__MAX_PAUSE", value)
+				} else {
+					path = filepath.Join(t.TempDir(), "config.yaml")
+					if err := os.WriteFile(path, []byte("cloudflare:\n  rate_limit:\n    max_pause: "+value+"\n"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				_, err := Load(path)
+				valid := value == "1s" || value == "60m"
+				if valid && err != nil || !valid && (err == nil || !strings.Contains(err.Error(), "max_pause")) {
+					t.Fatalf("max_pause=%s valid=%t err=%v", value, valid, err)
+				}
+			})
+		}
+	}
+}
 
 func TestRateLimitLoadDefaultsAndPrecedence(t *testing.T) {
 	c, err := Load("")

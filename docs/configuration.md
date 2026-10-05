@@ -48,11 +48,22 @@ REST `Retry-After` (nonnegative seconds or HTTP date) pauses the shared REST buc
 including sibling clients, not just the failed call. REST `Ratelimit` policies such
 as `default;r=0;t=1` defer the next REST token for `t` seconds whenever the remaining
 `r` is at or below the configured REST burst. Malformed or overflowing header
-values are ignored. Pauses only extend an existing pause, never shorten it.
+values are ignored. REST header pauses are capped by
+`cloudflare.rate_limit.max_pause`, default `5m`, a duration in `[1s, 60m]`.
+Override it with `CF2OTEL_CLOUDFLARE__RATE_LIMIT__MAX_PAUSE`. This is a shared
+REST ceiling, not a deprecated compatibility key; it is never expanded into the
+class buckets and does not produce a deprecation warning. A capped pause logs
+one warning, even when both headers request it; raw header values are not logged.
+The REST retry wait uses the same ceiling. Pauses only extend an existing pause,
+never shorten it.
 GraphQL `errors[].extensions.code="budget"` pauses only GraphQL for exactly 300
 seconds and retries once after that pause if the caller's context allows. Budget
 failures retain the bounded `rate_limited` collector error class even when the
 context expires during the retry wait; upstream messages are never exposed.
+The REST ceiling does not change this 300-second GraphQL budget pause. Only an
+exact string `budget` in `extensions.code` triggers it, including in responses
+with data or malformed sibling errors. Missing, null or non-string codes do not
+pause GraphQL; non-budget responses retain normal schema/error classification.
 
 Quota waiting happens before each HTTP exchange starts its `cloudflare.timeout`,
 including every redirect hop. The timeout still bounds network headers and body

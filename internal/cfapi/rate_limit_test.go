@@ -17,6 +17,35 @@ import (
 	"github.com/rknightion/cf2otel/internal/config"
 )
 
+func TestProcessMaxPauseConfigurationIdentity(t *testing.T) {
+	if runDefaultBudgetProcess(t) {
+		return
+	}
+	cfg := config.Default().Cloudflare
+	cfg.RateLimit.MaxPause = time.Second
+	if err := ConfigureProcessRateLimit(cfg.RateLimit); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"result":[]}`))
+	}))
+	defer server.Close()
+	cfg.APIBase = server.URL
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	var out []any
+	if err := New(cfg).Get(ctx, "/first", nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if err := ConfigureProcessRateLimit(cfg.RateLimit); err != nil {
+		t.Fatalf("identical active ceiling rejected: %v", err)
+	}
+	cfg.RateLimit.MaxPause = 2 * time.Second
+	if err := ConfigureProcessRateLimit(cfg.RateLimit); err == nil {
+		t.Fatal("active ceiling change accepted")
+	}
+}
+
 // A subprocess is the process edge: configuration is immutable after traffic,
 // so this exercises a genuinely fresh configured process rather than resetting
 // the singleton in a test or changing production defaults for fixtures.

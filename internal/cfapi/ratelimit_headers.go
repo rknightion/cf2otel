@@ -1,6 +1,7 @@
 package cfapi
 
 import (
+	"log/slog"
 	"math"
 	"net/http"
 	"strconv"
@@ -75,12 +76,26 @@ func ratelimitDelay(values []string, burst int) time.Duration {
 	return delay
 }
 
-func (b *tokenBucket) observeRESTHeaders(header http.Header) {
-	if delay, ok := retryAfterDelay(header.Get("Retry-After"), time.Now()); ok {
-		b.pause(delay)
-	}
+// The retry loop uses the same ceiling without logging again: observation is
+// the single warning site, even when both headers request an excessive pause.
+func (b *tokenBucket) restPause(delay time.Duration) time.Duration {
 	b.mu.Lock()
-	burst := b.burst
+	ceiling := b.maxPause
 	b.mu.Unlock()
-	b.pause(ratelimitDelay(header.Values("Ratelimit"), burst))
+	return min(delay, ceiling)
+}
+
+func (b *tokenBucket) observeRESTHeaders(header http.Header) {
+	b.mu.Lock()
+	burst, ceiling := b.burst, b.maxPause
+	b.mu.Unlock()
+	delay := ratelimitDelay(header.Values("Ratelimit"), burst)
+	if retry, ok := retryAfterDelay(header.Get("Retry-After"), time.Now()); ok {
+		delay = max(delay, retry)
+	}
+	if delay > ceiling {
+		slog.Warn("cloudflare REST rate-limit pause capped", "requested_pause", delay, "max_pause", ceiling)
+		delay = ceiling
+	}
+	b.pause(delay)
 }

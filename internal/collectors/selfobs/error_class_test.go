@@ -8,6 +8,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,6 +23,59 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
+
+func TestGraphQLEnvelopeErrorClasses(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, want string
+	}{
+		{"errors_with_data", `{"data":{"viewer":{"zones":[]}},"errors":[{"message":"private"}]}`, "other"},
+		{"missing_extensions", `{"errors":[{"message":"private"}]}`, "other"},
+		{"absent_code", `{"errors":[{"extensions":{}}]}`, "other"},
+		{"numeric_code", `{"errors":[{"extensions":{"code":123}}]}`, "other"},
+		{"null_code", `{"errors":[{"extensions":{"code":null}}]}`, "other"},
+		{"object_code", `{"errors":[{"extensions":{"code":{"value":"budget"}}}]}`, "other"},
+		{"array_code", `{"errors":[{"extensions":{"code":["budget"]}}]}`, "other"},
+		{"message_only_budget", `{"errors":[{"message":"budget"}]}`, "other"},
+		{"malformed_error", `{"errors":[false]}`, "schema"},
+		{"malformed_data", `{"data":false,"errors":[{"extensions":{"code":123}}]}`, "schema"},
+		{"entitlement_with_data", `{"data":{"viewer":{"zones":[]}},"errors":[{"message":"not entitled to field 'fixture'"}]}`, "unentitled"},
+		{"budget_with_malformed_sibling", `{"data":false,"errors":[false,{"extensions":false},{"extensions":{"code":"budget"}}]}`, "rate_limited"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// A real budget pause lasts 300s. Isolate each public-path witness,
+			// including repeated -count runs, rather than mutating the singleton.
+			if os.Getenv("CF2OTEL_TEST_ENVELOPE_CHILD") != "1" {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^"+t.Name()+"$", "-test.v")
+				cmd.Env = append(os.Environ(), "CF2OTEL_TEST_ENVELOPE_CHILD=1")
+				if output, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("envelope process: %v\n%s", err, output)
+				}
+				return
+			}
+			var calls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				calls.Add(1)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+			cfg := config.Default().Cloudflare
+			cfg.APIBase = server.URL
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			_, err := cfapi.New(cfg).DatasetSettings(ctx, cfapi.ZoneScope, "fixture", "events")
+			if err == nil || calls.Load() != 1 {
+				t.Fatalf("missing deterministic upstream failure: err=%v calls=%d", err, calls.Load())
+			}
+			for _, wrapped := range []error{err, fmt.Errorf("outer: %w", err)} {
+				if got := errorClass(wrapped); got != tc.want {
+					t.Fatalf("error class=%s want=%s err=%v", got, tc.want, wrapped)
+				}
+			}
+		})
+	}
+}
 
 // Observe scheduler failures through the public Stats callback and real SDK,
 // alongside the registered snapshot collector. Wrappers must retain their class,

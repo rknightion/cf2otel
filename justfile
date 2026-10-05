@@ -43,7 +43,7 @@ fmt-check:
 [group('check')]
 [no-exit-message]
 lint: _install-golangci-lint
-    {{ golangci_lint_dir }}/golangci-lint run ./...
+    {{ golangci_lint_dir }}/golangci-lint run --allow-parallel-runners ./...
 
 # Run go vet
 [group('check')]

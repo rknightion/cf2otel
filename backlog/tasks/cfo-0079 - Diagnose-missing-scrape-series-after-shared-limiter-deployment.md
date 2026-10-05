@@ -3,9 +3,9 @@ id: CFO-0079
 title: Diagnose missing scrape series after shared-limiter deployment
 status: Parked
 assignee:
-  - '@loop22-root'
+  - '@loop23-root'
 created_date: '2026-10-03 15:23'
-updated_date: '2026-10-05 12:20'
+updated_date: '2026-10-05 17:31'
 labels:
   - ops
   - limiter
@@ -79,4 +79,8 @@ Correction: originalversion46cbb26 has22errors(not23), newsameSHA0.18.0-rc.1 has
 Partial table reduction (not AC1):49collectorrows,441cumulative original-version requests,20688.666103seconds aggregate limiterwait and109.917351seconds API duration across concurrent requestseries. Leaders:requests email.sending33,healthchecks.events29,dns.events/firewall.events28; wait dns.events842.411s,dns.metrics840.896s,httpreq.metrics840.821s; API time tunnels.status10.873s,email.sending6.015s,healthchecks.events5.629s. These totals are neither firstpolltimefractions nor exactfive-minute demand; counterzero/epoch/source fence absent. Cause of22errors across14collectors remains unattributed, sameSHA RCnewversion0errors. Proposed nextscope: freeze/identify finalRCredeploy epoch, capture authenticated sanitized error cause and startupzero metrics, then measure all49or90minutes. Recommend atmost2implementation attempts for authentic registered/runtime error and epoch prerequisite only; no throughput correction until attribution acceptance.
 
 Loop22 L1 observation notstarted, AC1unchecked: final3e85282a exactCI37305970420success and autoRC37307606314fullcompletion12:15:56UTC; RC0.18.0-rc.6scrapes visible12:15:30(26searlier). Identity-awarehistory through12:19 found87series/0decreases, no qualifyingpostcompletionreset. Actualmetricnames/labelkeys discovered, no guessedzeros or measurement accepted. Receipt /Users/rob/repos/cf2otel/codex/live-loop22/L1-final-history-1791202745.json. Implementationattempts parent historical5unchanged; currentchildrenR1total3,M2conservative2; liveprobe consumesnone. Parkowner: authorise sameSHArestartafterfullRCcompletion or amend fence to demonstrablysettledpublication-linked epoch; rootcannotwaive it, SSH/restartnotgranted. No ongoingregression demonstrated/no rollback. Workflowdispatch follows parkedL1, noactiveobservation.
+
+Loop23 adopted: H1 limiter hardening precedes L1 on exact green main SHA; revised publication-linked reset fence and conditional one-shot restart authorized. No tracker pushes during L1; AC1 remains open until complete attribution.
+
+Loop23 L1: no implementation attempt (parent historical5 unchanged). H1 limiter hardening parked at lint infrastructure retry ceiling and did not land; measured current main d936bef5afbfb8fbaec49c237ac46d743a269f29. Exact CI37332966344 ci-success green, autoRC37334986467 complete15:48:55UTC, process reset bracket15:50:01.925-15:51:03.425UTC after RCstart15:42:27UTC; no further observed reset/gap or main change. Original90min epoch15:51:03.425-17:21:03.425UTC closes48/49 completed,47 firstdurations. httpreq.metrics completion absent; tunnels.status completed but firstcount2 makes firstduration unproved, not failure. Nine firstpolls exceed300s; email.routing870.307s vs2337.420s baseline, firewall.metrics795.169s vs1748.335s. httpreq.metrics GraphQL409cumulative/408observed-increase requests,5202.122/5174.378s limiterwait,117.633/117.560s APIduration; wait97.79percent of those two recorded cumulative components, not critical-path/wall-share proof. Other-class aigateway.logs REST28cumulative/26increase followed by unclassified-error request and collector successes; no exact retry/application recovery asserted. No rate_limited series observed/no rate-limit recovery claim. AC1 remains unchecked: precise slow/missing cause incomplete; need separately authorized registered/runtime inflight diagnostic evidence, not an assumed observation retry or fairqueue correction. Sanitized receipt /Users/rob/repos/cf2otel/codex/live-loop23/attribution.json with detailed history and independent partial-evidence review. No restart, rollback, push or source landing. Tracker edits remain local pending publication with next authorized code push; never pushed during L1.
 <!-- SECTION:NOTES:END -->

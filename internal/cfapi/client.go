@@ -116,6 +116,9 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, query url.Valu
 			delay := time.Duration(1<<attempt) * 100 * time.Millisecond
 			if parsed, ok := retryAfterDelay(resp.Header.Get("Retry-After"), time.Now()); ok {
 				delay = parsed
+				if method == http.MethodGet {
+					delay = restBudget.restPause(delay)
+				}
 			}
 			if delay < 0 {
 				delay = 0

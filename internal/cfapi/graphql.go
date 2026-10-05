@@ -162,18 +162,22 @@ func firstNode(r graphResponse, s Scope) (map[string]json.RawMessage, error) {
 }
 func hasBudgetError(raw []byte) bool {
 	var envelope struct {
-		Errors []struct {
-			Extensions struct {
-				Code json.RawMessage `json:"code"`
-			} `json:"extensions"`
-		} `json:"errors"`
+		Errors []json.RawMessage `json:"errors"`
 	}
 	if json.Unmarshal(raw, &envelope) != nil {
 		return false
 	}
-	for _, failure := range envelope.Errors {
+	for _, rawError := range envelope.Errors {
+		// Parse each error independently: a malformed sibling or extensions
+		// value cannot hide an authoritative string budget code elsewhere.
+		var failure struct {
+			Extensions map[string]json.RawMessage `json:"extensions"`
+		}
+		if json.Unmarshal(rawError, &failure) != nil {
+			continue
+		}
 		var code string
-		if json.Unmarshal(failure.Extensions.Code, &code) == nil && code == "budget" {
+		if json.Unmarshal(failure.Extensions["code"], &code) == nil && code == "budget" {
 			return true
 		}
 	}

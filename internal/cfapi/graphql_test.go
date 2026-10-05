@@ -2,6 +2,7 @@ package cfapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -22,6 +23,79 @@ func TestMain(m *testing.M) {
 		}
 	}
 	os.Exit(m.Run())
+}
+
+func TestGraphQLMixedMalformedEnvelopes(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, class string
+	}{
+		{"data_and_error", `{"data":{"viewer":{"zones":[{"settings":{}}]}},"errors":[{"message":"private"}]}`, "other"},
+		{"missing_extensions", `{"errors":[{"message":"private"}]}`, "other"},
+		{"absent_code", `{"errors":[{"extensions":{}}]}`, "other"},
+		{"numeric_code", `{"errors":[{"extensions":{"code":123}}]}`, "other"},
+		{"null_code", `{"errors":[{"extensions":{"code":null}}]}`, "other"},
+		{"array_code", `{"errors":[{"extensions":{"code":["budget"]}}]}`, "other"},
+		{"object_code", `{"errors":[{"extensions":{"code":{"value":"budget"}}}]}`, "other"},
+		{"message_only_budget", `{"errors":[{"message":"budget"}]}`, "other"},
+		{"scalar_extensions", `{"errors":[{"extensions":false}]}`, "other"},
+		{"null_error", `{"errors":[null]}`, "other"},
+		{"scalar_error", `{"errors":[false]}`, "schema"},
+		{"errors_object", `{"errors":{"extensions":{"code":"budget"}}}`, "schema"},
+		{"malformed_message", `{"errors":[{"message":123}]}`, "schema"},
+		{"malformed_data", `{"data":{"viewer":{"zones":false}},"errors":[{"extensions":{"code":123}}]}`, "schema"},
+		{"entitlement_with_data", `{"data":{"viewer":{"zones":[]}},"errors":[{"message":"not entitled to field 'fixture'"}]}`, "unentitled"},
+		{"budget_with_data", `{"data":{"viewer":{"zones":[]}},"errors":[{"extensions":{"code":"budget"}}]}`, "budget"},
+		{"budget_with_malformed_sibling", `{"data":false,"errors":[false,{"extensions":false},{"extensions":{"code":"budget"}}]}`, "budget"},
+		{"budget_before_malformed_sibling", `{"errors":[{"extensions":{"code":"budget"}},{"extensions":123}]}`, "budget"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if runDefaultBudgetProcess(t) {
+				return
+			}
+			var calls int
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+			cfg := config.Default().Cloudflare
+			if err := json.Unmarshal([]byte(`{"max_pause":1000000000}`), &cfg.RateLimit); err != nil {
+				t.Fatal(err)
+			}
+			if err := ConfigureProcessRateLimit(cfg.RateLimit); err != nil {
+				t.Fatal(err)
+			}
+			cfg.APIBase = server.URL
+			api := NewObserved(cfg, func(string, string, int, time.Duration, bool) { calls++ })
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			_, err := api.DatasetSettings(ctx, ZoneScope, "fixture", "events")
+			var budget *GraphQLBudgetError
+			var denied *UnentitledError
+			var shape *json.UnmarshalTypeError
+			class := "other"
+			switch {
+			case errors.As(err, &budget):
+				class = "budget"
+			case errors.As(err, &denied):
+				class = "unentitled"
+			case errors.As(err, &shape):
+				class = "schema"
+			}
+			if err == nil || class != tc.class || calls != 1 {
+				t.Fatalf("class=%s want=%s err=%v calls=%d", class, tc.class, err, calls)
+			}
+			graphqlBudget.mu.Lock()
+			pause := time.Until(graphqlBudget.pausedUntil)
+			graphqlBudget.mu.Unlock()
+			if tc.class == "budget" {
+				if !errors.Is(err, context.DeadlineExceeded) || pause < 299*time.Second || pause > 300*time.Second {
+					t.Fatalf("budget pause not preserved: err=%v remaining=%s", err, pause)
+				}
+			} else if pause > 0 {
+				t.Fatalf("non-string/absent budget code paused GraphQL: %s", pause)
+			}
+		})
+	}
 }
 
 func TestGraphQLRetentionGapCarriesFloor(t *testing.T) {

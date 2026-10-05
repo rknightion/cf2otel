@@ -71,10 +71,11 @@ type Config struct {
 }
 type RateLimitConfig struct {
 	// Legacy fields remain available to package users; explicit values apply to both classes.
-	RequestsPerSecond float64      `yaml:"requests_per_second" json:"requests_per_second,omitempty"`
-	Burst             int          `yaml:"burst" json:"burst,omitempty"`
-	REST              BucketConfig `yaml:"rest" json:"rest"`
-	GraphQL           BucketConfig `yaml:"graphql" json:"graphql"`
+	RequestsPerSecond float64       `yaml:"requests_per_second" json:"requests_per_second,omitempty"`
+	Burst             int           `yaml:"burst" json:"burst,omitempty"`
+	REST              BucketConfig  `yaml:"rest" json:"rest"`
+	GraphQL           BucketConfig  `yaml:"graphql" json:"graphql"`
+	MaxPause          time.Duration `yaml:"max_pause" json:"max_pause"`
 }
 
 type BucketConfig struct {
@@ -94,6 +95,9 @@ func (c RateLimitConfig) Buckets() (BucketConfig, BucketConfig) {
 }
 
 func (c RateLimitConfig) Validate() error {
+	if c.MaxPause < time.Second || c.MaxPause > time.Hour {
+		return errors.New("cloudflare.rate_limit.max_pause must be a duration in [1s, 60m]")
+	}
 	rest, graphql := c.Buckets()
 	for _, item := range []struct {
 		name   string
@@ -231,7 +235,7 @@ var disabledCollectorNames = []string{"aigateway.coverage", "logpush.failures", 
 
 func Default() Config {
 	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{RequestSource: "eyeball", Breakdowns: []string{"status", "origin_status", "country", "protocol", "tls_protocol", "method", "content_type"}, Scope: "access_protected", MaxMetricHostsPerZone: 1000, MaxMetricSeriesPerWindow: 10000}, Platform: PlatformConfig{MaxMetricSeriesPerWindow: 500}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{MetricCardinalityLimit: 10000, Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
-	c.Cloudflare.RateLimit = RateLimitConfig{REST: BucketConfig{RequestsPerSecond: 3, Burst: 5}, GraphQL: BucketConfig{RequestsPerSecond: 0.8, Burst: 2}}
+	c.Cloudflare.RateLimit = RateLimitConfig{MaxPause: 5 * time.Minute, REST: BucketConfig{RequestsPerSecond: 3, Burst: 5}, GraphQL: BucketConfig{RequestsPerSecond: 0.8, Burst: 2}}
 	c.Cloudflare.EntitlementBackoff = time.Hour
 	c.HTTP.HighCardinalityLimit = 500
 	c.HTTP.HighCardinalityHosts = []string{}

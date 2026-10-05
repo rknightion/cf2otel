@@ -12,7 +12,11 @@ import (
 
 // All clients share one bucket per request class, including retries and REST redirects.
 // Configuration and acquisitions lock in REST-then-GraphQL order when both are needed.
-var restBudget = newTokenBucket(3, 5)
+var restBudget = func() *tokenBucket {
+	b := newTokenBucket(3, 5)
+	b.maxPause = config.Default().Cloudflare.RateLimit.MaxPause
+	return b
+}()
 var graphqlBudget = newTokenBucket(0.8, 2)
 
 func newTokenBucket(rate float64, burst int) *tokenBucket {
@@ -25,12 +29,18 @@ type tokenBucket struct {
 	burst                  int
 	last                   time.Time
 	pausedUntil            time.Time
+	maxPause               time.Duration // REST header ceiling; never applied to GraphQL budget pauses.
 	started                bool
 }
 
 // ConfigureProcessRateLimit is atomic across classes and idempotent after traffic.
 // A different configuration cannot reset either active class's budget.
 func ConfigureProcessRateLimit(cfg config.RateLimitConfig) error {
+	// Package callers predating max_pause may omit it. Loaded configurations
+	// are validated strictly, so explicit YAML/environment zero is rejected.
+	if cfg.MaxPause == 0 {
+		cfg.MaxPause = config.Default().Cloudflare.RateLimit.MaxPause
+	}
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
@@ -42,12 +52,13 @@ func ConfigureProcessRateLimit(cfg config.RateLimitConfig) error {
 	same := func(b *tokenBucket, c config.BucketConfig) bool {
 		return b.rate == c.RequestsPerSecond && b.burst == c.Burst
 	}
-	if same(restBudget, rest) && same(graphqlBudget, graphql) {
+	if same(restBudget, rest) && same(graphqlBudget, graphql) && restBudget.maxPause == cfg.MaxPause {
 		return nil
 	}
 	if restBudget.started || graphqlBudget.started {
 		return errors.New("cloudflare process rate limit already in use")
 	}
+	restBudget.maxPause = cfg.MaxPause
 	for _, item := range []struct {
 		b *tokenBucket
 		c config.BucketConfig

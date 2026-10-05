@@ -1,17 +1,85 @@
 package cfapi
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rknightion/cf2otel/internal/config"
 )
+
+// Decode through the public configuration type so the same witness runs on the
+// base, where the new duration is ignored and the real HTTP pause remains 3s.
+func TestRESTPauseCeilingFakeUpstream(t *testing.T) {
+	for _, name := range []string{"retry_after_retry", "retry_after_sibling", "ratelimit_sibling", "both_headers"} {
+		t.Run(name, func(t *testing.T) {
+			if runDefaultBudgetProcess(t) {
+				return
+			}
+			cfg := config.Default().Cloudflare
+			if err := json.Unmarshal([]byte(`{"max_pause":1000000000}`), &cfg.RateLimit); err != nil {
+				t.Fatal(err)
+			}
+			if err := ConfigureProcessRateLimit(cfg.RateLimit); err != nil {
+				t.Fatal(err)
+			}
+			var log bytes.Buffer
+			original := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&log, nil)))
+			t.Cleanup(func() { slog.SetDefault(original) })
+			received := make(chan time.Time, 2)
+			var calls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				received <- time.Now()
+				if calls.Add(1) == 1 {
+					if name != "ratelimit_sibling" {
+						w.Header().Set("Retry-After", "3")
+					}
+					if name == "ratelimit_sibling" || name == "both_headers" {
+						w.Header().Set("Ratelimit", "default;r=0;t=3")
+					}
+					if name == "retry_after_retry" {
+						w.WriteHeader(http.StatusTooManyRequests)
+						return
+					}
+				}
+				_, _ = w.Write([]byte(`{"result":[]}`))
+			}))
+			defer server.Close()
+			cfg.APIBase = server.URL
+			cfg.Timeout = 100 * time.Millisecond
+			ctx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
+			defer cancel()
+			var out []any
+			if err := New(cfg).Get(ctx, "/first", nil, &out); err != nil {
+				t.Fatalf("1s ceiling versus 3s header: first request: %v", err)
+			}
+			if name != "retry_after_retry" {
+				if err := New(cfg).Get(ctx, "/sibling", nil, &out); err != nil {
+					t.Fatalf("1s ceiling versus 3s header: sibling request: %v", err)
+				}
+			}
+			first, second := <-received, <-received
+			if elapsed := second.Sub(first); elapsed < time.Second || elapsed >= 2500*time.Millisecond || calls.Load() != 2 {
+				t.Fatalf("ceiling not observed upstream: elapsed=%s calls=%d", elapsed, calls.Load())
+			} else {
+				t.Logf("fake upstream: ceiling=1s header=3s inter-attempt=%s calls=%d", elapsed, calls.Load())
+			}
+			if strings.Count(log.String(), "WARN") != 1 || strings.Contains(log.String(), "default;r=") {
+				t.Fatalf("want one bounded warning per pause, no raw header: %s", log.String())
+			}
+		})
+	}
+}
 
 func TestPerClassGraphQLSaturationDoesNotDelayREST(t *testing.T) {
 	if runDefaultBudgetProcess(t) {
