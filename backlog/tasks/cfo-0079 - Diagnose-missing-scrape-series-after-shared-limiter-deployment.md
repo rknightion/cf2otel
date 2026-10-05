@@ -3,9 +3,9 @@ id: CFO-0079
 title: Diagnose missing scrape series after shared-limiter deployment
 status: Parked
 assignee:
-  - '@loop20-root'
+  - '@loop22-root'
 created_date: '2026-10-03 15:23'
-updated_date: '2026-10-04 23:42'
+updated_date: '2026-10-05 12:20'
 labels:
   - ops
   - limiter
@@ -77,4 +77,6 @@ Loop21 live measurement interrupted by verified unhealthy instrumentation epoch:
 Correction: originalversion46cbb26 has22errors(not23), newsameSHA0.18.0-rc.1 has0errors/21successes after autoRC37243958078. Singleepoch broken by automaticRCredeploy; codecausation NOT proven. Partial historicalinstant table atalarm:49rows,441cumulative requests, wait/duration sums/counts; no reliable zero baseline, exactfirstpoll shares or5minute rate. Conservative explicit goal rollback chosen; AC1 unchecked. Re-grade release/epoch fence before renewed measurement.
 
 Partial table reduction (not AC1):49collectorrows,441cumulative original-version requests,20688.666103seconds aggregate limiterwait and109.917351seconds API duration across concurrent requestseries. Leaders:requests email.sending33,healthchecks.events29,dns.events/firewall.events28; wait dns.events842.411s,dns.metrics840.896s,httpreq.metrics840.821s; API time tunnels.status10.873s,email.sending6.015s,healthchecks.events5.629s. These totals are neither firstpolltimefractions nor exactfive-minute demand; counterzero/epoch/source fence absent. Cause of22errors across14collectors remains unattributed, sameSHA RCnewversion0errors. Proposed nextscope: freeze/identify finalRCredeploy epoch, capture authenticated sanitized error cause and startupzero metrics, then measure all49or90minutes. Recommend atmost2implementation attempts for authentic registered/runtime error and epoch prerequisite only; no throughput correction until attribution acceptance.
+
+Loop22 L1 observation notstarted, AC1unchecked: final3e85282a exactCI37305970420success and autoRC37307606314fullcompletion12:15:56UTC; RC0.18.0-rc.6scrapes visible12:15:30(26searlier). Identity-awarehistory through12:19 found87series/0decreases, no qualifyingpostcompletionreset. Actualmetricnames/labelkeys discovered, no guessedzeros or measurement accepted. Receipt /Users/rob/repos/cf2otel/codex/live-loop22/L1-final-history-1791202745.json. Implementationattempts parent historical5unchanged; currentchildrenR1total3,M2conservative2; liveprobe consumesnone. Parkowner: authorise sameSHArestartafterfullRCcompletion or amend fence to demonstrablysettledpublication-linked epoch; rootcannotwaive it, SSH/restartnotgranted. No ongoingregression demonstrated/no rollback. Workflowdispatch follows parkedL1, noactiveobservation.
 <!-- SECTION:NOTES:END -->
