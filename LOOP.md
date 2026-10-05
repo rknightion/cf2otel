@@ -50,8 +50,7 @@ needs a Docker daemon. Run `just` in a clean worktree: the gitignored `codex/` h
 - After a start, the first cycle may fail once on account-scoped collectors; begin an hour proof
   after the first complete cycle and never revert a healthy deploy for it.
 - The scheduled "Cloudflare API drift" workflow is not a required check (`ci-success` is). Read
-  its log before treating red as a gate or as real drift. Until CFO-0080 lands, its 2.5-minute
-  limiter timeout is not drift.
+  its log before treating red as a gate or as real drift.
 - The drift canary reads only what `restProbeQuery` in `tools/apidrift/probe.go` asks for, mostly
   one row, so a default-paging census does not show what it sees. Two Worker-destination Access
   apps legitimately have no `domain`; JSON null `domain` counts as missing on a domain-based row.
@@ -77,7 +76,8 @@ needs a Docker daemon. Run `just` in a clean worktree: the gitignored `codex/` h
 
 ## Mutexes
 
-- The root is the only live Cloudflare API caller; GraphQL is rate-limited platform-wide.
+- The root is the only live Cloudflare API caller; REST and GraphQL
+  have separate rate budgets (defaults 3 rps/burst 5 and 0.8 rps/burst 2).
 - One process-wide commit mutex serializes windowed checkpoint commits. Catch-up commits run
   sequentially, never concurrently.
 - Live external writes are a serial chain: read-only proof, the one authorised write, then deploy.
