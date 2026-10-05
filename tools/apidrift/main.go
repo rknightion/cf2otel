@@ -28,13 +28,20 @@ func main() {
 		fmt.Fprintln(os.Stderr, "CLOUDFLARE_API_TOKEN is required")
 		os.Exit(2)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	// Leave thirty seconds of the ten-minute job for startup and reporting.
+	ctx, cancel := context.WithTimeout(context.Background(), 570*time.Second)
 	defer cancel()
-	api := cfapi.New(config.CloudflareConfig{APIToken: config.Secret(token), Timeout: 10 * time.Second, MaxResponseBytes: 2 << 20})
+	cfg := config.Default().Cloudflare
+	cfg.APIToken, cfg.Timeout, cfg.MaxResponseBytes = config.Secret(token), 10*time.Second, 2<<20
+	if err := cfapi.ConfigureProcessRateLimit(cfg.RateLimit); err != nil {
+		fmt.Fprintln(os.Stderr, "invalid probe rate configuration")
+		os.Exit(2)
+	}
+	api := cfapi.New(cfg)
 	for _, report := range documentedRESTReports(c) {
 		fmt.Println(report)
 	}
-	diffs := probe(ctx, api, c)
+	diffs := probeBudgeted(ctx, api, c, cfg.RateLimit)
 	for _, diff := range diffs {
 		fmt.Fprintln(os.Stderr, diff)
 	}

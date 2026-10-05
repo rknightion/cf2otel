@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"os"
 	"regexp"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
+	"github.com/rknightion/cf2otel/internal/config"
 )
 
 type contract struct {
@@ -279,13 +281,68 @@ func validFields(fields []string) bool {
 // probe returns only contract names, field names and numeric limits. It never
 // formats scope IDs, response values, tokens or Cloudflare error bodies.
 func probe(ctx context.Context, api probeAPI, c contract) []string {
+	return probeWithBudget(ctx, api, c, nil)
+}
+
+func probeBudgeted(ctx context.Context, api probeAPI, c contract, rates config.RateLimitConfig) []string {
+	return probeWithBudget(ctx, api, c, &rates)
+}
+
+// Count every bounded request, including repeated gateway discovery and the
+// singleton firewall selection. Detail paths may be skipped, never undercounted.
+func probeRequestCounts(c contract, accounts, zones int) (rest, graphql int) {
+	for _, g := range c.GraphQL {
+		if g.Scope == cfapi.AccountScope {
+			graphql += accounts
+		} else {
+			graphql += zones
+		}
+		if g.Scope == cfapi.ZoneScope && g.Dataset == "firewallEventsAdaptiveGroups" {
+			graphql++
+		}
+	}
+	for _, r := range c.REST {
+		if r.ProbeMode == "documented_only" {
+			continue
+		}
+		switch r.Scope {
+		case "global":
+			rest++
+		case "account":
+			rest += accounts
+		case "zone":
+			rest += zones
+		case "gateway", "gateway-log":
+			rest += accounts * 5 // one discovery and at most four gateway reads
+		}
+	}
+	return rest, graphql
+}
+
+func probeDuration(c contract, accounts, zones int, rates config.RateLimitConfig) (time.Duration, error) {
+	if err := rates.Validate(); err != nil {
+		return 0, errors.New("invalid probe rate configuration")
+	}
+	rest, graphql := probeRequestCounts(c, accounts, zones)
+	r, g := rates.Buckets()
+	// Do not credit bursts: discovery already used the REST bucket. Allow
+	// five percent extra physical attempts per class, 50ms mean response
+	// latency, one full network timeout and four capped retry backoffs.
+	// This is a contingency budget, not a promise that every request can
+	// exhaust all five retries; sustained upstream delays remain visible.
+	seconds := math.Ceil(float64(rest)*1.05)/r.RequestsPerSecond + math.Ceil(float64(graphql)*1.05)/g.RequestsPerSecond
+	d := time.Duration(math.Ceil(seconds*1000))*time.Millisecond + time.Duration(rest+graphql)*50*time.Millisecond + 50*time.Second
+	return max(d, 2*time.Minute), nil
+}
+
+func probeWithBudget(ctx context.Context, api probeAPI, c contract, rates *config.RateLimitConfig) []string {
 	var diffs []string
 	// Schema-only tokens may read zones but be denied account listing. A zone's
 	// account.id supplies the same scope identifier without widening token access.
 	accounts, _ := api.Accounts(ctx)
 	zones, err := api.Zones(ctx)
 	if err != nil {
-		return []string{"zone discovery failed"}
+		return []string{"zone discovery failed: " + probeErrorClass(err)}
 	}
 	if len(accounts) == 0 {
 		seen := map[string]bool{}
@@ -298,6 +355,20 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 	}
 	if len(accounts) == 0 || len(accounts) > 4 || len(zones) == 0 || len(zones) > 32 {
 		return []string{"scope count outside bounded probe range"}
+	}
+	if rates != nil {
+		duration, err := probeDuration(c, len(accounts), len(zones), *rates)
+		if err != nil {
+			return []string{"probe budget invalid"}
+		}
+		deadline, ok := ctx.Deadline()
+		if !ok || duration > time.Until(deadline) {
+			rest, graphql := probeRequestCounts(c, len(accounts), len(zones))
+			return []string{fmt.Sprintf("probe budget exceeds job: REST requests=%d GraphQL requests=%d budget_ms=%d", rest, graphql, duration.Milliseconds())}
+		}
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, duration)
+		defer cancel()
 	}
 	var firewallRequest *cfapi.GraphQLRequest
 	firewallOrdinal := 0
@@ -320,7 +391,7 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 			label := fmt.Sprintf("GraphQL %s/%s scope #%d", g.Scope, g.Dataset, index+1)
 			s, err := api.DatasetSettings(ctx, g.Scope, id, g.Dataset)
 			if err != nil {
-				diffs = append(diffs, label+": settings request failed")
+				diffs = append(diffs, label+": settings request failed: "+probeErrorClass(err))
 				continue
 			}
 			if firewallRequest == nil && g.Scope == cfapi.ZoneScope && g.Dataset == "firewallEventsAdaptiveGroups" {
@@ -372,7 +443,7 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 			if _, saturated := cfapi.AsSaturation(err); saturated {
 				fmt.Println(label + ": selection accepted, limit reached; populated value shape unproven")
 			} else if err != nil {
-				diffs = append(diffs, label+": selection probe failed")
+				diffs = append(diffs, label+": selection probe failed: "+probeErrorClass(err))
 			} else if len(rows) == 0 {
 				fmt.Println(label + ": selection accepted, zero rows; populated value shape unproven")
 			} else {
@@ -410,7 +481,11 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 				}
 				gateways, err := api.Gateways(ctx, account.ID)
 				if err != nil || len(gateways) > 4 {
-					diffs = append(diffs, "REST "+r.Name+": gateway discovery failed or count outside bound")
+					if err != nil {
+						diffs = append(diffs, "REST "+r.Name+": gateway discovery failed: "+probeErrorClass(err))
+					} else {
+						diffs = append(diffs, "REST "+r.Name+": gateway count outside bound")
+					}
 					continue
 				}
 				for _, gateway := range gateways {
@@ -446,7 +521,7 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 					continue
 				}
 				if err != nil {
-					diffs = append(diffs, label+": read failed")
+					diffs = append(diffs, label+": read failed: "+probeErrorClass(err))
 					continue
 				}
 				if len(body) == 0 || !json.Valid(body) {
@@ -461,14 +536,14 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 					Tests []map[string]any `json:"tests"`
 				}
 				if err := api.Get(ctx, path, query, &result); err != nil || result.Tests == nil {
-					diffs = append(diffs, label+": invalid tests overview response")
+					diffs = append(diffs, label+": invalid tests overview response: "+probeErrorClass(err))
 					continue
 				}
 				rows = result.Tests
 			} else if r.Single {
 				var row map[string]any
 				if err := api.Get(ctx, path, query, &row); err != nil {
-					diffs = append(diffs, label+": read failed")
+					diffs = append(diffs, label+": read failed: "+probeErrorClass(err))
 					continue
 				}
 				if row != nil {
@@ -478,16 +553,16 @@ func probe(ctx context.Context, api probeAPI, c contract) []string {
 				if getter, ok := api.(pageProbeAPI); ok {
 					var page cfapi.Page
 					if err := getter.GetPage(ctx, path, query, &page); err != nil || json.Unmarshal(page.Result, &rows) != nil {
-						diffs = append(diffs, label+": read failed")
+						diffs = append(diffs, label+": read failed: "+probeErrorClass(err))
 						continue
 					}
 					totalCount = page.ResultInfo.TotalCount
 				} else if err := api.Get(ctx, path, query, &rows); err != nil {
-					diffs = append(diffs, label+": read failed")
+					diffs = append(diffs, label+": read failed: "+probeErrorClass(err))
 					continue
 				}
 			} else if err := api.Get(ctx, path, query, &rows); err != nil {
-				diffs = append(diffs, label+": read failed")
+				diffs = append(diffs, label+": read failed: "+probeErrorClass(err))
 				continue
 			}
 			if r.Name == "firewall-rulesets" {
@@ -680,4 +755,28 @@ func destinationsHaveOnlyTypes(row map[string]any, allowedTypes []string) bool {
 		}
 	}
 	return true
+}
+
+// Only fixed categories leave this boundary. Never inspect upstream error text.
+func probeErrorClass(err error) string {
+	var budget *cfapi.GraphQLBudgetError
+	var status *cfapi.HTTPError
+	switch {
+	case errors.As(err, &budget):
+		return "rate_limited"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "deadline"
+	case errors.Is(err, context.Canceled):
+		return "cancelled"
+	case errors.As(err, &status):
+		if status.Status == 429 {
+			return "rate_limited"
+		}
+		if status.Status >= 100 && status.Status <= 599 {
+			return fmt.Sprintf("http_%dxx", status.Status/100)
+		}
+		return "http_other"
+	default:
+		return "envelope"
+	}
 }
