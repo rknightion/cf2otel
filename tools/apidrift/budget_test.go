@@ -121,14 +121,18 @@ func TestBudgetDefaultLimiterContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("settings=307 selection=1 class=graphql rate=0.8 burst=2 budget=%s elapsed=%s physical_requests=%d", duration, time.Since(started), calls.Load())
+	graphql := cfg.RateLimit.GraphQL
+	t.Logf("settings=307 selection=1 class=graphql rate=%g burst=%d budget=%s elapsed=%s physical_requests=%d", graphql.RequestsPerSecond, graphql.Burst, duration, time.Since(started), calls.Load())
 	if len(diffs) != 0 {
 		t.Fatalf("contract probe differences: %v", diffs)
 	}
 	if calls.Load() != 308 {
 		t.Fatalf("want all 307 settings and singleton selection, got %d", calls.Load())
 	}
-	if time.Since(started) < 380*time.Second {
+	// 308 requests through the default process GraphQL bucket: the burst is free,
+	// every later request waits 1/rate. Allow 5% for timer slack.
+	floor := time.Duration(float64(308-graphql.Burst) / graphql.RequestsPerSecond * 0.95 * float64(time.Second))
+	if time.Since(started) < floor {
 		t.Fatal("default pacing was bypassed")
 	}
 }

@@ -94,6 +94,9 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, query url.Valu
 		if body != nil {
 			req.Header.Set("Content-Type", "application/json")
 		}
+		if method == http.MethodPost && scopeBudgets.enabled() {
+			req.Header.Set("X-Rate-Limit-Type", "account-based")
+		}
 		resp, err := c.doRedirects(req)
 		status := 0
 		if resp != nil {
@@ -148,16 +151,25 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, query url.Valu
 // before Do starts that timer. The original caller context bounds the whole chain.
 func (c *HTTPClient) doRedirects(req *http.Request) (*http.Response, error) {
 	budget := restBudget
+	var resource *tokenBucket
 	if req.Method == http.MethodPost {
 		budget = graphqlBudget
+		resource = scopeBudgets.bucket(quotaScope(req.Context()))
 	}
 	for hops := 0; ; hops++ {
 		waiting := time.Now()
-		if err := budget.acquire(req.Context()); err != nil {
-			if req.Body != nil {
-				_ = req.Body.Close()
+		// Take the resource token before the shared one so a request held
+		// back by its own zone or account does not spend process capacity.
+		for _, b := range []*tokenBucket{resource, budget} {
+			if b == nil {
+				continue
 			}
-			return nil, err
+			if err := b.acquire(req.Context()); err != nil {
+				if req.Body != nil {
+					_ = req.Body.Close()
+				}
+				return nil, err
+			}
 		}
 		started := time.Now()
 		wait := started.Sub(waiting)

@@ -77,7 +77,8 @@ needs a Docker daemon. Run `just` in a clean worktree: the gitignored `codex/` h
 ## Mutexes
 
 - The root is the only live Cloudflare API caller; REST and GraphQL
-  have separate rate budgets (defaults 3 rps/burst 5 and 0.8 rps/burst 2).
+  have separate rate budgets (defaults 1.25 rps/burst 5 and 2.5 rps/burst 5), and GraphQL is
+  also metered per zone/account (0.9 rps/burst 2, account-based header).
 - One process-wide commit mutex serializes windowed checkpoint commits. Catch-up commits run
   sequentially, never concurrently.
 - Live external writes are a serial chain: read-only proof, the one authorised write, then deploy.

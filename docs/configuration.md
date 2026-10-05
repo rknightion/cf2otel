@@ -16,7 +16,7 @@ Settings load in this order: built-in defaults, YAML, then `CF2OTEL_` environmen
 | `state` | Persistent checkpoint directory; default `/var/lib/cf2otel`. |
 | `health`, `log` | Loopback health listener and application logging. |
 | `firewall` | `rule_dimensions` defaults to false; `max_metric_series_per_window` is a positive total cap, default 500. |
-| `cloudflare.rate_limit` | `rest.requests_per_second` defaults to `3`, `rest.burst` to `5`; `graphql.requests_per_second` defaults to `0.8`, `graphql.burst` to `2`. Rates must be finite and positive; bursts must be integers in `[1, 1000]`, checked before weak decoding. Separate process-wide REST and GraphQL buckets cover all clients, accounts, pagination, retries and permitted redirect hops. |
+| `cloudflare.rate_limit` | `rest.requests_per_second` defaults to `1.25`, `rest.burst` to `5`; `graphql.requests_per_second` defaults to `2.5`, `graphql.burst` to `5`; `account_based` defaults to `true`; `graphql_scope.requests_per_second` defaults to `0.9`, `graphql_scope.burst` to `2`. Rates must be finite and positive; bursts must be integers in `[1, 1000]`, checked before weak decoding. Separate process-wide REST and GraphQL buckets cover all clients, accounts, pagination, retries and permitted redirect hops. A warning is logged when `rest` plus `graphql` exceeds Cloudflare's general limit of 4 requests per second. |
 | `cloudflare.entitlement_backoff` | Positive duration, default `1h`. Disabled or absent GraphQL zone datasets share a timed settings decision across aliases and collectors using the same client, independently per zone and dataset. Override with `CF2OTEL_CLOUDFLARE__ENTITLEMENT_BACKOFF`. |
 
 Collector keys are `access.logins`, `access.login_metrics`, `access.scim`, `access.seats`, `inventory.access`, `httpreq.events`, `httpreq.metrics`, `aigateway.logs`, `aigateway.metrics`, `aigateway.coverage`, `audit.logs`, `firewall.events`, `firewall.metrics`, `dns.events`, `dns.metrics`, `rum.pageloads`, `rum.web_vitals`, `gateway.dns`, `workers.overview`, `workers.invocations`, `turnstile.events`, `logpush.health`, `d1.analytics`, `d1.queries`, `d1.storage`, `kv.operations`, `kv.storage`, `r2.bandwidth`, `r2.catalog_data`, `r2.catalog_maintenance`, `r2.operations`, `r2.storage`, `r2.sql`, `durableobjects.invocations`, `durableobjects.periodic`, `durableobjects.sql_storage`, `durableobjects.subrequests`, `queues.backlog`, `queues.consumer`, `queues.delayed_backlog`, `queues.message_operations`, `email.routing`, `email.sending`, `selfobs`, `certs.packs`, and `tunnels.status`. Enabled collectors default to five-minute intervals. `access.seats` is enabled by default and polls every 15 minutes as a snapshot, without windows or checkpoints. It counts the independent `access_seat` and `gateway_seat` user flags across the complete paginated Access users list, emitting only the bounded seat-type attribute. Both flags may be true for one user; do not sum the two series as a unique billing-user total. An empty list publishes two zeros; missing, null or nonboolean flags, HTTP errors and incomplete pagination fail the scrape without publishing partial counts. To disable it, set `CF2OTEL_COLLECTORS__ACCESS_SEATS__ENABLED=false`; to override its interval, set `CF2OTEL_COLLECTORS__ACCESS_SEATS__INTERVAL=30m`. The email collectors sum Groups counts across account-owned zones over complete five-minute buckets; they emit no zone metric attributes. DMARC is excluded. `aigateway.metrics` is disabled and unscheduled because its GraphQL Groups ingestion lag is not bounded; `aigateway.logs` emits the AI Gateway metrics from REST rows. The default initial lookback is 30 minutes and maximum window is one hour. `aigateway.coverage` is present but disabled by default. The scheduler advances a checkpoint after a successful window or after it drops a window following three payload rejections.
@@ -64,6 +64,16 @@ The REST ceiling does not change this 300-second GraphQL budget pause. Only an
 exact string `budget` in `extensions.code` triggers it, including in responses
 with data or malformed sibling errors. Missing, null or non-string codes do not
 pause GraphQL; non-budget responses retain normal schema/error classification.
+
+With `account_based: true` every GraphQL request sends
+`X-Rate-Limit-Type: account-based`, so Cloudflare meters its 300 queries per
+five minutes per zone and per account instead of per token. Each zone or
+account the exporter queries then also takes a token from its own
+`graphql_scope` bucket before the shared `graphql` bucket. A budget error whose
+message names one zone or account pauses only that resource for 300 seconds;
+any other budget error pauses all GraphQL as before. With `account_based: false`
+the header is not sent and only the shared buckets apply. Dataset settings
+discovery is cached for 45 to 75 minutes per zone and dataset.
 
 Quota waiting happens before each HTTP exchange starts its `cloudflare.timeout`,
 including every redirect hop. The timeout still bounds network headers and body

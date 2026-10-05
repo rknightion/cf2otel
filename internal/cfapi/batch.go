@@ -105,7 +105,7 @@ func (c *HTTPClient) QueryBatch(ctx context.Context, selections []GraphQLBatchSe
 			queries = append(queries, p.query)
 		}
 		q := fmt.Sprintf("{viewer{%s(%s){%s}}}", scopeName(first.Scope), scopeFilter(first.Scope, first.ScopeID), strings.Join(queries, " "))
-		response, err := c.graph(ctx, q)
+		response, err := c.graph(ctx, first.Scope, first.ScopeID, q)
 		if err != nil {
 			return nil, err
 		}

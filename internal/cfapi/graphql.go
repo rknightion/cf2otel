@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"sort"
 	"strconv"
@@ -107,7 +108,9 @@ type graphResponse struct {
 	} `json:"errors"`
 }
 
-func (c *HTTPClient) graph(ctx context.Context, q string) (graphResponse, error) {
+// graph meters q against the named zone or account as well as the process cap.
+func (c *HTTPClient) graph(ctx context.Context, scope Scope, id, q string) (graphResponse, error) {
+	ctx = withQuotaScope(ctx, scope, id)
 	var out graphResponse
 	b, _ := json.Marshal(map[string]string{"query": q})
 	var budgetErr *GraphQLBudgetError
@@ -122,12 +125,25 @@ func (c *HTTPClient) graph(ctx context.Context, q string) (graphResponse, error)
 		out = graphResponse{}
 		// A valid budget code is authoritative even if accompanying data has
 		// an invalid shape. Non-budget responses keep normal schema validation.
-		if !hasBudgetError(raw) {
+		budget, resource := budgetErrors(raw)
+		if !budget {
 			err := json.Unmarshal(raw, &out)
 			return out, err
 		}
 		budgetErr = &GraphQLBudgetError{}
-		graphqlBudget.pause(300 * time.Second)
+		// A resource-scoped budget error throttles only that zone or account;
+		// anything else is the per-token quota and pauses every GraphQL caller.
+		if b := scopeBudgets.bucket(quotaScope(ctx)); resource && b != nil {
+			b.pause(300 * time.Second)
+		} else {
+			graphqlBudget.pause(300 * time.Second)
+			// A per-token budget error while opted into account-based metering
+			// means Cloudflare is not applying it: fall back to a rate the
+			// per-token quota sustains instead of exhausting it every cycle.
+			if scopeBudgets.enabled() && graphqlBudget.clampRate(perTokenSafeRate) {
+				slog.Warn("cloudflare GraphQL budget is per token despite account-based rate limiting; process GraphQL rate lowered", "requests_per_second", perTokenSafeRate)
+			}
+		}
 		if attempt == 1 {
 			return out, budgetErr
 		}
@@ -160,28 +176,49 @@ func firstNode(r graphResponse, s Scope) (map[string]json.RawMessage, error) {
 	}
 	return nodes[0], nil
 }
-func hasBudgetError(raw []byte) bool {
+
+// budgetErrors reports whether raw carries a string budget code and whether
+// every such error names one zone or account (account-based rate limiting).
+// The message is only matched, never logged or returned.
+func budgetErrors(raw []byte) (budget, resource bool) {
 	var envelope struct {
 		Errors []json.RawMessage `json:"errors"`
 	}
 	if json.Unmarshal(raw, &envelope) != nil {
-		return false
+		return false, false
 	}
+	resource = true
 	for _, rawError := range envelope.Errors {
 		// Parse each error independently: a malformed sibling or extensions
 		// value cannot hide an authoritative string budget code elsewhere.
 		var failure struct {
+			Message    json.RawMessage            `json:"message"`
 			Extensions map[string]json.RawMessage `json:"extensions"`
 		}
 		if json.Unmarshal(rawError, &failure) != nil {
 			continue
 		}
 		var code string
-		if json.Unmarshal(failure.Extensions["code"], &code) == nil && code == "budget" {
-			return true
+		if json.Unmarshal(failure.Extensions["code"], &code) != nil || code != "budget" {
+			continue
+		}
+		budget = true
+		var message string
+		_ = json.Unmarshal(failure.Message, &message)
+		if !resourceBudgetMessage(message) {
+			resource = false
 		}
 	}
-	return false
+	return budget, budget && resource
+}
+
+// Cloudflare names the throttled resource: "Zone <tag> has exceeded its rate
+// limit" or "Account <tag> has exceeded its rate limit".
+func resourceBudgetMessage(message string) bool {
+	if !strings.HasPrefix(message, "Zone ") && !strings.HasPrefix(message, "Account ") {
+		return false
+	}
+	return strings.Contains(message, " has exceeded its rate limit")
 }
 
 func gqlErrors(r graphResponse) error {
@@ -395,7 +432,7 @@ func (c *HTTPClient) queryWithSettings(ctx context.Context, r GraphQLRequest, ou
 		var merged []json.RawMessage
 		for chunkIndex, chunkFields := range chunks {
 			q := fmt.Sprintf("{viewer{%s(%s){%s(limit:%d,filter:%s){%s}}}}", scopeName(r.Scope), scopeFilter(r.Scope, r.ScopeID), r.Dataset, limit, f, selection(chunkFields))
-			response, e := c.graph(ctx, q)
+			response, e := c.graph(ctx, r.Scope, r.ScopeID, q)
 			if e != nil {
 				return e
 			}

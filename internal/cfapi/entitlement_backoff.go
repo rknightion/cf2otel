@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"time"
 )
 
 // settingsFor shares one decision across all aliases and collectors on this
 // client. Only an explicit disabled or absent zone dataset gets the backoff TTL;
-// enabled discovery metadata keeps its existing fifteen-minute lifetime.
+// enabled discovery metadata lives 45-75 minutes, jittered so keys cached
+// together do not all re-probe in one burst against the GraphQL quota.
 func (c *HTTPClient) settingsFor(ctx context.Context, r GraphQLRequest, refresh bool) (DatasetSettings, error) {
 	var zero DatasetSettings
 	now := time.Now
@@ -55,7 +57,7 @@ func (c *HTTPClient) settingsFor(ctx context.Context, r GraphQLRequest, refresh 
 		c.mu.Unlock()
 	}()
 	q := fmt.Sprintf("{viewer{%s(%s){settings{%s{enabled availableFields maxNumberOfFields maxDuration notOlderThan maxPageSize}}}}}", scopeName(r.Scope), scopeFilter(r.Scope, r.ScopeID), r.Dataset)
-	response, err := c.graph(ctx, q)
+	response, err := c.graph(ctx, r.Scope, r.ScopeID, q)
 	if err != nil {
 		return zero, err
 	}
@@ -97,7 +99,7 @@ func (c *HTTPClient) settingsFor(ctx context.Context, r GraphQLRequest, refresh 
 			return DatasetSettings{}, errors.New("GraphQL enabled dataset settings missing availableFields")
 		}
 	}
-	ttl := 15 * time.Minute
+	ttl := 45*time.Minute + rand.N(30*time.Minute) //nolint:gosec // Cache jitter, not a secret.
 	if r.Scope == ZoneScope && !zero.Enabled {
 		ttl = c.entitlementBackoff
 		if ttl <= 0 {

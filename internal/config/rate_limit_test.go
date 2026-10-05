@@ -209,8 +209,11 @@ func TestRateLimitValidation(t *testing.T) {
 func checkRateLimitDefaults(t *testing.T, c *Config) {
 	t.Helper()
 	rest, graphql := c.Cloudflare.RateLimit.Buckets()
-	if rest != (BucketConfig{3, 5}) || graphql != (BucketConfig{0.8, 2}) {
+	if rest != (BucketConfig{1.25, 5}) || graphql != (BucketConfig{2.5, 5}) {
 		t.Fatalf("defaults: REST=%+v GraphQL=%+v", rest, graphql)
+	}
+	if rl := c.Cloudflare.RateLimit; !rl.AccountBased || rl.GraphQLScope != (BucketConfig{0.9, 2}) || rl.ExceedsGeneralLimit() {
+		t.Fatalf("defaults: account_based=%v graphql_scope=%+v", rl.AccountBased, rl.GraphQLScope)
 	}
 }
 
@@ -245,8 +248,9 @@ func TestPerClassRateLimitCompatibilityAndWarning(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkRateLimit(t, c, 2.5, 4)
-	if strings.Count(log.String(), "WARN") != 1 {
-		t.Fatalf("want one deprecation warning: %s", log.String())
+	// 2.5 rps applied to both classes is 5 rps, over Cloudflare's 4 rps general limit.
+	if strings.Count(log.String(), "WARN") != 2 || strings.Count(log.String(), "deprecated") != 1 || strings.Count(log.String(), "general limit") != 1 {
+		t.Fatalf("want one deprecation and one general-limit warning: %s", log.String())
 	}
 	for _, class := range []string{"rest", "graphql"} {
 		for _, key := range []string{"requests_per_second", "burst"} {
@@ -305,7 +309,7 @@ func TestPerClassLegacyPartialAndSourcePrecedence(t *testing.T) {
 		t.Fatal(err)
 	}
 	rest, graphql := c.Cloudflare.RateLimit.Buckets()
-	if rest != (BucketConfig{6, 4}) || graphql != (BucketConfig{0.8, 4}) {
+	if rest != (BucketConfig{6, 4}) || graphql != (BucketConfig{2.5, 4}) {
 		t.Fatalf("partial legacy lost defaults: REST=%+v GraphQL=%+v", rest, graphql)
 	}
 	t.Setenv("CF2OTEL_CLOUDFLARE__RATE_LIMIT__REQUESTS_PER_SECOND", "8")

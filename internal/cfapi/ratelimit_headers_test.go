@@ -99,13 +99,13 @@ func TestPerClassGraphQLSaturationDoesNotDelayREST(t *testing.T) {
 	cfg := config.Default().Cloudflare
 	cfg.APIBase = server.URL
 	a, b := New(cfg), New(cfg)
-	if _, err := a.graph(context.Background(), "{viewer{zones{}}}"); err != nil {
+	if _, err := a.graph(context.Background(), "", "", "{viewer{zones{}}}"); err != nil {
 		t.Fatal(err)
 	}
 	queued, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { _, err := a.graph(queued, "{viewer{zones{}}}"); done <- err }()
+	go func() { _, err := a.graph(queued, "", "", "{viewer{zones{}}}"); done <- err }()
 	ctx, stop := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer stop()
 	var out []any
@@ -273,7 +273,7 @@ func TestRESTRetryAfterPausesSiblingOnly(t *testing.T) {
 	}
 	graph, cancelGraph := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancelGraph()
-	if _, err := New(cfg).graph(graph, "{viewer{zones{}}}"); err != nil {
+	if _, err := New(cfg).graph(graph, "", "", "{viewer{zones{}}}"); err != nil {
 		t.Fatalf("REST pause delayed GraphQL: %v", err)
 	}
 	if calls.Load() != 1 {

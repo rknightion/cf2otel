@@ -76,7 +76,7 @@ func TestRequestObserverHTTPAndGraphQLHeaderOutcomes(t *testing.T) {
 			})
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			response, err := client.graph(ctx, "{viewer{zones{settings}}}")
+			response, err := client.graph(ctx, "", "", "{viewer{zones{settings}}}")
 			if status == 200 {
 				if err != nil || gqlErrors(response) == nil {
 					t.Fatalf("logical GraphQL error lost: %+v %v", response, err)

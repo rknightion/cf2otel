@@ -13,10 +13,14 @@ cloudflare:
   rate_limit:
     max_pause: 5m # REST header pause ceiling; duration in [1s, 60m].
     rest:
-      requests_per_second: 3
+      requests_per_second: 1.25 # rest + graphql should stay within Cloudflare's 4 rps general limit.
       burst: 5 # Integer in [1, 1000].
     graphql:
-      requests_per_second: 0.8
+      requests_per_second: 2.5 # Process-wide GraphQL cap.
+      burst: 5 # Integer in [1, 1000].
+    account_based: true # Send X-Rate-Limit-Type: account-based; meter GraphQL per zone and account.
+    graphql_scope:
+      requests_per_second: 0.9 # Per zone or account; Cloudflare allows 1 rps each.
       burst: 2 # Integer in [1, 1000].
 access:
   include_service_tokens: false
