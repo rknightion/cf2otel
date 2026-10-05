@@ -5,7 +5,7 @@ status: Parked
 assignee:
   - '@loop17-root'
 created_date: '2026-10-02 17:38'
-updated_date: '2026-10-03 12:17'
+updated_date: '2026-10-05 20:42'
 labels: []
 dependencies: []
 priority: low
@@ -42,4 +42,6 @@ Loop17 frozen packet: one local implementation attempt with assertion-red witnes
 
 <!-- SECTION:NOTES:BEGIN -->
 Loop17 FIX-PLAT candidate sound atomic fixture hardening and full gate passed, but required frozen packet base race red was not observed by worker or fresh independent reviewer (150 repetitions per named test plus full race package all passed). No false race-elimination pass or gate waiver. Preserve combined candidate d77f62315412dc73342a652393164ae7382e7524; withdraw D1 changes from forthcoming CFO-0076-only candidate. Resume only with authentic base race witness or owner-approved changed prerequisite.
+
+Dropped 2026-10-05 by owner decision (won't do): test-only hardening whose required base race red never reproduced in 150 repetitions per test; landing it without the red witness would be a weaker proof than the task demands. Candidate d77f623 is abandoned.
 <!-- SECTION:NOTES:END -->

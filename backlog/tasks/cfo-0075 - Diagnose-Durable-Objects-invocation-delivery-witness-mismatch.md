@@ -1,11 +1,11 @@
 ---
 id: CFO-0075
 title: Diagnose Durable Objects invocation delivery witness mismatch
-status: Parked
+status: Done
 assignee:
   - '@loop17-root'
 created_date: '2026-10-02 16:01'
-updated_date: '2026-10-03 18:12'
+updated_date: '2026-10-05 20:42'
 labels: []
 dependencies: []
 priority: medium
@@ -22,7 +22,7 @@ Loop16 HOUR-0 on the unchanged running release ended after eight reads because d
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 The attempt-success mismatch is attributed to a collector failure or metric-observation coherence with exact timestamped, sanitised evidence.
-- [ ] #2 Any required source correction has an assertion-failing reproduction and candidate pass, without weakening the hour-proof contract.
+- [x] #2 Any required source correction has an assertion-failing reproduction and candidate pass, without weakening the hour-proof contract.
 <!-- AC:END -->
 
 ## Definition of Done
@@ -44,4 +44,12 @@ Loop17 D75 read-only attribution against loop16 hour receipts and timestamped Lo
 Loop17 D75 read-only attribution at source 597f2bfe3fedf08c5f9a5594fbe3f6a7e0aa48da: HOUR-0 2026-10-02T14:32:04Z attempt45-to46 with success44 unchanged and errors1-to2 proves failed collector poll, not observation coherence; retry span passes independently. Root timestamped Mimir error-class read confirms class other. Three successful sanitized Loki selections returned no rows, so exact failed source operation remains unknown and no source correction is justified yet. AC1 checked on its stated collector-failure witness; AC2 remains open rather than claiming a source fix. Private evidence D75-return.md and do-error-class.json retained outside tracked paths.
 
 Loop17 AC1timestamped failed-poll attribution checked; specific old failure sourcecall unknown classother, no actionable correction justified. AC2 remains unproved rather than fabricated fix. Current0.16.0HOUR1DOattempts=successes sustained; future failure needs exact safe error/call witness before F75 admission.
+
+Closed 2026-10-05 by owner decision: no source correction is required. No recurrence since loop17; on 0.18.0-rc.10 durableobjects.invocations attempts equal successes over the trailing hour with zero scrape errors. AC2 (any required correction has a reproduction) holds vacuously.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Mismatch attributed to a single class-other collector poll failure in loop16 (AC1). No recurrence and no actionable source call, so no correction was made; closed by owner decision.
+<!-- SECTION:FINAL_SUMMARY:END -->
