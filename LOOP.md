@@ -9,8 +9,7 @@ grafana-stack: robknight
 
 Public repository: no hostname, account/zone/gateway ID, tenant ID, email or internal identifier in
 any tracked file or loop artifact. `just ci` adds the goreleaser snapshot and the image build and
-needs a Docker daemon. Run `just` with stdin from `/dev/null`, in a clean worktree: the gitignored
-`codex/` holds Go files that fail fmt, lint, vet and test in the shared checkout.
+needs a Docker daemon. Run `just` in a clean worktree: the gitignored `codex/` holds Go files that fail fmt, lint, vet and test in the shared checkout.
 
 ## Credentials
 
@@ -51,14 +50,17 @@ needs a Docker daemon. Run `just` with stdin from `/dev/null`, in a clean worktr
 - After a start, the first cycle may fail once on account-scoped collectors; begin an hour proof
   after the first complete cycle and never revert a healthy deploy for it.
 - The scheduled "Cloudflare API drift" workflow is not a required check (`ci-success` is). Read
-  its log before treating red as a gate or as real drift.
+  its log before treating red as a gate or as real drift. Until CFO-0080 lands, its 2.5-minute
+  limiter timeout is not drift.
 - The drift canary reads only what `restProbeQuery` in `tools/apidrift/probe.go` asks for, mostly
   one row, so a default-paging census does not show what it sees. Two Worker-destination Access
   apps legitimately have no `domain`; JSON null `domain` counts as missing on a domain-based row.
   SCIM update-log `resource_user_email` must appear in at least one row of a page, never every row;
   a nonempty page with none is a canary difference by design, do not suppress it. Null counts as
   missing only for fields in `optional_when_destination_types` or `required_in_any_row`.
-- `auto-rc` cuts a `v*-rc.*` tag for any green `main` SHA. release-please moves its branch
+- `auto-rc` cuts and publishes a `v*-rc.*` tag for any green `main` SHA, and its rollout restarts
+  the app on the same SHA: fence an epoch on `build_commit` and process start time after auto-RC
+  completes, never the SHA alone. release-please moves its branch
   non-fast-forward at every release, so `loop-pi-audit closeout` exits 1: report it as the bot's
   move and never widen the grants.
 - Every push to main redeploys and restarts the process, tracker-only commits included. Hold all
