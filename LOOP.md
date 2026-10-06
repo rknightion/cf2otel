@@ -49,9 +49,10 @@ any tracked file or loop artifact. `just ci` needs a Docker daemon. Run `just` i
   missing only for fields in `optional_when_destination_types` or `required_in_any_row`.
 - `auto-rc` cuts and publishes a `v*-rc.*` tag for any green `main` SHA, and its rollout restarts
   the app on the same SHA: fence an epoch on `build_commit` and process start time after auto-RC
-  completes, never the SHA alone. release-please moves its branch
-  non-fast-forward at every release, so `loop-pi-audit closeout` exits 1: report it as the bot's
-  move and never widen the grants.
+  completes, never the SHA alone. `loop-pi-audit closeout` attributes release-please branch moves
+  and RC tags to their bot actors and exits 0 when every ref is covered; it exits 1 only on an
+  ungranted ref (an RC tag, a Renovate branch non-fast-forward). Report each by actor and never
+  widen the grants.
 - Every push to main redeploys and restarts the process, tracker-only commits included. Hold all
   pushes during an hour proof, and start the hour after `build_commit` matches the landed SHA.
 - Launch every watcher under `caffeinate -i`, measure on the wall clock, and treat an observation
