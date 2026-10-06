@@ -1,9 +1,10 @@
 ---
 id: CFO-0082
 title: Upgrade OpenTelemetry Go to the v1.47 line
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06 10:02'
+updated_date: '2026-10-06 10:37'
 labels:
   - deps
   - telemetry
@@ -34,3 +35,17 @@ PR38 failed on the OpenTelemetry upgrade. Track a compatible release-set upgrade
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+OT lane: read PR38 job and PR37 module diff plus upstream release/API docs; upgrade the complete OTel release set using exporter module requirements; adapt only proven API incompatibilities while preserving the wire contract; tidy, exercise local telemetry export, run just check and CodeRabbit, then return uncommitted for root security review.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Compatibility evidence before implementation: PR38 build/vet/test run 37127010446 job 111520175636 compiled and passed race tests; it failed at go mod tidy -diff because go.sum retained old sums and metric/x needed v0.69.0. PR38 mixed v1.47.0 API/SDK with previous exporters; PR37 lists the full release set. Firecrawl read https://github.com/open-telemetry/opentelemetry-go/releases/tag/v1.47.0 and https://pkg.go.dev/go.opentelemetry.io/otel/log@v1.47.0. Logs API/SDK stabilized at v1.47.0; both otlplog v0.23.0 go.mod files require log and sdk/log v1.47.0, not v0.23.0. Current call sites already use attribute.Value/attribute.KeyValue as required by the stable API, so no call-site adaptation or pinback is justified. prometheus v0.69.0 requires procfs v0.22.0; this is the sole non-OTel MVS version increase expected.
+
+Implemented the full OTel release set, including log/sdk/log v1.47.0, indirect otlptrace v1.47.0, metric/x v0.69.0 and upstream-test-only sdk/log/logtest v0.23.0. Sole non-OTel MVS increase is github.com/prometheus/procfs v0.21.1 -> v0.22.0, required by prometheus v0.69.0; selected-module before/after comparison confirms no other changes. go mod tidy completed; cmd/ and internal/ diffs, including semconv and all tests, are empty. Existing local race-enabled telemetry boundary tests passed uncached: OTLP HTTP metrics/logs/traces decoded at an httptest receiver, log bodies/attributes and span context, denied/inferred identity cases, Prometheus alongside OTLP, and rejected-datapoint handling. No production call-site changes were needed because baseline already uses the stable attribute APIs. Required-version check failed on unchanged base and passed after upgrade. Root must still review, commit/push, observe exact-SHA ci-success and post-auto-RC telemetry; criteria/status left untouched.
+<!-- SECTION:NOTES:END -->
