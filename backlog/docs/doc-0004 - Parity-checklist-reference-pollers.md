@@ -3,7 +3,7 @@ id: doc-0004
 title: Parity checklist - reference pollers
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-10-06 06:46'
+updated_date: '2026-10-06 10:02'
 ---
 cf2otel must cover every capability listed here. The list is a behaviour contract drawn from a survey
 of open-source Cloudflare pollers and exporters; no other project is named and no code is copied.
@@ -140,7 +140,7 @@ The OTel SDK cardinality limit is per instrument and configurable (CFO-0045).
 - [x] Metric and attribute deny list validated against semconv (CFO-0051.02).
 - [x] Classified collector errors (CFO-0051.03).
 - [x] Per-zone entitlement backoff and a shared client-side rate limiter (CFO-0051.04).
-- Multiple accounts, listed or discovered (CFO-0051.05).
+- [x] Won't do by owner decision: multiple accounts, listed or discovered (CFO-0051.05 [multi-account support]). cf2otel is single-account; run one instance per account.
 - [x] Optional Prometheus `/metrics` endpoint (CFO-0051.06).
 
 ## Deliberately out of scope
@@ -171,3 +171,7 @@ Loop25 R1 reconciliation: 0 implementation attempts. Documented pool traffic is 
 
 
 Loop25 final statuspage acceptance supersedes the earlier pending entry: CFO-0050.04 (public status page collector) is Done at 6e7e046e90d6cfb7f24032bb0ffd6b4203d80d9c, root-verified exact CI 37424290375 completed success including ci-success, and composed G-SP just check exit0 on that same SHA. Whole-second validation, actual CLI/regression red-green, FileStore restart no-replay, complete CodeRabbit zero findings and SP-SEC PASS support the accepted best-effort latest-page contract; late/older/off-page omissions remain explicit. SP loop25 consumes 1 implementation attempt and 1 delta security repair round, preserving historical 4 implementation/2 review-repair; K1 and R1 consume 0. Every health child is Done and this health section is fully checked for its admitted delivered scope, permitting CFO-0050 (origin and edge health parent) closure. Regional/origin health and RTT remain separately Parked in CFO-0081 (Load balancer regional and origin health and RTT); no new live-hour claim. CFO-0051 (operations parity) remains open.
+
+
+
+Loop26 reconciliation: CFO-0051.05 (multi-account support) archived under owner decision 2026-10-06: won't do; cf2otel is single-account, run one instance per account. The other five operations subtasks are Done; all Operations rows are resolved, including this explicit won't-do disposition. CFO-0051 (operations parity) closes for this admitted scope. Checks denote accepted source contracts or owner disposition, not new live telemetry proof. CFO-0082 (Upgrade OpenTelemetry Go to the v1.47 line) separately tracks the compatible dependency upgrade; root owns its post-auto-RC telemetry proof and finalization.
