@@ -731,6 +731,12 @@ func (c Config) Validate() error {
 	add(c.State.Dir != "", "state.dir is required")
 	add(strings.HasPrefix(c.Health.Listen, "127.0.0.1:") || strings.HasPrefix(c.Health.Listen, "localhost:"), "health.listen must bind loopback")
 	for name, v := range c.Collectors {
+		if name == semconv.CollectorNameStatuspageComponents || name == semconv.CollectorNameStatuspageIncidents {
+			// Keep startup and catch-up bounds aligned with the scheduler's
+			// second-resolution retained cursor; fractional bounds can replay logs.
+			add(v.InitialLookback%time.Second == 0, name+".initial_lookback must be a whole number of seconds")
+			add(v.MaxWindow%time.Second == 0, name+".max_window must be a whole number of seconds")
+		}
 		if v.Enabled {
 			add(v.Interval > 0, name+".interval must be positive")
 			add(v.InitialLookback >= 0, name+".initial_lookback must be nonnegative")

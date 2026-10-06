@@ -77,6 +77,67 @@ func TestIncidentsFileStoreRestartCheckpoint(t *testing.T) {
 	}
 }
 
+// Pin the smallest supported incident bounds. Source updates may still have
+// fractional timestamps, while every successfully persisted bound stays whole.
+func TestIncidentsWholeSecondFileStoreRestart(t *testing.T) {
+	at := time.Date(2026, 1, 2, 3, 4, 1, 0, time.UTC)
+	summary := `{"components":[]}`
+	firstAt := at.Add(-750 * time.Millisecond)
+	incidents := incidentJSON(firstAt, "opaque-fractional-update")
+	srv := server(t, &summary, &incidents)
+	checkpointPath := filepath.Join(t.TempDir(), "checkpoints")
+	e, _, logs := emitter(t)
+	poll := func(now time.Time) {
+		t.Helper()
+		cfg := config.Default()
+		cfg.Cloudflare.APIToken = "opaque-token"
+		cfg.Cloudflare.AccountID = "opaque-account"
+		cfg.OTLP.Endpoint = "https://opaque.invalid/otlp"
+		cfg.OTLP.GrafanaCloud.InstanceID = "opaque-instance"
+		cfg.OTLP.GrafanaCloud.Token = "opaque-token"
+		cfg.Statuspage.BaseURL = srv.URL
+		cfg.Collectors["statuspage.incidents"] = config.CollectorConfig{Enabled: true, Interval: time.Second, InitialLookback: time.Second, MaxWindow: time.Second}
+		if err := cfg.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		r := collector.NewRegistry()
+		statuspage.Register(collector.Deps{Config: &cfg, Registry: r})
+		store, err := collector.NewFileStore(checkpointPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries := r.Entries()
+		if len(entries) != 1 || entries[0].Collector.Name() != "statuspage.incidents" {
+			t.Fatalf("independent incident registration: %v", entries)
+		}
+		s := collector.NewScheduler(r, e, store)
+		s.Now = func() time.Time { return now }
+		run(t, s, entries[0])
+		cp, ok := store.Get("statuspage.incidents")
+		if !ok || !cp.Equal(now.Truncate(time.Second)) || cp.Nanosecond() != 0 {
+			t.Fatalf("whole-second checkpoint=%s present=%v now=%s", cp, ok, now)
+		}
+	}
+	poll(at.Add(900 * time.Millisecond))
+	if len(logs.records) != 1 || !logs.records[0].Timestamp().Equal(firstAt) {
+		t.Fatalf("fractional source update must emit once: records=%d", len(logs.records))
+	}
+	poll(at.Add(time.Second)) // New registry, scheduler and FileStore loaded from disk.
+	if len(logs.records) != 1 {
+		t.Fatalf("restart replayed committed fractional update: records=%d", len(logs.records))
+	}
+	newerAt := at.Add(1250 * time.Millisecond)
+	incidents = incidentJSON(newerAt, "opaque-newer-revision")
+	poll(at.Add(2 * time.Second))
+	if len(logs.records) != 2 || !logs.records[1].Timestamp().Equal(newerAt) {
+		t.Fatalf("newer fractional revision must emit once: records=%d", len(logs.records))
+	}
+	poll(at.Add(3 * time.Second))
+	if len(logs.records) != 2 {
+		t.Fatalf("second restart replayed newer revision: records=%d", len(logs.records))
+	}
+}
+
 func TestStatuspageNeedsNoCloudflareCredentials(t *testing.T) {
 	for _, credentials := range []bool{false, true} {
 		t.Run(fmt.Sprint(credentials), func(t *testing.T) {

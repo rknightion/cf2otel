@@ -42,6 +42,60 @@ func TestStatuspageValidation(t *testing.T) {
 	}
 }
 
+// The shared scheduler truncates retained checkpoints to seconds. Fractional
+// startup/window bounds can otherwise move a committed incident cursor backward.
+func TestStatuspageWholeSecondWindowValidation(t *testing.T) {
+	valid := func() Config {
+		c := Default()
+		c.Cloudflare.APIToken = "opaque-token"
+		c.Cloudflare.AccountID = "opaque-account"
+		c.OTLP.Endpoint = "https://opaque.invalid/otlp"
+		c.OTLP.GrafanaCloud.InstanceID = "opaque-instance"
+		c.OTLP.GrafanaCloud.Token = "opaque-token"
+		return c
+	}
+	for _, name := range []string{"statuspage.components", "statuspage.incidents"} {
+		for _, enabled := range []bool{false, true} {
+			for _, field := range []string{"initial_lookback", "max_window"} {
+				for _, fraction := range []time.Duration{500 * time.Millisecond, 1500 * time.Millisecond, time.Second + time.Nanosecond} {
+					t.Run(fmt.Sprintf("%s/enabled=%v/%s/%s", name, enabled, field, fraction), func(t *testing.T) {
+						c := valid()
+						entry := CollectorConfig{Enabled: enabled, Interval: time.Second, InitialLookback: time.Second, MaxWindow: time.Second}
+						if field == "initial_lookback" {
+							entry.InitialLookback = fraction
+						} else {
+							entry.MaxWindow = fraction
+						}
+						c.Collectors[name] = entry
+						if err := c.Validate(); err == nil || !strings.Contains(err.Error(), name+"."+field+" must be a whole number of seconds") {
+							t.Fatalf("fractional statuspage checkpoint configuration accepted: %v", err)
+						}
+					})
+				}
+			}
+			for _, lookback := range []time.Duration{0, time.Second, 15 * time.Minute} {
+				c := valid()
+				c.Collectors[name] = CollectorConfig{Enabled: enabled, Interval: 500 * time.Millisecond, InitialLookback: lookback, MaxWindow: time.Second}
+				if err := c.Validate(); err != nil {
+					t.Fatalf("whole-second bounds or fractional polling interval rejected: %v", err)
+				}
+			}
+		}
+	}
+	// Pin the reported supported-config defect through the environment loader,
+	// not only direct struct construction: 1s lookback with a 500ms window.
+	t.Setenv("CF2OTEL_COLLECTORS__STATUSPAGE_INCIDENTS__ENABLED", "true")
+	t.Setenv("CF2OTEL_COLLECTORS__STATUSPAGE_INCIDENTS__INITIAL_LOOKBACK", "1s")
+	t.Setenv("CF2OTEL_COLLECTORS__STATUSPAGE_INCIDENTS__MAX_WINDOW", "500ms")
+	loaded, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := loaded.Validate(); err == nil || !strings.Contains(err.Error(), "statuspage.incidents.max_window must be a whole number of seconds") {
+		t.Fatalf("loaded 1s lookback/500ms window accepted: %v", err)
+	}
+}
+
 func TestStatuspageDefaultModesAndEnvironment(t *testing.T) {
 	c := Default()
 	if got := c.Collector("statuspage.components"); got != (CollectorConfig{Interval: 5 * time.Minute}) {
