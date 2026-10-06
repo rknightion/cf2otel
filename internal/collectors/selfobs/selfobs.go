@@ -11,6 +11,9 @@ import (
 	"github.com/rknightion/cf2otel/internal/telemetry"
 )
 
+// Capture once during process initialization, not per Stats instance or poll.
+var processStartTime = float64(time.Now().UnixNano()) / 1e9
+
 type Stats struct {
 	mu              sync.Mutex
 	identityMu      sync.Mutex // Serializes snapshot-to-delta recording across concurrent collects.
@@ -158,6 +161,9 @@ func (s *Stats) Collect(ctx context.Context, now time.Time) error {
 		errs = append(errs, err)
 	}
 	if err := s.emitter.Gauge(ctx, semconv.MetricBuildInfo, 1, telemetry.Attr{Key: semconv.AttrBuildVersion, Value: s.version}, telemetry.Attr{Key: semconv.AttrBuildCommit, Value: s.commit}); err != nil {
+		errs = append(errs, err)
+	}
+	if err := s.emitter.Gauge(ctx, semconv.MetricProcessStartTime, processStartTime); err != nil {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)

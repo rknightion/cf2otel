@@ -48,8 +48,11 @@ any tracked file or loop artifact. `just ci` needs a Docker daemon. Run `just` i
   a nonempty page with none is a canary difference by design, do not suppress it. Null counts as
   missing only for fields in `optional_when_destination_types` or `required_in_any_row`.
 - `auto-rc` cuts and publishes a `v*-rc.*` tag for any green `main` SHA, and its rollout restarts
-  the app on the same SHA: fence an epoch on `build_commit` and process start time after auto-RC
-  completes, never the SHA alone. `loop-pi-audit closeout` attributes release-please branch moves
+  the app on the same SHA. After a restart, including an in-place restart keeping
+  `service_instance_id`, old process series stay visible for the 5-minute lookback with different
+  `service_version`. After auto-RC completes, fence the epoch on `build_commit` plus
+  `cf2otel_process_start_time_seconds` plus exactly one `service_instance_id`; select the full
+  label set, never SHA or instance alone. `loop-pi-audit closeout` attributes release-please branch moves
   and RC tags to their bot actors and exits 0 when every ref is covered; it exits 1 only on an
   ungranted ref (an RC tag, a Renovate branch non-fast-forward). Report each by actor and never
   widen the grants.

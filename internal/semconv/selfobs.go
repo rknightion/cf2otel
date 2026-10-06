@@ -22,6 +22,7 @@ const (
 	MetricExportSuccess        = "cf2otel.export.success"
 	MetricExportErrors         = "cf2otel.export.errors"
 	MetricBuildInfo            = "cf2otel.build.info"
+	MetricProcessStartTime     = "cf2otel.process.start_time"
 	AttrCollector              = "cf2otel.collector"
 	AttrVersion                = "cf2otel.version"
 	AttrCommit                 = "cf2otel.commit"

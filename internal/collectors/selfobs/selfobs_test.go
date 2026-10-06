@@ -188,8 +188,12 @@ func TestPollAndCollect(t *testing.T) {
 	if len(e.counters) != 7 || len(e.histograms) != 2 {
 		t.Fatalf("counters=%d histograms=%d", len(e.counters), len(e.histograms))
 	}
-	if len(e.gauges) != 4 {
+	if len(e.gauges) != 5 {
 		t.Fatalf("gauges=%d", len(e.gauges))
+	}
+	start := e.gauges[len(e.gauges)-1]
+	if start.name != semconv.MetricProcessStartTime || start.value != processStartTime || len(start.attrs) != 0 {
+		t.Fatalf("process start gauge: %+v", start)
 	}
 	identityValues := map[string]float64{}
 	for _, counter := range e.counters {

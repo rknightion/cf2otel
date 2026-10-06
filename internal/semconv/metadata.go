@@ -147,6 +147,7 @@ var metricSpecs = map[string]MetricSpec{
 	MetricExportSuccess:                  {Unit: "1", Description: "Successful OTLP exports."},
 	MetricExportErrors:                   {Unit: "1", Description: "Failed OTLP exports."},
 	MetricBuildInfo:                      {Unit: "1", Description: "Build identity."},
+	MetricProcessStartTime:               {Unit: "s", Description: "Unix time the cf2otel process started."},
 	MetricCheckpointAge:                  {Unit: "s", Description: "Age of the oldest collector checkpoint."},
 	MetricAPIRequests:                    {Unit: "{request}", Description: "Physical Cloudflare HTTP requests by collector, REST/GraphQL method and failure-only error class."},
 	MetricAPIEnvelopeErrors:              {Unit: "{error}", Description: "Unsuccessful Cloudflare API envelopes returned with successful HTTP status."},
