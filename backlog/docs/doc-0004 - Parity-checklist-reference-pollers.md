@@ -3,7 +3,7 @@ id: doc-0004
 title: Parity checklist - reference pollers
 type: specification
 created_date: '2026-09-23 09:59'
-updated_date: '2026-10-05 22:19'
+updated_date: '2026-10-06 06:46'
 ---
 cf2otel must cover every capability listed here. The list is a behaviour contract drawn from a survey
 of open-source Cloudflare pollers and exporters; no other project is named and no code is copied.
@@ -130,9 +130,9 @@ The OTel SDK cardinality limit is per instrument and configurable (CFO-0045).
 ## Origin and edge health [Prom] (CFO-0050)
 
 - [x] Certificate pack status and expiry (CFO-0050.01).
-- Load balancer pool/origin health by region, origin RTT, pool traffic (CFO-0050.02).
+- [x] Documented pool traffic: trailing-window uncached load-balancer resolutions (CFO-0050.02 [load balancer documented pool traffic]). Regional/origin health and RTT is separately Parked in CFO-0081 (Load balancer regional and origin health and RTT), awaiting Cloudflare stable region/origin keys; this check does not claim that blocked scope.
 - [x] Health check events with RTT/TTFB/TCP/TLS timings and failure reason (CFO-0050.03).
-- Opt-in public status page component status (CFO-0050.04).
+- [x] Opt-in public status page component status and best-effort incident-update logs (CFO-0050.04 [public status page collector]).
 
 ## Operations [Prom] (CFO-0051)
 
@@ -163,3 +163,11 @@ Backoff/limiter source parity checked at loop17 landing2eb6a689 with fresh indep
 
 
 Loop24 reconciliation: CFO-0048.02 (WARP fleet status aggregates) is Done under the owner raw-status decision, with exact tuple/pagination fixture proof at 4a74ad304fdb0cd5fe2f59b084c9fc97db0e4883, required CI and composed gate green; no inferred connected Boolean or populated fleet proof. CFO-0049.01 (firewall rule, host and country dimensions) was already Done and is now reflected here. All four Zero Trust children are Done and that section is fully checked. CFO-0050.02 (load-balancer health and traffic) remains Parked: documented pool traffic landed, but regional/origin attribution is unproved. CFO-0050.04 (public status page collector) remains Parked: its unlanded candidate has a major fractional-checkpoint restart replay finding and an exhausted implementation ceiling. Neither health row is checked; the health parent stays open. CFO-0051 (operations parity) stays open for multi-account decisions. Checks denote their accepted source contracts, not a new live-hour proof.
+
+
+
+Loop25 R1 reconciliation: 0 implementation attempts. Documented pool traffic is delivered at 14ed3bfb1dcddd10270c7c4ff34cf9b083b70604 with recorded exact CI 37377084957 and composed G-LB PASS; CFO-0050.02 (load balancer documented pool traffic) is Done under the authorised split. CFO-0081 (Load balancer regional and origin health and RTT) is a top-level Parked source-prerequisite task, not delivered regional/origin scope. CFO-0050.04 (public status page collector) source landed 6e7e046e90d6cfb7f24032bb0ffd6b4203d80d9c, but definitive root exact CI/composed G-SP verdict is pending; its row remains unchecked and CFO-0050 (origin and edge health parent) remains open. Prior reconciliation entries are historical, not overwritten. CFO-0051 (operations parity) stays open; no live-hour proof claimed.
+
+
+
+Loop25 final statuspage acceptance supersedes the earlier pending entry: CFO-0050.04 (public status page collector) is Done at 6e7e046e90d6cfb7f24032bb0ffd6b4203d80d9c, root-verified exact CI 37424290375 completed success including ci-success, and composed G-SP just check exit0 on that same SHA. Whole-second validation, actual CLI/regression red-green, FileStore restart no-replay, complete CodeRabbit zero findings and SP-SEC PASS support the accepted best-effort latest-page contract; late/older/off-page omissions remain explicit. SP loop25 consumes 1 implementation attempt and 1 delta security repair round, preserving historical 4 implementation/2 review-repair; K1 and R1 consume 0. Every health child is Done and this health section is fully checked for its admitted delivered scope, permitting CFO-0050 (origin and edge health parent) closure. Regional/origin health and RTT remain separately Parked in CFO-0081 (Load balancer regional and origin health and RTT); no new live-hour claim. CFO-0051 (operations parity) remains open.
