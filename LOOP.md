@@ -21,7 +21,7 @@ any tracked file or loop artifact. `just ci` needs a Docker daemon. Run `just` i
   password, authorization or headers and prints key names and value lengths only.
 - The compose host runs `:main` (`pull_policy: always`, Watchtower fastlane, 5-minute poll). A
   green push to main is the deploy: the release workflow's `edge` job publishes `:main` and
-  Watchtower recreates the app. Confirm the live commit from `cf2otel_build_info_ratio` `build_commit` on
+  Watchtower recreates the app. Confirm the live commit from `cf2otel_build_info_ratio` label `cf2otel_build_commit` on
   robknight; roll back by reverting on main. A new `CF2OTEL_` variable needs its own compose
   `environment:` entry, which is a host edit and needs an ops grant.
 
@@ -50,14 +50,15 @@ any tracked file or loop artifact. `just ci` needs a Docker daemon. Run `just` i
 - `auto-rc` cuts and publishes a `v*-rc.*` tag for any green `main` SHA, and its rollout restarts
   the app on the same SHA. After a restart, including an in-place restart keeping
   `service_instance_id`, old process series stay visible for the 5-minute lookback with different
-  `service_version`. After auto-RC completes, fence the epoch on `build_commit` plus
+  `service_version`. After auto-RC completes, fence the epoch on `cf2otel_build_commit` plus
   `cf2otel_process_start_time_seconds` plus exactly one `service_instance_id`; select the full
   label set, never SHA or instance alone. `loop-pi-audit closeout` attributes release-please branch moves
   and RC tags to their bot actors and exits 0 when every ref is covered; it exits 1 only on an
   ungranted ref (an RC tag, a Renovate branch non-fast-forward). Report each by actor and never
-  widen the grants.
+  widen the grants. Merging the release-please PR auto-deletes its branch
+  (`delete_branch_on_merge` is on): expected, report it by actor, not as a fault.
 - Every push to main redeploys and restarts the process, tracker-only commits included. Hold all
-  pushes during an hour proof, and start the hour after `build_commit` matches the landed SHA.
+  pushes during an hour proof, and start the hour after `cf2otel_build_commit` matches the landed SHA.
 - Launch every watcher under `caffeinate -i`, measure on the wall clock, and treat an observation
   gap as not observed, never as unhealthy. Read the exact-SHA CI run back with `gh run view`.
 - The push scan flags every email-shaped literal, `example.com` included, and a net-diff scan
