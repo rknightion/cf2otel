@@ -24,6 +24,7 @@ var testProcessInitialized = time.Now()
 func TestProcessStartRealExport(t *testing.T) {
 	var mu sync.Mutex
 	metrics := map[string]*metricpb.Metric{}
+	var collectedAfter uint64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/metrics" {
 			body, err := io.ReadAll(r.Body)
@@ -42,7 +43,17 @@ func TestProcessStartRealExport(t *testing.T) {
 			for _, resource := range req.ResourceMetrics {
 				for _, scope := range resource.ScopeMetrics {
 					for _, metric := range scope.Metrics {
-						metrics[metric.Name] = metric
+						// An older periodic collection can still be in flight when
+						// Collect returns. Its arrival is not proof of fresh data.
+						fresh := true
+						for _, point := range metric.GetGauge().GetDataPoints() {
+							if point.TimeUnixNano < collectedAfter {
+								fresh = false
+							}
+						}
+						if fresh {
+							metrics[metric.Name] = metric
+						}
 					}
 				}
 			}
@@ -69,14 +80,16 @@ func TestProcessStartRealExport(t *testing.T) {
 	collect := selfobs.NewCollector(stats)
 	assertExport := func() float64 {
 		t.Helper()
-		mu.Lock()
-		clear(metrics)
-		mu.Unlock()
 		if err := collect.Collect(ctx, providers.Emitter); err != nil {
 			t.Fatal(err)
 		}
+		mu.Lock()
+		collectedAfter = uint64(time.Now().UnixNano())
+		clear(metrics)
+		mu.Unlock()
 		// FlushCommit flushes logs/traces only; wait for the real periodic
-		// metric reader and require a fresh export for each collection.
+		// metric reader to collect after this Collect returned, not merely
+		// for an older export to arrive after the map was cleared.
 		deadline := time.Now().Add(2 * time.Second)
 		for time.Now().Before(deadline) {
 			mu.Lock()
