@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.18.0](https://github.com/rknightion/cf2otel/compare/v0.17.0...v0.18.0) (2026-10-07)
+
+
+### Features
+
+* attribute Cloudflare request metrics to collectors ([46cbb26](https://github.com/rknightion/cf2otel/commit/46cbb261de5bcabab8529c3a5529fd104be0b0f0))
+* export process start time as a self-metric ([eeb706d](https://github.com/rknightion/cf2otel/commit/eeb706ddbabcd06dee897cc3a2b4d2e63f0c6abf))
+* **loadbalancers:** add documented opt-in pool traffic snapshots ([14ed3bf](https://github.com/rknightion/cf2otel/commit/14ed3bfb1dcddd10270c7c4ff34cf9b083b70604))
+* **statuspage:** collect public component and incident status ([335526d](https://github.com/rknightion/cf2otel/commit/335526dd44ece621079fbc40ddaa5b6467e0e6e1))
+
+
+### Bug Fixes
+
+* **apidrift:** probe strict firewall rule dimensions ([78f4d46](https://github.com/rknightion/cf2otel/commit/78f4d46249d7b529773c2e9e113059034a6b240f))
+* **apidrift:** size probe budget by request class and contract count ([3e85282](https://github.com/rknightion/cf2otel/commit/3e85282a6b91250ec592fcb7344bb77979d64f04))
+* **cfapi:** cap extreme REST rate-limit pauses and parse GraphQL errors per entry ([1ca1172](https://github.com/rknightion/cf2otel/commit/1ca1172c28b11d1380045285e31ddae14a6d0e3b))
+* **cfapi:** isolate REST and GraphQL rate budgets ([15c7ef3](https://github.com/rknightion/cf2otel/commit/15c7ef311107774105c1a4d44fdb4098888dcd96))
+* **cfapi:** meter GraphQL per zone and account under account-based rate limiting ([9c3dec1](https://github.com/rknightion/cf2otel/commit/9c3dec1f89f9366c4584e738d62829a9786ff569))
+* **cfapi:** pack polling requests and restrict fixture clocks to test binaries ([a756b7a](https://github.com/rknightion/cf2otel/commit/a756b7af7e6524143137731a5ceaaf1d0d2a9c52))
+* **deps:** update module github.com/knadh/koanf/providers/env/v2 to v2.0.2 ([#48](https://github.com/rknightion/cf2otel/issues/48)) ([da6bc90](https://github.com/rknightion/cf2otel/commit/da6bc9050d3000dbef702c3c7c61e14b34c465e9))
+* **deps:** upgrade OpenTelemetry to v1.47 release set ([97698a0](https://github.com/rknightion/cf2otel/commit/97698a0de490d3b42dd6d545ce42cac84cca1f14))
+* restore per-collector request and limiter-wait instrumentation ([08a6c0e](https://github.com/rknightion/cf2otel/commit/08a6c0eb605a9e0eb6f23aac918758097cb7661d))
+* **statuspage:** require whole-second checkpoint bounds ([6e7e046](https://github.com/rknightion/cf2otel/commit/6e7e046e90d6cfb7f24032bb0ffd6b4203d80d9c))
+
 ## [0.17.0](https://github.com/rknightion/cf2otel/compare/v0.16.1...v0.17.0) (2026-10-03)
 
 
