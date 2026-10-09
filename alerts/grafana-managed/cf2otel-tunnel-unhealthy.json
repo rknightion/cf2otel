@@ -14,7 +14,7 @@
     "annotations": {
       "__dashboardUid__": "cf2otel",
       "__panelId__": "2641",
-      "description": "The current (value 1) tunnel status has been non-healthy for five minutes, with collector last success less than 180 seconds old (three deployment polling intervals of 60 seconds). Retired value-0 states are excluded. Collector is disabled by default; stale/absent data is not proof of health.",
+      "description": "The current (value 1) tunnel status has been non-healthy for five minutes, with collector last success less than 900 seconds old (three deployment polling intervals of 300 seconds). Retired value-0 states are excluded. The deployment polls tunnels.status every 300 seconds (the exporter's built-in default is 60), so the generator default is 300; regenerate with GRAFANA_TUNNELS_STATUS_INTERVAL_SECONDS for any other interval. Collector is disabled by default; stale/absent data is not proof of health.",
       "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
       "summary": "Cloudflare tunnel is not healthy"
     },
@@ -27,7 +27,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "(max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name=\"cf2otel\",cloudflare_tunnel_status!=\"healthy\"} == 1) or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name=\"cf2otel\"} == 1))) and on() (time() - max(cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"tunnels.status\"}) < 180)",
+          "expr": "(max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name=\"cf2otel\",cloudflare_tunnel_status!=\"healthy\"} == 1) or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name=\"cf2otel\"} == 1))) and on() (time() - max(cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"tunnels.status\"}) < 900)",
           "instant": true,
           "range": false,
           "refId": "A"

@@ -14,7 +14,7 @@
     "annotations": {
       "__dashboardUid__": "cf2otel",
       "__panelId__": "2645",
-      "description": "A present certificate pack has a non-active status, including packs with unknown expiry. Requires opt-in certs.packs and collector last success less than 10800 seconds old (three deployment polling intervals of 3600 seconds). Removed packs and previous statuses retire. Absent/stale data is not proof of health. For a non-default interval regenerate with GRAFANA_CERTS_PACKS_INTERVAL_SECONDS matching the deployment.",
+      "description": "A present certificate pack has a status other than active or backup_issued (Cloudflare's normal standby state for a second-CA backup certificate), including packs with unknown expiry. Requires opt-in certs.packs and collector last success less than 10800 seconds old (three deployment polling intervals of 3600 seconds). Removed packs and previous statuses retire. Absent/stale data is not proof of health. For a non-default interval regenerate with GRAFANA_CERTS_PACKS_INTERVAL_SECONDS matching the deployment.",
       "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
       "summary": "Cloudflare certificate pack is not active"
     },
@@ -27,7 +27,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!=\"active\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))",
+          "expr": "(max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_status!~\"active|backup_issued\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)) or on (cloudflare_certificate_zone, cloudflare_certificate_pack_id) (0 * max by (cloudflare_certificate_zone, cloudflare_certificate_pack_id) ((cloudflare_certificate_pack{service_name=\"cf2otel\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800))))",
           "instant": true,
           "range": false,
           "refId": "A"

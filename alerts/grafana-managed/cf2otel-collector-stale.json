@@ -14,7 +14,7 @@
     "annotations": {
       "__dashboardUid__": "cf2otel",
       "__panelId__": "401",
-      "description": "Collector last-success timestamp is older than 15 minutes.",
+      "description": "Collector last-success timestamp is older than three of that collector's polling intervals (2700 seconds for access.seats, 10800 seconds for certs.packs, httpreq.threats, httpreq.transfer, 900 seconds for every other collector). The query value is seconds beyond the threshold, so only a value above 0 fires. Regenerate with the matching GRAFANA_*_INTERVAL_SECONDS settings for non-default deployment intervals.",
       "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
       "summary": "cf2otel collector is stale"
     },
@@ -27,7 +27,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\"})",
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)",
           "instant": true,
           "range": false,
           "refId": "A"
@@ -58,7 +58,7 @@
             {
               "evaluator": {
                 "params": [
-                  900
+                  0
                 ],
                 "type": "gt"
               }

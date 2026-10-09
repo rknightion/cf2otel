@@ -1,0 +1,426 @@
+{
+  "evaluation_interval": "1m",
+  "rule_files": [],
+  "tests": [
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}",
+          "values": "-900 -900"
+        }
+      ],
+      "interval": "1m",
+      "name": "certs.packs hourly collector 1200s old does not fire",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"certs.packs\"}",
+              "value": -9600
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}",
+          "values": "-10500 -10500"
+        }
+      ],
+      "interval": "1m",
+      "name": "certs.packs hourly collector at three intervals does not fire",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"certs.packs\"}",
+              "value": 0
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}",
+          "values": "-10501 -10501"
+        }
+      ],
+      "interval": "1m",
+      "name": "certs.packs hourly collector beyond three intervals fires",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"certs.packs\"}",
+              "value": 1
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}",
+          "values": "-19700 -19700"
+        }
+      ],
+      "interval": "1m",
+      "name": "certs.packs hourly collector long stale fires",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"certs.packs\"}",
+              "value": 9200
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"httpreq.threats\"}",
+          "values": "-900 -900"
+        }
+      ],
+      "interval": "1m",
+      "name": "httpreq.threats hourly collector 1200s old does not fire",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"httpreq.threats\"}",
+              "value": -9600
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"httpreq.threats\"}",
+          "values": "-10500 -10500"
+        }
+      ],
+      "interval": "1m",
+      "name": "httpreq.threats hourly collector at three intervals does not fire",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"httpreq.threats\"}",
+              "value": 0
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"httpreq.threats\"}",
+          "values": "-10501 -10501"
+        }
+      ],
+      "interval": "1m",
+      "name": "httpreq.threats hourly collector beyond three intervals fires",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"httpreq.threats\"}",
+              "value": 1
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"httpreq.threats\"}",
+          "values": "-19700 -19700"
+        }
+      ],
+      "interval": "1m",
+      "name": "httpreq.threats hourly collector long stale fires",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"httpreq.threats\"}",
+              "value": 9200
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"httpreq.transfer\"}",
+          "values": "-900 -900"
+        }
+      ],
+      "interval": "1m",
+      "name": "httpreq.transfer hourly collector 1200s old does not fire",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"httpreq.transfer\"}",
+              "value": -9600
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"httpreq.transfer\"}",
+          "values": "-10500 -10500"
+        }
+      ],
+      "interval": "1m",
+      "name": "httpreq.transfer hourly collector at three intervals does not fire",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"httpreq.transfer\"}",
+              "value": 0
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"httpreq.transfer\"}",
+          "values": "-10501 -10501"
+        }
+      ],
+      "interval": "1m",
+      "name": "httpreq.transfer hourly collector beyond three intervals fires",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"httpreq.transfer\"}",
+              "value": 1
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"httpreq.transfer\"}",
+          "values": "-19700 -19700"
+        }
+      ],
+      "interval": "1m",
+      "name": "httpreq.transfer hourly collector long stale fires",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"httpreq.transfer\"}",
+              "value": 9200
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"access.logins\"}",
+          "values": "-600 -600"
+        }
+      ],
+      "interval": "1m",
+      "name": "five-minute collector 900s old does not fire",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"access.logins\"}",
+              "value": 0
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"access.logins\"}",
+          "values": "-601 -601"
+        }
+      ],
+      "interval": "1m",
+      "name": "five-minute collector 901s old fires",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"access.logins\"}",
+              "value": 1
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"access.logins\"}",
+          "values": "-900 -900"
+        }
+      ],
+      "interval": "1m",
+      "name": "five-minute collector 1200s old fires",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"access.logins\"}",
+              "value": 300
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"access.seats\"}",
+          "values": "-900 -900"
+        }
+      ],
+      "interval": "1m",
+      "name": "access.seats fifteen-minute collector 1200s old does not fire",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"access.seats\"}",
+              "value": -1500
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"access.seats\"}",
+          "values": "-2401 -2401"
+        }
+      ],
+      "interval": "1m",
+      "name": "access.seats fifteen-minute collector beyond three intervals fires",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"access.seats\"}",
+              "value": 1
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}",
+          "values": "-900 -900"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"httpreq.threats\"}",
+          "values": "-10700 -10700"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"access.logins\"}",
+          "values": "-900 -900"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"firewall.events\"}",
+          "values": "200 200"
+        }
+      ],
+      "interval": "1m",
+      "name": "mixed hourly and five-minute collectors keep their own thresholds",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"certs.packs\"}",
+              "value": -9600
+            },
+            {
+              "labels": "{cf2otel_collector=\"httpreq.threats\"}",
+              "value": 200
+            },
+            {
+              "labels": "{cf2otel_collector=\"access.logins\"}",
+              "value": 300
+            },
+            {
+              "labels": "{cf2otel_collector=\"firewall.events\"}",
+              "value": -800
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+        }
+      ]
+    }
+  ]
+}
