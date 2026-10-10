@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.18.1](https://github.com/rknightion/cf2otel/compare/v0.18.0...v0.18.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **alerts:** stop cf2otel cert, stale and tunnel false positives ([06636ba](https://github.com/rknightion/cf2otel/commit/06636bad3f6af379e77cb532f7bf10fba71b1a5b))
+* **deps:** update module github.com/knadh/koanf/v2 to v2.3.8 ([#53](https://github.com/rknightion/cf2otel/issues/53)) ([ca6af5b](https://github.com/rknightion/cf2otel/commit/ca6af5b0170884bcaf77236f119ebb041d5a63d0))
+* **deps:** update module github.com/prometheus/client_golang to v1.25.0 ([#58](https://github.com/rknightion/cf2otel/issues/58)) ([9861f03](https://github.com/rknightion/cf2otel/commit/9861f03e67b307ef15708cbd3b3c175bb6572e70))
+
 ## [0.18.0](https://github.com/rknightion/cf2otel/compare/v0.17.0...v0.18.0) (2026-10-07)
 
 
