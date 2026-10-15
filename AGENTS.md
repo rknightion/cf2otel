@@ -10,10 +10,10 @@ and the container image build. Run `just` with stdin from `/dev/null`.
 
 ## Tracker
 
-Tasks are `CFO-NNNN` in `backlog/`. Read `~/repos/agent-docs/sources/loop/planner.md` before
-designing a wave, and the **Wave operating model** doc for this repo's own rules; the operating model
-wins on anything about this repo. **Cloudflare API surface - live-verified reference** is the data
+Tasks are `CFO-NNNN` in `backlog/`. **Cloudflare API surface - live-verified reference** is the data
 contract for every collector, and **Parity checklist - reference pollers** is the feature floor.
+
+Loops: the protocol lives in `~/repos/agent-docs/sources/loop/` (this board's "Loop protocol pointer" doc points there); this repository's loop facts are in `LOOP.md`.
 
 `backlog/` is committed and public: no credential, account/zone/gateway ID, email, public IP or
 internal hostname in a task or doc.
@@ -26,6 +26,9 @@ internal hostname in a task or doc.
 - `internal/semconv` owns every signal and attribute name. Nothing else declares one. Cloudflare
   signals are `cloudflare.*`, GenAI signals follow the OpenTelemetry `gen_ai.*` conventions, and
   self-observability is `cf2otel.*`.
+  Cardinality is decided there, not at the call site: IPs, emails, paths, ray IDs, user agents,
+  prompt IDs and session IDs are log/span attributes only, never metric attributes. Metric attributes
+  are bounded enums or configured names.
 - `internal/telemetry` is the only package that touches OTLP.
 - `internal/cfapi` is the only package that talks to Cloudflare. It is read-only by construction.
 - `internal/collector` owns registration, scheduling, windows and checkpoints.

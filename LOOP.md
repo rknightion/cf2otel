@@ -4,7 +4,6 @@ gate: just check
 ci-required: ci-success
 release-on-push: yes
 deploy-on-push: yes
-receiver: https://loopwatch.m7kni.com
 grafana-stack: robknight
 
 Public repository: no hostname, account/zone/gateway ID, tenant ID, email or internal identifier in
@@ -14,7 +13,7 @@ any tracked file or loop artifact. `just ci` needs a Docker daemon. Run `just` i
 
 - Three separate Cloudflare credentials: a read-only runtime API token, a schema-probe token, and a
   Global API Key used only for read-only GETs on gateway and Workers-observability-destination
-  objects plus one narrow write path that a goal must name. Never any other Global-Key write.
+  objects plus one narrow write path that the charter must name. Never any other Global-Key write.
 - A Grafana Cloud admin token is read from the local credentials tree for read-only setup calls.
 - Never copy a token, ID, email, IP or hostname into the repo, a log, argv or a fixture. A
   diagnostic that reads runtime or compose settings drops every key matching token, key, secret,
@@ -23,7 +22,7 @@ any tracked file or loop artifact. `just ci` needs a Docker daemon. Run `just` i
   green push to main is the deploy: the release workflow's `edge` job publishes `:main` and
   Watchtower recreates the app. Confirm the live commit from `cf2otel_build_info_ratio` label `cf2otel_build_commit` on
   robknight; roll back by reverting on main. A new `CF2OTEL_` variable needs its own compose
-  `environment:` entry, which is a host edit and needs an ops grant.
+  `environment:` entry, which is a host edit and needs authority.
 
 ## Traps
 
@@ -59,15 +58,17 @@ any tracked file or loop artifact. `just ci` needs a Docker daemon. Run `just` i
   (`delete_branch_on_merge` is on): expected, report it by actor, not as a fault.
 - Every push to main redeploys and restarts the process, tracker-only commits included. Hold all
   pushes during an hour proof, and start the hour after `cf2otel_build_commit` matches the landed SHA.
-- Launch every watcher under `caffeinate -i`, measure on the wall clock, and treat an observation
-  gap as not observed, never as unhealthy. Read the exact-SHA CI run back with `gh run view`.
+- Launch every watcher under `caffeinate -i`, measure on the wall clock; an observation gap is not
+  observed, never unhealthy. Read the exact-SHA CI run back with `gh run view`.
 - The push scan flags every email-shaped literal, `example.com` included, and a net-diff scan
   misses a literal added then removed within one push: use opaque non-email strings and scan newly
   reachable commits too. The private scans allow loopback and the RFC 5737 and RFC 3849 ranges.
 - On an external write's rejection, capture the full response body, and re-GET before rolling back.
-- The root does not write or repair proof, deploy or scan helpers during a run; a defect goes to a
-  lane once, or parks that step.
 - A loop lands from a worktree, so the shared checkout's `main` stays put. Never commit there.
+- Fixtures are sanitized before they are written and append-only: add a new one beside a committed
+  one, never overwrite it. Raw live captures stay in gitignored `codex/`.
+- Where Cloudflare's docs disagree with the live API, the API wins: never "correct" working code to
+  match a doc.
 
 ## Mutexes
 
