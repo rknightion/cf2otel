@@ -8,6 +8,10 @@ Gateway requests and the wider non-Enterprise log surface as OTLP logs, metrics 
 `just check` is the gate and must pass before you commit. `just ci` adds the goreleaser snapshot
 and the container image build. Run `just` with stdin from `/dev/null`.
 
+Off the Mac, when the remote gate runner is installed (`which gaterun`): `gaterun -- just ci` (or
+`just check`), paced across lanes with `gaterun-slot <lane> -- gaterun -- just ci`; `.gaterunner.yaml`
+is its contract. Run one test or package locally.
+
 ## Tracker
 
 Tasks are `CFO-NNNN` in `backlog/`. **Cloudflare API surface - live-verified reference** is the data
