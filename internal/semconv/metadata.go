@@ -12,6 +12,10 @@ type MetricSpec struct {
 var genAIOperationDurationBuckets = []float64{0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 30, 60}
 var pollerDurationBuckets = []float64{0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 7.5, 10, 15, 20, 30, 45, 60, 90, 120}
 
+// Scrapes may exceed their polling interval during catch-up. Keep the 300s
+// cadence observable rather than censoring all slow polls in +Inf.
+var scrapeDurationBuckets = append(append([]float64(nil), pollerDurationBuckets...), 180, 240, 300, 450, 600, 900, 1800, 3600, 7200)
+
 var metricSpecs = map[string]MetricSpec{
 	MetricLBPoolRequests:                   {Unit: "{request}", Description: "Uncached load-balancer resolutions per pool in the trailing configured polling interval (rounded out to source seconds); replaceable snapshot, not all HTTP requests or a cumulative counter. Other sums overflow and unresolved pool names."},
 	MetricLBPoolHealth:                     {Unit: "1", Description: "Unattributed provider-reported health flag: true=1, false=0, unknown omitted; not regional aggregate pool availability. Other is the minimum of known flags, not complete fleet coverage."},
@@ -141,7 +145,7 @@ var metricSpecs = map[string]MetricSpec{
 	MetricZonesFiltered:                  {Unit: "{zone}", Description: "Zones removed by include, ownership or exclusion selection, by reason."},
 	MetricZonesProcessed:                 {Unit: "{zone}", Description: "Distinct eligible zones queried in a complete collector poll."},
 	MetricZonesSkipped:                   {Unit: "{zone}", Description: "Eligible zones not queried in a complete collector poll, by reason."},
-	MetricScrapeDuration:                 {Unit: "s", Description: "Collector scrape duration.", Boundaries: pollerDurationBuckets},
+	MetricScrapeDuration:                 {Unit: "s", Description: "Collector scrape duration.", Boundaries: scrapeDurationBuckets},
 	MetricScrapeErrors:                   {Unit: "1", Description: "Collector scrape errors."},
 	MetricScrapeLastSuccess:              {Unit: "s", Description: "Time of last successful collector scrape."},
 	MetricExportSuccess:                  {Unit: "1", Description: "Successful OTLP exports."},

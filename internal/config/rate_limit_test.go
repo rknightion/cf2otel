@@ -209,7 +209,7 @@ func TestRateLimitValidation(t *testing.T) {
 func checkRateLimitDefaults(t *testing.T, c *Config) {
 	t.Helper()
 	rest, graphql := c.Cloudflare.RateLimit.Buckets()
-	if rest != (BucketConfig{1.25, 5}) || graphql != (BucketConfig{2.5, 5}) {
+	if rest != (BucketConfig{3.75, 5}) || graphql != (BucketConfig{2.5, 5}) {
 		t.Fatalf("defaults: REST=%+v GraphQL=%+v", rest, graphql)
 	}
 	if rl := c.Cloudflare.RateLimit; !rl.AccountBased || rl.GraphQLScope != (BucketConfig{0.9, 2}) || rl.ExceedsGeneralLimit() {
@@ -248,7 +248,16 @@ func TestPerClassRateLimitCompatibilityAndWarning(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkRateLimit(t, c, 2.5, 4)
-	// 2.5 rps applied to both classes is 5 rps, over Cloudflare's 4 rps general limit.
+	// Class caps can overlap safely under the default total ceiling.
+	if strings.Count(log.String(), "WARN") != 1 || strings.Contains(log.String(), "general limit") {
+		t.Fatalf("want only a deprecation warning under the total ceiling: %s", log.String())
+	}
+	log.Reset()
+	t.Setenv("CF2OTEL_CLOUDFLARE__RATE_LIMIT__TOTAL__REQUESTS_PER_SECOND", "6")
+	if _, err := Load(path); err != nil {
+		t.Fatal(err)
+	}
+	// Both classes can now exceed the general limit under an explicit override.
 	if strings.Count(log.String(), "WARN") != 2 || strings.Count(log.String(), "deprecated") != 1 || strings.Count(log.String(), "general limit") != 1 {
 		t.Fatalf("want one deprecation and one general-limit warning: %s", log.String())
 	}
@@ -272,7 +281,7 @@ func TestPerClassRateLimitCompatibilityAndWarning(t *testing.T) {
 }
 
 func TestPerClassRateLimitNestedValidation(t *testing.T) {
-	for _, class := range []string{"rest", "graphql"} {
+	for _, class := range []string{"total", "rest", "graphql"} {
 		for _, value := range []string{"true", "1.9", "1.0000000000000001", ".inf", "0", "1001"} {
 			t.Run(class+"/burst/"+value, func(t *testing.T) {
 				path := filepath.Join(t.TempDir(), "config.yaml")

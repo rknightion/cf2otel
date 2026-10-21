@@ -73,7 +73,8 @@ any tracked file or loop artifact. `just ci` needs a Docker daemon. Run `just` i
 ## Mutexes
 
 - The root is the only live Cloudflare API caller; REST and GraphQL
-  have separate rate budgets (defaults 1.25 rps/burst 5 and 2.5 rps/burst 5), and GraphQL is
+  share a combined 3.75 rps/burst 5 ceiling with separate class caps
+  (REST 3.75 rps/burst 5 and GraphQL 2.5 rps/burst 5), and GraphQL is
   also metered per zone/account (0.9 rps/burst 2, account-based header).
 - One process-wide commit mutex serializes windowed checkpoint commits. Catch-up commits run
   sequentially, never concurrently.

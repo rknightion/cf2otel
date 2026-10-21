@@ -158,18 +158,11 @@ func (c *HTTPClient) doRedirects(req *http.Request) (*http.Response, error) {
 	}
 	for hops := 0; ; hops++ {
 		waiting := time.Now()
-		// Take the resource token before the shared one so a request held
-		// back by its own zone or account does not spend process capacity.
-		for _, b := range []*tokenBucket{resource, budget} {
-			if b == nil {
-				continue
+		if err := acquireBudgets(req.Context(), resource, budget, totalBudget); err != nil {
+			if req.Body != nil {
+				_ = req.Body.Close()
 			}
-			if err := b.acquire(req.Context()); err != nil {
-				if req.Body != nil {
-					_ = req.Body.Close()
-				}
-				return nil, err
-			}
+			return nil, err
 		}
 		started := time.Now()
 		wait := started.Sub(waiting)

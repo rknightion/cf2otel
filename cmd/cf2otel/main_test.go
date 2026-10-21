@@ -111,13 +111,32 @@ func captureStdout(t *testing.T, call func() error) (string, error) {
 	}
 	previous := os.Stdout
 	os.Stdout = writer
+	// Drain concurrently: an effective config can exceed the pipe capacity,
+	// particularly on Linux when many test processes share the pipe quota.
+	var output bytes.Buffer
+	readDone := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(&output, reader)
+		readDone <- err
+	}()
 	callErr := call()
 	_ = writer.Close()
 	os.Stdout = previous
-	output, readErr := io.ReadAll(reader)
+	readErr := <-readDone
 	_ = reader.Close()
 	if readErr != nil {
 		t.Fatal(readErr)
 	}
-	return string(output), callErr
+	return output.String(), callErr
+}
+
+func TestCaptureStdoutDrainsWhileCommandWrites(t *testing.T) {
+	want := strings.Repeat("fixture output\n", 10000)
+	got, err := captureStdout(t, func() error {
+		_, err := io.WriteString(os.Stdout, want)
+		return err
+	})
+	if err != nil || got != want {
+		t.Fatalf("large command output was not captured completely: bytes=%d err=%v", len(got), err)
+	}
 }

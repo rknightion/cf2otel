@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 )
 
 type fakeAPI struct {
+	mu                              sync.Mutex
 	calls                           []string
 	listQueries                     []url.Values
 	list, detail, request, response string
@@ -32,6 +34,8 @@ type fakeAPI struct {
 }
 
 func (f *fakeAPI) Get(_ context.Context, path string, q url.Values, out any) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls = append(f.calls, path)
 	if strings.HasSuffix(path, "/request") || strings.HasSuffix(path, "/response") {
 		return errors.New("body endpoint has no result envelope")
@@ -59,6 +63,8 @@ func (f *fakeAPI) Get(_ context.Context, path string, q url.Values, out any) err
 	return json.Unmarshal([]byte(value), out)
 }
 func (f *fakeAPI) GetRaw(_ context.Context, path string, _ url.Values, out any) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls = append(f.calls, path)
 	if strings.HasSuffix(path, "/request") {
 		if f.missingRequest {

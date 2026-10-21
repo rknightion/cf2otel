@@ -62,6 +62,8 @@ func (b *burstAPI) Get(_ context.Context, path string, q url.Values, out any) er
 }
 
 func (b *burstAPI) GetRaw(_ context.Context, path string, _ url.Values, out any) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if b.bodyFetches == nil {
 		b.bodyFetches = map[string]int{}
 	}

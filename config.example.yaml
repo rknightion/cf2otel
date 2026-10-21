@@ -12,8 +12,11 @@ cloudflare:
   entitlement_backoff: 1h # Positive duration; retry disabled/absent zone datasets.
   rate_limit:
     max_pause: 5m # REST header pause ceiling; duration in [1s, 60m].
+    total:
+      requests_per_second: 3.75 # Combined REST + GraphQL ceiling; leave room below 4 rps.
+      burst: 5 # Integer in [1, 1000].
     rest:
-      requests_per_second: 1.25 # rest + graphql should stay within Cloudflare's 4 rps general limit.
+      requests_per_second: 3.75 # Can use spare total capacity when GraphQL is quiet.
       burst: 5 # Integer in [1, 1000].
     graphql:
       requests_per_second: 2.5 # Process-wide GraphQL cap.

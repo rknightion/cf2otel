@@ -285,10 +285,11 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 	var nonJSONBodySides []string
 	if c.cfg.AIGateway.CaptureBodies || c.cfg.AIGateway.LinkCallerTraces {
 		path := "/accounts/" + url.PathEscape(c.cfg.Cloudflare.AccountID) + "/ai-gateway/gateways/" + url.PathEscape(gateway) + "/logs/" + url.PathEscape(row.ID)
-		var detail logRow
-		if err := c.api.Get(ctx, path, nil, &detail); err != nil {
-			return fmt.Errorf("aigateway log detail: %w", err)
+		captured, err := c.fetchLog(ctx, path)
+		if err != nil {
+			return err
 		}
+		detail := captured.detail
 		addInt(&attrs, semconv.AttrAIGatewayRequestSize, detail.RequestSize)
 		addInt(&attrs, semconv.AttrAIGatewayResponseSize, detail.ResponseSize)
 		if detail.RequestHeadComplete != nil {
@@ -306,26 +307,18 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 			links = traceLinks(detail.RequestHead)
 		}
 		if c.cfg.AIGateway.CaptureBodies {
-			rawGetter, ok := c.api.(cfapi.RawGetter)
-			if !ok {
-				return errors.New("aigateway API does not support raw body reads")
-			}
 			contentAttrs := make([]telemetry.Attr, 0, 4)
-			for _, side := range []struct{ suffix, bodyKey, messageKey, truncatedKey string }{{"request", semconv.AttrAIGatewayRequestBody, semconv.AttrGenAIInputMessages, semconv.AttrAIGatewayRequestBodyTruncated}, {"response", semconv.AttrAIGatewayResponseBody, semconv.AttrGenAIOutputMessages, semconv.AttrAIGatewayResponseBodyTruncated}} {
-				var body json.RawMessage
-				if err := rawGetter.GetRaw(ctx, path+"/"+side.suffix, nil, &body); err != nil {
-					var httpErr *cfapi.HTTPError
-					if errors.As(err, &httpErr) && httpErr.Status == 404 && httpErr.Code == 7002 {
-						key := semconv.AttrAIGatewayRequestBodyUnavailable
-						if side.suffix == "response" {
-							key = semconv.AttrAIGatewayResponseBodyUnavailable
-						}
-						missing := telemetry.Attr{Key: key, Value: "true"}
-						attrs = append(attrs, missing)
-						contentAttrs = append(contentAttrs, missing)
-						continue
+			for i, side := range []struct{ suffix, bodyKey, messageKey, truncatedKey string }{{"request", semconv.AttrAIGatewayRequestBody, semconv.AttrGenAIInputMessages, semconv.AttrAIGatewayRequestBodyTruncated}, {"response", semconv.AttrAIGatewayResponseBody, semconv.AttrGenAIOutputMessages, semconv.AttrAIGatewayResponseBodyTruncated}} {
+				body := captured.bodies[i]
+				if captured.unavailable[i] {
+					key := semconv.AttrAIGatewayRequestBodyUnavailable
+					if side.suffix == "response" {
+						key = semconv.AttrAIGatewayResponseBodyUnavailable
 					}
-					return fmt.Errorf("aigateway %s body: %w", side.suffix, err)
+					missing := telemetry.Attr{Key: key, Value: "true"}
+					attrs = append(attrs, missing)
+					contentAttrs = append(contentAttrs, missing)
+					continue
 				}
 				// Classify the complete body before capping: a truncated JSON
 				// document is not an upstream non-JSON body. Never export opaque

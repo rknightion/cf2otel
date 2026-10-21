@@ -324,6 +324,12 @@ func TestReviewRedirectQueueOutsideNetworkTimeout(t *testing.T) {
 	}))
 	defer server.Close()
 	cfg := config.Default().Cloudflare
+	// Pin the slow class rate this timeout regression needs; defaults now let
+	// REST use spare capacity and would finish both waits in about 0.53s.
+	cfg.RateLimit.REST.RequestsPerSecond = 1.25
+	if err := ConfigureProcessRateLimit(cfg.RateLimit); err != nil {
+		t.Fatal(err)
+	}
 	cfg.APIBase = server.URL
 	cfg.Timeout = 40 * time.Millisecond
 	api := New(cfg)

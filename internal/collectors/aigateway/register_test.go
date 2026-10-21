@@ -30,7 +30,11 @@ import (
 
 func TestMain(m *testing.M) {
 	// Real loopback fixtures retain caller deadlines, using explicit process pacing.
-	if err := cfapi.ConfigureProcessRateLimit(config.RateLimitConfig{RequestsPerSecond: 10000, Burst: 1}); err != nil {
+	limits := config.RateLimitConfig{RequestsPerSecond: 10000, Burst: 1}
+	if os.Getenv("CF2OTEL_TEST_AIGATEWAY_BUDGET_CHILD") == "1" {
+		limits = config.Default().Cloudflare.RateLimit
+	}
+	if err := cfapi.ConfigureProcessRateLimit(limits); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

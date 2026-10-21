@@ -75,6 +75,7 @@ type RateLimitConfig struct {
 	// Legacy fields remain available to package users; explicit values apply to both classes.
 	RequestsPerSecond float64       `yaml:"requests_per_second" json:"requests_per_second,omitempty"`
 	Burst             int           `yaml:"burst" json:"burst,omitempty"`
+	Total             BucketConfig  `yaml:"total" json:"total"`
 	REST              BucketConfig  `yaml:"rest" json:"rest"`
 	GraphQL           BucketConfig  `yaml:"graphql" json:"graphql"`
 	MaxPause          time.Duration `yaml:"max_pause" json:"max_pause"`
@@ -89,11 +90,11 @@ type RateLimitConfig struct {
 // (1200 requests per five minutes).
 const GeneralAPILimit = 4.0
 
-// ExceedsGeneralLimit reports whether the two class caps together can exceed
-// Cloudflare's general per-user API limit.
+// ExceedsGeneralLimit reports whether the effective combined ceiling can exceed
+// Cloudflare's general per-user API limit. Class caps may share spare capacity.
 func (c RateLimitConfig) ExceedsGeneralLimit() bool {
 	rest, graphql := c.Buckets()
-	return rest.RequestsPerSecond+graphql.RequestsPerSecond > GeneralAPILimit
+	return min(c.Total.RequestsPerSecond, rest.RequestsPerSecond+graphql.RequestsPerSecond) > GeneralAPILimit
 }
 
 type BucketConfig struct {
@@ -120,7 +121,7 @@ func (c RateLimitConfig) Validate() error {
 	for _, item := range []struct {
 		name   string
 		bucket BucketConfig
-	}{{"rest", rest}, {"graphql", graphql}, {"graphql_scope", c.GraphQLScope}} {
+	}{{"total", c.Total}, {"rest", rest}, {"graphql", graphql}, {"graphql_scope", c.GraphQLScope}} {
 		if err := item.bucket.Validate(); err != nil {
 			return fmt.Errorf("cloudflare.rate_limit.%s: %w", item.name, err)
 		}
@@ -276,7 +277,7 @@ var disabledCollectorNames = []string{"aigateway.coverage", "logpush.failures", 
 
 func Default() Config {
 	c := Config{Cloudflare: CloudflareConfig{APIBase: "https://api.cloudflare.com/client/v4", Timeout: 30 * time.Second, MaxResponseBytes: 16 << 20}, Collectors: map[string]CollectorConfig{}, HTTP: HTTPConfig{RequestSource: "eyeball", Breakdowns: []string{"status", "origin_status", "country", "protocol", "tls_protocol", "method", "content_type"}, Scope: "access_protected", MaxMetricHostsPerZone: 1000, MaxMetricSeriesPerWindow: 10000}, Platform: PlatformConfig{MaxMetricSeriesPerWindow: 500}, Identity: IdentityConfig{Enabled: true, MatchWindow: 15 * time.Minute, MaxCandidates: 100000}, AIGateway: AIGatewayConfig{MaxBodyBytes: 16 << 10, LinkCallerTraces: true}, OTLP: OTLPConfig{MetricCardinalityLimit: 10000, Protocol: "http", Headers: map[string]string{}}, State: StateConfig{Dir: "/var/lib/cf2otel"}, Health: HealthConfig{Listen: "127.0.0.1:9464"}, Log: LogConfig{Level: "info", Format: "json"}}
-	c.Cloudflare.RateLimit = RateLimitConfig{MaxPause: 5 * time.Minute, REST: BucketConfig{RequestsPerSecond: 1.25, Burst: 5}, GraphQL: BucketConfig{RequestsPerSecond: 2.5, Burst: 5}, AccountBased: true, GraphQLScope: BucketConfig{RequestsPerSecond: 0.9, Burst: 2}}
+	c.Cloudflare.RateLimit = RateLimitConfig{MaxPause: 5 * time.Minute, Total: BucketConfig{RequestsPerSecond: 3.75, Burst: 5}, REST: BucketConfig{RequestsPerSecond: 3.75, Burst: 5}, GraphQL: BucketConfig{RequestsPerSecond: 2.5, Burst: 5}, AccountBased: true, GraphQLScope: BucketConfig{RequestsPerSecond: 0.9, Burst: 2}}
 	c.Cloudflare.EntitlementBackoff = time.Hour
 	c.HTTP.HighCardinalityLimit = 500
 	c.HTTP.HighCardinalityHosts = []string{}
@@ -377,7 +378,7 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	// Check effective values before weak decoding can truncate fractions or coerce booleans.
-	for _, class := range []string{"rest", "graphql", "graphql_scope"} {
+	for _, class := range []string{"total", "rest", "graphql", "graphql_scope"} {
 		key := "cloudflare.rate_limit." + class + ".burst"
 		burst, err := integerBurst(k.Get(key))
 		if err != nil {
@@ -401,7 +402,7 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	if c.Cloudflare.RateLimit.ExceedsGeneralLimit() {
-		slog.Warn("cloudflare.rate_limit rest and graphql requests_per_second together exceed Cloudflare's general limit of 4 requests per second")
+		slog.Warn("cloudflare.rate_limit effective total requests_per_second exceeds Cloudflare's general limit of 4 requests per second")
 	}
 	if legacy {
 		slog.Warn("cloudflare.rate_limit.requests_per_second and cloudflare.rate_limit.burst are deprecated; use cloudflare.rate_limit.rest.requests_per_second, cloudflare.rate_limit.rest.burst, cloudflare.rate_limit.graphql.requests_per_second and cloudflare.rate_limit.graphql.burst")
@@ -466,7 +467,7 @@ func (burstYAMLParser) Unmarshal(data []byte) (map[string]any, error) {
 	if err := decoded.Load(rawBurstProvider(out), nil); err != nil {
 		return nil, err
 	}
-	for _, key := range []string{"cloudflare.rate_limit.burst", "cloudflare.rate_limit.rest.burst", "cloudflare.rate_limit.graphql.burst", "cloudflare.rate_limit.graphql_scope.burst"} {
+	for _, key := range []string{"cloudflare.rate_limit.burst", "cloudflare.rate_limit.total.burst", "cloudflare.rate_limit.rest.burst", "cloudflare.rate_limit.graphql.burst", "cloudflare.rate_limit.graphql_scope.burst"} {
 		if k.Exists(key) {
 			if err := decoded.Set(key, k.Get(key)); err != nil {
 				return nil, err
@@ -500,7 +501,7 @@ func (r *rawBurstYAML) UnmarshalYAML(node *yamlv3.Node) error {
 // also avoids recursively expanding arbitrary alias graphs in other settings.
 func (r rawBurstYAML) atPath(path string) (any, error) {
 	node := r.node
-	if node != nil && node.Kind == yamlv3.MappingNode && (path == "cloudflare" || path == "cloudflare.rate_limit" || path == "cloudflare.rate_limit.rest" || path == "cloudflare.rate_limit.graphql" || path == "cloudflare.rate_limit.graphql_scope") {
+	if node != nil && node.Kind == yamlv3.MappingNode && (path == "cloudflare" || path == "cloudflare.rate_limit" || path == "cloudflare.rate_limit.total" || path == "cloudflare.rate_limit.rest" || path == "cloudflare.rate_limit.graphql" || path == "cloudflare.rate_limit.graphql_scope") {
 		// Match yaml.v3's string-map rule. Other maps remain opaque to koanf.
 		stringMap := true
 		for i := 0; i < len(node.Content); i += 2 {
