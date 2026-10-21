@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-19 15:14'
-updated_date: '2026-10-21 01:57'
+updated_date: '2026-10-21 02:01'
 labels:
   - bug
 dependencies: []
@@ -56,4 +56,6 @@ Limiter source published as 1661d4b. Exact-SHA CI exposed existing module Go1.27
 Live owner-requested check 2026-10-21 01:50 UTC: exact final efb6067 build observed and GitHub CI39528251783 completed success. Process uptime about588s at sample, aigateway.logs929physical requests,562.08s aggregate limiter wait and387.21s aggregate HTTP duration, zero completed-poll/checkpoint/exported-row series yet and scrape errors initialized0. Existing stale rule Alerting. This is first-run catch-up, NOT demonstrated improvement or recovery; both AC remain open. Receipt /Users/rob/repos/cf2otel/codex/cfo85-live-check-20261021.json. Missing checkpoint telemetry during restored first run motivates generic alert work and startup cursor observation.
 
 Follow-up live sample around01:56 UTC: efb6067 process completed2 failed aigateway.logs polls, total838.460s (mean419.23s), no success/checkpoint series, scrape error class other=2 and commit-failure counter0. Source recovery NOT established. Same-source auto-RC0.18.1-rc.12 began a new epoch, so never splice its counters into the earlier process. Loki query for runtime collector-failure lines returned none; precise failure cause remains unobserved. Existing stale alert remains correct.
+
+After bundling generic poll/backlog alerts, observer retargeted to23fbd865ae06b3673dac5547143be50cfd51253f. Current bounded observer /Users/rob/repos/cf2otel/codex/cfo87-observe.py, receipt /Users/rob/repos/cf2otel/codex/cfo87-recovery-observation.json, process identity /Users/rob/repos/cf2otel/codex/cfo87-recovery-process.json. Prior receipts retained. Requires final CI/Release/auto-rc success, actual two new alert rules, exact process identity and24h fresh source checkpoints/success; Grafana-sync overall failure is separately reported because only existing extra-rule ownership failed verification. Both recovery AC remain open.
 <!-- SECTION:NOTES:END -->

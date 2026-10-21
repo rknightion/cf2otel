@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-21 01:48'
-updated_date: '2026-10-21 01:59'
+updated_date: '2026-10-21 02:01'
 labels: []
 dependencies: []
 priority: high
@@ -47,6 +47,8 @@ Added interval, elapsed(max active vs last completed), and source-holdback-adjus
 Full gate found startup cursor observation had reused commit-only OnCheckpoint callback, breaking catch-up cancellation and adaptive delivery witnesses. Added separate OnWindowStart observer and retained OnCheckpoint timing; focused cancellation now passes and independent final runtime review PASS. Earlier adaptive focused rerun was bounded at90s but that existing production-budget test needs about189s; timeout is not a pass, final full remote gate retains its normal bound. CodeRabbit minor descriptions/runbook-placement findings corrected. Final gate/review still running.
 
 Final remote just check PASS: run20261021T015347Z-cf2otel-f72dc361, tree6cb532ea7fd8ad19f68383e398e82d022d68563f on efb6067. All race tests (including unchanged adaptive delivery/cancellation), lint/vet/tidy/build/vuln/generated checks passed. Ten new PromQL fixture cases plus existing fixture suites pass. Independent review PASS; CodeRabbit completed all15 candidate paths with2minor docs findings, both fixed. No packaging definition changes; conditional just ci not applicable. Source package complete; live publication/readback tracked separately in session.
+
+Published23fbd86. Grafana-sync39530500878 applied alerts; direct evaluation API readback confirms both expected UIDs/titles, queries, pending300s and enabled state. Whole-folder semantic verifier failed only on pre-existing extra daily-token alert; no missing/drift error for managed rules. Preserve extra; follow-up CFO-0088 (reconcile daily-token alert ownership). Runtime source deployment and exact-SHA CI still pending; do not claim alerts have evaluated the new gauges yet.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
