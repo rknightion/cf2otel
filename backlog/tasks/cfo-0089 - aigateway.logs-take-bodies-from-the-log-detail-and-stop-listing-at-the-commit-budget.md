@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-21 03:13'
-updated_date: '2026-10-21 03:30'
+updated_date: '2026-10-21 03:31'
 labels:
   - bug
 dependencies: []
@@ -43,3 +43,9 @@ Each captured AI Gateway log costs three REST reads (detail, /request, /response
 
 Revised step 2: a head replaces a body read only when it is a complete JSON string; anything else keeps that side's raw read (404 code 7002 still marks it unavailable). Chosen over exporting incomplete prefixes because it keeps response-body usage recovery exact for rare bodies over the ~2 MB head cap at the cost of one extra read for those logs only.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implemented in 8e62766 (pushed). Red first: complete-head test read both bodies; incomplete-head test read both; listing test listed 42 pages in one call against a 24-page bound. fetchLog now GETs the detail, takes a body from a complete JSON-string head, and raw-reads only the remaining sides concurrently with joined cancellation. Budgeted CollectWindowBudget pages per gateway, emits rows before the earliest gateway's last fully listed second, and returns once listRowCap (500) rows are listed; the unbudgeted path still lists everything first. A page whose new row precedes the horizon fails the window instead of skipping it. The two overlap tests were rewritten for detail-first ordering. Package race tests pass; remote gate run 20261021T032544Z-cf2otel-999c49e1 just check exit 0; CodeRabbit complete, 1 minor finding (AC wording) fixed via CLI. AC1, AC2 and AC4 are covered by tests; AC3 (live calls per log at most 1.2) awaits a completed poll on the deployed build.
+<!-- SECTION:NOTES:END -->
