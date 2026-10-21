@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -15,10 +16,11 @@ import (
 	"github.com/rknightion/cf2otel/internal/config"
 )
 
-// The three independent per-log reads must overlap upstream latency while
-// the ordinary client still meters every physical request.
+// Body reads the detail could not satisfy must overlap upstream latency while
+// the ordinary client still meters every physical request. The detail comes
+// first because its heads decide which bodies need a read.
 func TestCapturedLogReadsOverlapThroughHTTPClient(t *testing.T) {
-	var started atomic.Int32
+	var started, details atomic.Int32
 	ready := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/accounts/fixture/ai-gateway/gateways/gateway/logs" {
@@ -29,7 +31,12 @@ func TestCapturedLogReadsOverlapThroughHTTPClient(t *testing.T) {
 			}
 			return
 		}
-		if started.Add(1) == 3 {
+		if r.URL.Path == "/accounts/fixture/ai-gateway/gateways/gateway/logs/row" {
+			details.Add(1)
+			_, _ = w.Write([]byte(`{"result":{"request_head_complete":false,"response_head_complete":false}}`))
+			return
+		}
+		if started.Add(1) == 2 {
 			close(ready)
 		}
 		select {
@@ -37,11 +44,7 @@ func TestCapturedLogReadsOverlapThroughHTTPClient(t *testing.T) {
 		case <-r.Context().Done():
 			return
 		}
-		if r.URL.Path == "/accounts/fixture/ai-gateway/gateways/gateway/logs/row" {
-			_, _ = w.Write([]byte(`{"result":{}}`))
-		} else {
-			_, _ = w.Write([]byte(`{"messages":[{"role":"user","content":"fixture"}]}`))
-		}
+		_, _ = w.Write([]byte(`{"messages":[{"role":"user","content":"fixture"}]}`))
 	}))
 	defer server.Close()
 	cfg := config.Default()
@@ -52,8 +55,8 @@ func TestCapturedLogReadsOverlapThroughHTTPClient(t *testing.T) {
 	from := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
 	out := &fakeEmitter{}
 	mark, err := NewLogs(&cfg, cfapi.New(cfg.Cloudflare)).CollectWindow(ctx, from, from.Add(time.Minute), out)
-	if err != nil || !mark.Equal(from.Add(time.Minute)) || len(out.spans) != 1 || started.Load() != 3 {
-		t.Fatalf("independent capture reads did not overlap: mark=%s spans=%d reads=%d err=%v", mark, len(out.spans), started.Load(), err)
+	if err != nil || !mark.Equal(from.Add(time.Minute)) || len(out.spans) != 1 || started.Load() != 2 || details.Load() != 1 {
+		t.Fatalf("body reads did not overlap: mark=%s spans=%d bodies=%d details=%d err=%v", mark, len(out.spans), started.Load(), details.Load(), err)
 	}
 }
 
@@ -63,13 +66,16 @@ type canceledCaptureAPI struct {
 	failure                    error
 }
 
-func (a *canceledCaptureAPI) Get(context.Context, string, url.Values, any) error {
-	<-a.started
-	<-a.started
-	return a.failure
-}
+// The detail has no complete head, so both bodies need a read.
+func (a *canceledCaptureAPI) Get(context.Context, string, url.Values, any) error { return nil }
 
-func (a *canceledCaptureAPI) GetRaw(ctx context.Context, _ string, _ url.Values, _ any) error {
+// The request read fails once the response read is in flight; the response
+// read only returns after cancellation and the test's release.
+func (a *canceledCaptureAPI) GetRaw(ctx context.Context, path string, _ url.Values, _ any) error {
+	if strings.HasSuffix(path, "/request") {
+		<-a.started
+		return a.failure
+	}
 	a.started <- struct{}{}
 	<-ctx.Done()
 	a.canceled <- struct{}{}
@@ -79,7 +85,7 @@ func (a *canceledCaptureAPI) GetRaw(ctx context.Context, _ string, _ url.Values,
 
 func TestCaptureFailureCancelsAndJoinsSiblingReads(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		api := &canceledCaptureAPI{started: make(chan struct{}, 2), canceled: make(chan struct{}, 2), release: make(chan struct{}), failure: errors.New("fixture detail failure")}
+		api := &canceledCaptureAPI{started: make(chan struct{}, 1), canceled: make(chan struct{}, 1), release: make(chan struct{}), failure: errors.New("fixture request body failure")}
 		cfg := config.Default()
 		cfg.AIGateway.CaptureBodies = true
 		out := &fakeEmitter{}
@@ -88,7 +94,6 @@ func TestCaptureFailureCancelsAndJoinsSiblingReads(t *testing.T) {
 			duration := 1.0
 			done <- NewLogs(&cfg, api).emit(context.Background(), "gateway", logRow{ID: "row", CreatedAt: time.Now(), Duration: &duration}, out)
 		}()
-		<-api.canceled
 		<-api.canceled
 		synctest.Wait()
 		select {

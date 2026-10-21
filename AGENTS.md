@@ -53,7 +53,10 @@ internal hostname in a task or doc.
   of active elapsed and last completed duration; `cf2otel.checkpoint.backlog` subtracts
   current source holdback, including dynamic bucket alignment. Startup cursor observation
   is distinct from the commit-only checkpoint callback.
-- AI Gateway full body capture needs three REST reads per log. REST and GraphQL share a
+- AI Gateway log detail `request_head`/`response_head` are body text as JSON strings (not
+  headers); `*_head_complete=true` means the head is the whole body. Capture reads a raw
+  body only for an incomplete head, so a typical log costs one REST read. The live limit is
+  per token, `Ratelimit-Policy` `q=1200;w=300`. REST and GraphQL share a
   combined 3.75 rps/burst 5 ceiling; REST can use spare capacity. Explicit old REST overrides
   still apply. Judge recovery by declining checkpoint age as well as scrape success.
 - AI Gateway token counts can fall back to complete, untruncated captured response JSON.

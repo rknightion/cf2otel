@@ -23,6 +23,11 @@ import (
 // The live AI Gateway endpoint rejects per_page=100 with code 7001.
 const logPageSize = 50
 
+// listRowCap bounds how many rows one budgeted call lists before it commits.
+// A truncated commit re-lists from its mark, so listing a whole dense window
+// first spent most calls on pages a later commit would list again.
+const listRowCap = 500
+
 type logs struct {
 	cfg *config.Config
 	api cfapi.Client
@@ -99,100 +104,189 @@ func (c *logs) CollectWindow(ctx context.Context, from, to time.Time, out teleme
 }
 
 // CollectWindowBudget emits whole source seconds in order and returns a
-// second boundary before to once the buffered records reach budgetBytes. One
-// commit then never delivers, or holds in memory, more than the budget plus
-// one second, and bodies past the mark are not fetched. The second that would
-// overflow is fetched to be measured and left for the next call.
+// second boundary before to once the buffered records reach budgetBytes or
+// listRowCap rows have been listed. One commit then never delivers, or holds in
+// memory, more than the budget plus one second, and bodies past the mark are
+// not fetched. The second that would overflow is fetched to be measured and
+// left for the next call.
 func (c *logs) CollectWindowBudget(ctx context.Context, from, to time.Time, budgetBytes int, out telemetry.Emitter) (time.Time, error) {
 	if !from.Before(to) || c.cfg == nil || c.api == nil {
 		return time.Time{}, errors.New("aigateway logs: invalid window or dependencies")
 	}
-	all := make([]namedRow, 0)
-	seen := make(map[string]bool)
+	pagers := make([]*logPager, 0, len(c.cfg.AIGateway.Gateways))
 	for _, gateway := range c.cfg.AIGateway.Gateways {
 		if gateway == "" {
 			return time.Time{}, errors.New("aigateway logs: empty gateway")
 		}
 		path := "/accounts/" + url.PathEscape(c.cfg.Cloudflare.AccountID) + "/ai-gateway/gateways/" + url.PathEscape(gateway) + "/logs"
-		for pageNumber := 1; pageNumber <= 10000; pageNumber++ {
-			if err := ctx.Err(); err != nil {
-				return time.Time{}, err
-			}
-			query := url.Values{"page": {strconv.Itoa(pageNumber)}, "per_page": {strconv.Itoa(logPageSize)}, "order_by": {"created_at"}, "order_by_direction": {"asc"}, "start_date": {from.UTC().Format(time.RFC3339Nano)}, "end_date": {to.UTC().Format(time.RFC3339Nano)}}
-			var page []logRow
-			if err := c.api.Get(ctx, path, query, &page); err != nil {
-				return time.Time{}, fmt.Errorf("aigateway logs page %d: %w", pageNumber, err)
-			}
-			pastTo := false
-			for _, row := range page {
-				if row.ID == "" || row.CreatedAt.IsZero() {
-					return time.Time{}, fmt.Errorf("aigateway logs page %d: missing id or created_at", pageNumber)
-				}
-				if !row.CreatedAt.Before(to) {
-					pastTo = true
-					continue
-				}
-				if row.CreatedAt.Before(from) {
-					continue
-				}
-				key := gateway + "\x00" + row.ID
-				if seen[key] {
-					continue
-				}
-				seen[key] = true
-				all = append(all, namedRow{gateway, row})
-			}
-			// Get unwraps result and does not expose result_info.per_page. The
-			// server may cap per_page below our requested size, so only an empty
-			// page (or crossing to) proves that pagination is complete.
-			if pastTo || len(page) == 0 {
-				break
-			}
-			if pageNumber == 10000 {
-				return time.Time{}, errors.New("aigateway logs: page limit reached")
-			}
-		}
+		pagers = append(pagers, &logPager{api: c.api, gateway: gateway, path: path, from: from, to: to, seen: map[string]bool{}})
 	}
-	sort.Slice(all, func(i, j int) bool {
-		a, b := all[i], all[j]
-		if a.row.CreatedAt.Equal(b.row.CreatedAt) {
-			return a.row.ID < b.row.ID
-		}
-		return a.row.CreatedAt.Before(b.row.CreatedAt)
-	})
 	if budgetBytes <= 0 {
-		for _, item := range all {
+		for _, p := range pagers {
+			for !p.done {
+				if err := p.next(ctx); err != nil {
+					return time.Time{}, err
+				}
+			}
+		}
+		for _, item := range takeBefore(pagers, to) {
 			if err := c.emit(ctx, item.gateway, item.row, out); err != nil {
 				return time.Time{}, err
 			}
 		}
 		return to, nil
 	}
-	buffered := 0
-	for start := 0; start < len(all); {
-		second := all[start].row.CreatedAt.Truncate(time.Second)
-		end := start
-		for end < len(all) && all[end].row.CreatedAt.Truncate(time.Second).Equal(second) {
-			end++
-		}
-		group := &telemetry.Buffer{}
-		for _, item := range all[start:end] {
-			if err := c.emit(ctx, item.gateway, item.row, group); err != nil {
-				return time.Time{}, err
+	pos, buffered, listed, emitted := from, 0, 0, false
+	for {
+		horizon := to
+		for _, p := range pagers {
+			if h := p.horizon(); h.Before(horizon) {
+				horizon = h
 			}
 		}
-		size := group.ApproxBytes()
-		// The first second is always delivered whole, whatever its size.
-		if start > 0 && buffered+size > budgetBytes {
-			return second, nil
+		// List further while no whole second is known, or below the row cap.
+		if !horizon.After(pos) || (horizon.Before(to) && listed < listRowCap) {
+			for _, p := range pagers {
+				if !p.done && !p.horizon().After(horizon) {
+					before := len(p.pending)
+					if err := p.next(ctx); err != nil {
+						return time.Time{}, err
+					}
+					listed += len(p.pending) - before
+				}
+			}
+			continue
 		}
-		if err := group.ReplayInto(ctx, out); err != nil {
-			return time.Time{}, err
+		rows := takeBefore(pagers, horizon)
+		for start := 0; start < len(rows); {
+			second := rows[start].row.CreatedAt.Truncate(time.Second)
+			end := start
+			for end < len(rows) && rows[end].row.CreatedAt.Truncate(time.Second).Equal(second) {
+				end++
+			}
+			group := &telemetry.Buffer{}
+			for _, item := range rows[start:end] {
+				if err := c.emit(ctx, item.gateway, item.row, group); err != nil {
+					return time.Time{}, err
+				}
+			}
+			size := group.ApproxBytes()
+			// The first second is always delivered whole, whatever its size.
+			if emitted && buffered+size > budgetBytes {
+				return second, nil
+			}
+			if err := group.ReplayInto(ctx, out); err != nil {
+				return time.Time{}, err
+			}
+			buffered += size
+			emitted = true
+			start = end
 		}
-		buffered += size
-		start = end
+		pos = horizon
+		if !pos.Before(to) || listed >= listRowCap {
+			return pos, nil
+		}
 	}
-	return to, nil
+}
+
+// logPager lists one gateway's window in ascending created_at order.
+type logPager struct {
+	api           cfapi.Client
+	gateway, path string
+	from, to      time.Time
+	page          int
+	seen          map[string]bool
+	pending       []namedRow
+	last          time.Time
+	done          bool
+}
+
+func (p *logPager) next(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	p.page++
+	query := url.Values{"page": {strconv.Itoa(p.page)}, "per_page": {strconv.Itoa(logPageSize)}, "order_by": {"created_at"}, "order_by_direction": {"asc"}, "start_date": {p.from.UTC().Format(time.RFC3339Nano)}, "end_date": {p.to.UTC().Format(time.RFC3339Nano)}}
+	var page []logRow
+	if err := p.api.Get(ctx, p.path, query, &page); err != nil {
+		return fmt.Errorf("aigateway logs page %d: %w", p.page, err)
+	}
+	horizon := p.horizon()
+	pastTo := false
+	for _, row := range page {
+		if row.ID == "" || row.CreatedAt.IsZero() {
+			return fmt.Errorf("aigateway logs page %d: missing id or created_at", p.page)
+		}
+		if !row.CreatedAt.Before(p.to) {
+			pastTo = true
+			continue
+		}
+		if row.CreatedAt.Before(p.from) {
+			continue
+		}
+		key := p.gateway + "\x00" + row.ID
+		if p.seen[key] {
+			continue
+		}
+		// An earlier page already let rows before the horizon be emitted.
+		if row.CreatedAt.Before(horizon) {
+			return fmt.Errorf("aigateway logs page %d: list order went backwards", p.page)
+		}
+		p.seen[key] = true
+		p.pending = append(p.pending, namedRow{p.gateway, row})
+	}
+	if len(page) > 0 && page[len(page)-1].CreatedAt.After(p.last) {
+		p.last = page[len(page)-1].CreatedAt
+	}
+	// Get unwraps result and does not expose result_info.per_page. The
+	// server may cap per_page below our requested size, so only an empty
+	// page (or crossing to) proves that pagination is complete.
+	if pastTo || len(page) == 0 {
+		p.done = true
+	} else if p.page == 10000 {
+		return errors.New("aigateway logs: page limit reached")
+	}
+	return nil
+}
+
+// horizon is the earliest instant whose rows may still be unlisted. Rows in
+// the last listed second can continue on the next page.
+func (p *logPager) horizon() time.Time {
+	if p.done {
+		return p.to
+	}
+	h := p.last.Truncate(time.Second)
+	if h.Before(p.from) {
+		return p.from
+	}
+	if h.After(p.to) {
+		return p.to
+	}
+	return h
+}
+
+// takeBefore removes and returns every listed row before limit, in emission order.
+func takeBefore(pagers []*logPager, limit time.Time) []namedRow {
+	var rows []namedRow
+	for _, p := range pagers {
+		kept := p.pending[:0]
+		for _, item := range p.pending {
+			if item.row.CreatedAt.Before(limit) {
+				rows = append(rows, item)
+			} else {
+				kept = append(kept, item)
+			}
+		}
+		p.pending = kept
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		a, b := rows[i], rows[j]
+		if a.row.CreatedAt.Equal(b.row.CreatedAt) {
+			return a.row.ID < b.row.ID
+		}
+		return a.row.CreatedAt.Before(b.row.CreatedAt)
+	})
+	return rows
 }
 
 func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemetry.Emitter) error {
