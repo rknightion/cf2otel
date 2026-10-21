@@ -41,6 +41,10 @@ internal hostname in a task or doc.
 
 ## Traps
 
+- The distroless runtime requires the eMudhra trust-store fix: `ca-certificates`
+  `20250419+deb13u1` or newer. Debian 12 distroless digests can still contain the
+  affected bundle; verify package metadata rather than assuming a fresh digest is patched.
+
 - One unentitled field fails a whole GraphQL query. Build selections from `settings.availableFields`
   per zone, and respect `maxNumberOfFields`, `maxDuration` and `notOlderThan`.
 - Adaptive datasets are sampled. Rates come from `*Groups` datasets, never from counting raw rows.

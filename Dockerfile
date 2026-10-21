@@ -18,7 +18,7 @@ RUN install -d -m 0750 -o 65532 -g 65532 /out/state
 
 # The static runtime supplies the CA bundle required for HTTPS to the Cloudflare
 # API and OTLP, and has no shell or package manager. UID/GID 65532 is nonroot.
-FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:d62067879de890a1def9da0e7766b7d20810a5e5555cef8506b752437d7a3e88
 COPY --from=build /out/cf2otel /usr/local/bin/cf2otel
 COPY --from=build --chown=65532:65532 /out/state /var/lib/cf2otel
 USER 65532:65532
