@@ -129,8 +129,11 @@ func (c *logs) CollectWindowBudget(ctx context.Context, from, to time.Time, budg
 				}
 			}
 		}
-		for _, item := range takeBefore(pagers, to) {
-			if err := c.emit(ctx, item.gateway, item.row, out); err != nil {
+		rows := takeBefore(pagers, to)
+		details := c.prefetchDetails(ctx, rows)
+		defer details.stop()
+		for i, item := range rows {
+			if err := c.emitWith(ctx, item.gateway, item.row, details.get(i), out); err != nil {
 				return time.Time{}, err
 			}
 		}
@@ -158,35 +161,50 @@ func (c *logs) CollectWindowBudget(ctx context.Context, from, to time.Time, budg
 			continue
 		}
 		rows := takeBefore(pagers, horizon)
-		for start := 0; start < len(rows); {
-			second := rows[start].row.CreatedAt.Truncate(time.Second)
-			end := start
-			for end < len(rows) && rows[end].row.CreatedAt.Truncate(time.Second).Equal(second) {
-				end++
-			}
-			group := &telemetry.Buffer{}
-			for _, item := range rows[start:end] {
-				if err := c.emit(ctx, item.gateway, item.row, group); err != nil {
-					return time.Time{}, err
-				}
-			}
-			size := group.ApproxBytes()
-			// The first second is always delivered whole, whatever its size.
-			if emitted && buffered+size > budgetBytes {
-				return second, nil
-			}
-			if err := group.ReplayInto(ctx, out); err != nil {
-				return time.Time{}, err
-			}
-			buffered += size
-			emitted = true
-			start = end
+		mark, stopped, err := c.emitSeconds(ctx, rows, budgetBytes, &buffered, &emitted, out)
+		if err != nil || stopped {
+			return mark, err
 		}
 		pos = horizon
 		if !pos.Before(to) || listed >= listRowCap {
 			return pos, nil
 		}
 	}
+}
+
+// emitSeconds delivers rows a whole source second at a time and reports the
+// second that would overflow the budget, if any.
+// Details are prefetched one second at a time: nothing past the second that
+// overflows is fetched, and sparse traffic keeps its share of the limiter.
+func (c *logs) emitSeconds(ctx context.Context, rows []namedRow, budgetBytes int, buffered *int, emitted *bool, out telemetry.Emitter) (time.Time, bool, error) {
+	for start := 0; start < len(rows); {
+		second := rows[start].row.CreatedAt.Truncate(time.Second)
+		end := start
+		for end < len(rows) && rows[end].row.CreatedAt.Truncate(time.Second).Equal(second) {
+			end++
+		}
+		group := &telemetry.Buffer{}
+		details := c.prefetchDetails(ctx, rows[start:end])
+		for i := start; i < end; i++ {
+			if err := c.emitWith(ctx, rows[i].gateway, rows[i].row, details.get(i-start), group); err != nil {
+				details.stop()
+				return time.Time{}, false, err
+			}
+		}
+		details.stop()
+		size := group.ApproxBytes()
+		// The first second is always delivered whole, whatever its size.
+		if *emitted && *buffered+size > budgetBytes {
+			return second, true, nil
+		}
+		if err := group.ReplayInto(ctx, out); err != nil {
+			return time.Time{}, false, err
+		}
+		*buffered += size
+		*emitted = true
+		start = end
+	}
+	return time.Time{}, false, nil
 }
 
 // logPager lists one gateway's window in ascending created_at order.
@@ -290,6 +308,11 @@ func takeBefore(pagers []*logPager, limit time.Time) []namedRow {
 }
 
 func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemetry.Emitter) error {
+	return c.emitWith(ctx, gateway, row, nil, out)
+}
+
+// emitWith emits one row; a prefetched detail replaces the inline fetch.
+func (c *logs) emitWith(ctx context.Context, gateway string, row logRow, prefetched *fetchedLog, out telemetry.Emitter) error {
 	if row.Duration == nil || *row.Duration < 0 || *row.Duration > float64((24*time.Hour)/time.Millisecond) {
 		return errors.New("aigateway logs: invalid duration")
 	}
@@ -378,8 +401,13 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 	var contentLogs []telemetry.LogRecord
 	var nonJSONBodySides []string
 	if c.cfg.AIGateway.CaptureBodies || c.cfg.AIGateway.LinkCallerTraces {
-		path := "/accounts/" + url.PathEscape(c.cfg.Cloudflare.AccountID) + "/ai-gateway/gateways/" + url.PathEscape(gateway) + "/logs/" + url.PathEscape(row.ID)
-		captured, err := c.fetchLog(ctx, path)
+		var captured capturedLog
+		var err error
+		if prefetched != nil {
+			captured, err = prefetched.log, prefetched.err
+		} else {
+			captured, err = c.fetchLog(ctx, c.detailPath(gateway, row.ID))
+		}
 		if err != nil {
 			return err
 		}

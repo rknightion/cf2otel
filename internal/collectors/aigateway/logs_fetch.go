@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"sync"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
@@ -84,4 +85,70 @@ func completeHead(head json.RawMessage, complete *bool) (json.RawMessage, bool) 
 		return nil, false
 	}
 	return json.RawMessage(body), true
+}
+
+// detailConcurrency bounds log details in flight. A detail is latency-bound
+// (up to ~4 MB of heads), so one at a time leaves most of the quota idle.
+const detailConcurrency = 3
+
+func (c *logs) detailPath(gateway, id string) string {
+	return "/accounts/" + url.PathEscape(c.cfg.Cloudflare.AccountID) + "/ai-gateway/gateways/" + url.PathEscape(gateway) + "/logs/" + url.PathEscape(id)
+}
+
+type fetchedLog struct {
+	log capturedLog
+	err error
+}
+
+// detailPrefetch fetches row details at most detailConcurrency ahead of the
+// consumer, which reads them strictly in order. A nil prefetch means rows need
+// no detail and emit fetches nothing.
+type detailPrefetch struct {
+	c       *logs
+	ctx     context.Context
+	cancel  context.CancelFunc
+	rows    []namedRow
+	results []chan fetchedLog
+	wg      sync.WaitGroup
+}
+
+func (c *logs) prefetchDetails(ctx context.Context, rows []namedRow) *detailPrefetch {
+	if !c.cfg.AIGateway.CaptureBodies && !c.cfg.AIGateway.LinkCallerTraces {
+		return nil
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	p := &detailPrefetch{c: c, ctx: ctx, cancel: cancel, rows: rows, results: make([]chan fetchedLog, len(rows))}
+	for i := 0; i < min(detailConcurrency, len(rows)); i++ {
+		p.start(i)
+	}
+	return p
+}
+
+func (p *detailPrefetch) start(i int) {
+	p.results[i] = make(chan fetchedLog, 1)
+	p.wg.Go(func() {
+		log, err := p.c.fetchLog(p.ctx, p.c.detailPath(p.rows[i].gateway, p.rows[i].row.ID))
+		p.results[i] <- fetchedLog{log, err}
+	})
+}
+
+// get returns row i's detail and starts the next one, keeping the window full.
+func (p *detailPrefetch) get(i int) *fetchedLog {
+	if p == nil {
+		return nil
+	}
+	result := <-p.results[i]
+	if next := i + detailConcurrency; next < len(p.rows) {
+		p.start(next)
+	}
+	return &result
+}
+
+// stop cancels unread fetches and waits for them, so none outlives its window.
+func (p *detailPrefetch) stop() {
+	if p == nil {
+		return
+	}
+	p.cancel()
+	p.wg.Wait()
 }
