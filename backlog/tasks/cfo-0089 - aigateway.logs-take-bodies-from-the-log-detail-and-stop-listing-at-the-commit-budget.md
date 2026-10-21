@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-21 03:13'
-updated_date: '2026-10-21 03:31'
+updated_date: '2026-10-21 04:08'
 labels:
   - bug
 dependencies: []
@@ -48,4 +48,6 @@ Revised step 2: a head replaces a body read only when it is a complete JSON stri
 
 <!-- SECTION:NOTES:BEGIN -->
 Implemented in 8e62766 (pushed). Red first: complete-head test read both bodies; incomplete-head test read both; listing test listed 42 pages in one call against a 24-page bound. fetchLog now GETs the detail, takes a body from a complete JSON-string head, and raw-reads only the remaining sides concurrently with joined cancellation. Budgeted CollectWindowBudget pages per gateway, emits rows before the earliest gateway's last fully listed second, and returns once listRowCap (500) rows are listed; the unbudgeted path still lists everything first. A page whose new row precedes the horizon fails the window instead of skipping it. The two overlap tests were rewritten for detail-first ordering. Package race tests pass; remote gate run 20261021T032544Z-cf2otel-999c49e1 just check exit 0; CodeRabbit complete, 1 minor finding (AC wording) fixed via CLI. AC1, AC2 and AC4 are covered by tests; AC3 (live calls per log at most 1.2) awaits a completed poll on the deployed build.
+
+Live readback, epoch 0.19.0-rc.2 (commit 8e62766, process start 1792554303, one instance): first aigateway.logs poll succeeded in 1186s, 4 commits (catch-up windows 3), 1304 rows exported for 1621 aigateway.logs REST calls = 1.24 calls per row (was 3.86). The call count includes the next poll's in-flight reads, so the per-commit figure is lower, but AC3 (at most 1.2) is NOT checked: no clean per-poll split was observed. Capture is now about 3950 rows/h (was about 1950): aigateway.logs used about 1.4 rps, so it is latency-bound (one sequential detail GET of up to ~4 MB per log), not quota-bound. The checkpoint still ages while the cursor is inside the 10000-15000/h block of 2026-10-20 00:00-01:00. The earlier :main epoch's two failed polls were not diagnosable: its container logs were discarded by the Watchtower recreate (CFO-0090).
 <!-- SECTION:NOTES:END -->
