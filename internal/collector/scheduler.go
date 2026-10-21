@@ -132,8 +132,18 @@ func (s *Scheduler) runEntry(ctx context.Context, e Entry) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
+		// A tick queued behind an overrunning poll must not start another
+		// poll once shutdown has begun.
+		if ctx.Err() != nil {
+			return
+		}
 		started := time.Now()
 		err := s.RunOnce(ctx, e)
+		if ctx.Err() != nil && errors.Is(err, context.Canceled) {
+			// Shutdown cut the poll short; that is not a collector failure.
+			s.Logger.Info("collector run interrupted by shutdown", "collector", e.Collector.Name())
+			return
+		}
 		if s.OnPoll != nil {
 			s.OnPoll(ctx, e.Collector.Name(), time.Since(started), err, s.Now())
 		}
