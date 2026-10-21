@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.19.0](https://github.com/rknightion/cf2otel/compare/v0.18.0...v0.19.0) (2026-10-21)
+
+
+### Features
+
+* alert on slow collector polls and source backlogs ([23fbd86](https://github.com/rknightion/cf2otel/commit/23fbd865ae06b3673dac5547143be50cfd51253f))
+
+
+### Bug Fixes
+
+* **aigateway:** take complete bodies from the log detail and bound listing ([8e62766](https://github.com/rknightion/cf2otel/commit/8e627660e6cee01e6ebdebff5682f9e394700e06))
+* **alerts:** stop cf2otel cert, stale and tunnel false positives ([06636ba](https://github.com/rknightion/cf2otel/commit/06636bad3f6af379e77cb532f7bf10fba71b1a5b))
+* apply log configuration and export process logs over OTLP ([c6b90ac](https://github.com/rknightion/cf2otel/commit/c6b90ac208e66fcbc2d6ba9d0c00e35a79f60ab1))
+* **collector:** do not count a poll cut short by shutdown as a failure ([e68c1ec](https://github.com/rknightion/cf2otel/commit/e68c1ecb64a2c3a806943036def6d433d5a7efa4))
+* **deps:** Go 1.27.2, golang.org/x/net v0.60.0 and golangci-lint v2.14.0 for the stdlib and HTTP/2 fixes ([63a405d](https://github.com/rknightion/cf2otel/commit/63a405d05ffc6d8c64df2699be14a6b9487f35c4))
+* **deps:** replace affected runtime CA bundle and refresh shared workflows ([70f6427](https://github.com/rknightion/cf2otel/commit/70f6427ebe1339d910c6a3c5153e527c9c355553))
+* **deps:** update module github.com/knadh/koanf/v2 to v2.3.8 ([#53](https://github.com/rknightion/cf2otel/issues/53)) ([ca6af5b](https://github.com/rknightion/cf2otel/commit/ca6af5b0170884bcaf77236f119ebb041d5a63d0))
+* **deps:** update module github.com/knadh/koanf/v2 to v2.4.0 ([#66](https://github.com/rknightion/cf2otel/issues/66)) ([9755c2d](https://github.com/rknightion/cf2otel/commit/9755c2d22efa7b1862b1ee0d561177bb0cde1da7))
+* **deps:** update module github.com/knadh/koanf/v2 to v2.4.1 ([#67](https://github.com/rknightion/cf2otel/issues/67)) ([31646d1](https://github.com/rknightion/cf2otel/commit/31646d1659bcfcd36134e51f3eec4daa1b04850c))
+* **deps:** update module github.com/prometheus/client_golang to v1.25.0 ([#58](https://github.com/rknightion/cf2otel/issues/58)) ([9861f03](https://github.com/rknightion/cf2otel/commit/9861f03e67b307ef15708cbd3b3c175bb6572e70))
+* **deps:** update module github.com/prometheus/common to v0.72.1 ([#61](https://github.com/rknightion/cf2otel/issues/61)) ([800ba19](https://github.com/rknightion/cf2otel/commit/800ba1949a178d572855093789983b8278a0cc35))
+* recover AI Gateway token usage from captured responses ([efb6067](https://github.com/rknightion/cf2otel/commit/efb6067dfe8dfb1c7b00055d853f6dd4a7a1a502))
+* restore AI Gateway polling throughput with shared quota capacity ([1661d4b](https://github.com/rknightion/cf2otel/commit/1661d4b7ac4337f30ac2ec903ceb67b625ebd747))
+
+
+### Performance
+
+* **aigateway:** fetch up to three log details in parallel per source second ([11fef1d](https://github.com/rknightion/cf2otel/commit/11fef1de96db9f3a309f409986f8d7fbd58adf53))
+
 ## [0.18.0](https://github.com/rknightion/cf2otel/compare/v0.17.0...v0.18.0) (2026-10-07)
 
 
