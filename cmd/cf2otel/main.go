@@ -69,6 +69,11 @@ func run(args []string) error {
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
+	logHandler, err := telemetry.NewLogHandler(os.Stderr, cfg.Log.Level, cfg.Log.Format)
+	if err != nil {
+		return err
+	}
+	slog.SetDefault(slog.New(logHandler))
 	if err := validateDatasets(opts.Datasets); err != nil {
 		return err
 	}
@@ -114,7 +119,10 @@ func run(args []string) error {
 			return err
 		}
 		emitter = providers.Emitter
+		slog.SetDefault(slog.New(providers.ProcessLogHandler(logHandler)))
 		defer func() {
+			// Shutdown errors cannot ride the pipeline being shut down.
+			slog.SetDefault(slog.New(logHandler))
 			shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if e := providers.Shutdown(shutdown); e != nil {

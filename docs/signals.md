@@ -205,6 +205,7 @@ panels and live canary/proof delivery are separate root-owned work.
 | `cloudflare.firewall.event` | `firewallEventsAdaptive` | Per-request security action; IP, path, query, user agent and ray stay on logs. |
 | `cloudflare.dns.query` | `dnsAnalyticsAdaptive` | Per-query DNS event with available query, response and network fields. Names and IPs stay on logs. |
 | `cf2otel.window.gap` | Retention-gap handling | Collector, skipped window and retention floor when a source cannot backfill. |
+| `cf2otel.process.log` | cf2otel's own process log | Every record at or above `log.level`, with its severity; the body is the JSON-encoded record (message and fields, including error text). Batched apart from checkpoint commits, so a lost record never fails a commit. Query with `{service_name="cf2otel"} \| event_name="cf2otel.process.log"`. |
 | GenAI client span | AI Gateway REST logs | Request model/provider, outcome, token usage and available timing. |
 | `cf2otel.api.request` | Cloudflare API client | Attempt duration, method and status class; no URL or scope identifier. |
 
@@ -437,6 +438,7 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 
 | Kind | Name |
 | --- | --- |
+| Event | `cf2otel.process.log` |
 | Event | `cf2otel.window.gap` |
 | Event | `cloudflare.access.login` |
 | Event | `cloudflare.access.scim_update` |

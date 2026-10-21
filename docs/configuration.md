@@ -329,6 +329,7 @@ span; its content logs use the content side to distinguish request and response 
 | `EventDNSQuery` | Log | `cloudflare.dns.zone`, record timestamp and a deterministic hash of the complete event body and attributes; the source row has no event ID, so this is best-effort and cannot distinguish identical queries. Do not rely on it for exact query counts. |
 | `EventTunnelStatusChange` | Log | `cloudflare.tunnel.id`, `cloudflare.tunnel.status` and observed time (record timestamp). (CFO-0048.01) |
 | `EventStatusIncidentUpdate` | Log | `cloudflare.status.update.id` and source `updated_at` (record timestamp); edited updates retain their ID with a new timestamp. |
+| `EventProcessLog` | Log | None: diagnostic process log, not source data. Records are batched outside checkpoint commits and may be lost or repeated across restarts; a commit never re-emits one. |
 | `EventWindowGap` | Log | `cf2otel.collector`, `cf2otel.window.from`, `cf2otel.window.floor` and `cloudflare.dns.zone` when present. |
 
 cf2otel also emits two span families. Deduplicate the AI Gateway request span by

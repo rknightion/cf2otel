@@ -726,6 +726,12 @@ func (c Config) Validate() error {
 	add(c.Identity.MatchWindow > 0, "identity.match_window must be positive")
 	add(c.Identity.MaxCandidates > 0, "identity.max_candidates must be positive")
 	add(c.AIGateway.MaxBodyBytes > 0, "ai_gateway.max_body_bytes must be positive")
+	switch strings.ToLower(c.Log.Level) {
+	case "debug", "info", "warn", "error":
+	default:
+		add(false, "log.level must be one of debug, info, warn, error")
+	}
+	add(strings.EqualFold(c.Log.Format, "json") || strings.EqualFold(c.Log.Format, "text"), "log.format must be json or text")
 	_, port, listenErr := net.SplitHostPort(c.Prometheus.Listen)
 	portNumber, portErr := strconv.Atoi(port)
 	add(listenErr == nil && portErr == nil && strings.Trim(port, "0123456789") == "" && portNumber >= 1 && portNumber <= 65535 && !strings.ContainsAny(c.Prometheus.Listen, "/@"), "prometheus.listen must be a host:port with numeric port 1..65535")

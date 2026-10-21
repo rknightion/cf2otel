@@ -9,6 +9,7 @@ const (
 
 	MetricScrapeSuccess        = "cf2otel.scrape.success"
 	EventWindowGap             = "cf2otel.window.gap"
+	EventProcessLog            = "cf2otel.process.log"
 	MetricWindowGap            = "cf2otel.window.gap"
 	MetricWindowCommitFailures = "cf2otel.window.commit_failures"
 	MetricWindowCatchupWindows = "cf2otel.window.catchup_windows" // #nosec G101 -- fixed telemetry name, not a credential
