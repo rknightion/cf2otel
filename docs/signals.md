@@ -377,6 +377,22 @@ Prometheus compatibility naming adds `_seconds` for `s` when the base name lacks
 
 AI Gateway metrics combine Cloudflare request outcome measurements with GenAI duration and usage conventions.
 
+AI Gateway token usage falls back to a complete, untruncated captured JSON response
+when the gateway input or output count is zero or missing. Supported shapes are
+Workers AI `result.usage.input_tokens`/`output_tokens`, top-level
+`usage.input_tokens`/`output_tokens`, and Chat Completions
+`usage.prompt_tokens`/`completion_tokens`. Each positive gateway count stays
+authoritative; request logs, GenAI spans and token counters/histograms share the
+resolved values. A missing or zero total is recomputed only when both counts are
+known and their sum fits in a signed 64-bit integer. Negative, fractional,
+non-numeric and overflowing body counts are rejected. Non-JSON, unavailable and
+truncated bodies supply no fallback. This requires `ai_gateway.capture_bodies`;
+no extra API reads are made and capture limits stay in force. Usage source is
+absent when no body count is used. Costs are not inferred from token counts.
+Previously committed rows are not reprocessed; compare post-deployment source
+windows after checkpoint lag has recovered.
+
+
 `cloudflare.ai_gateway.log_coverage.gap` comes from the separate `aigateway.coverage` collector, which is off by default. REST gateway logs stay the primary AI Gateway source; requests sent with log collection off, or dropped by gateway log limits or retention, never appear there, while `aiGatewayRequestsAdaptiveGroups` still counts them. Each commit compares one closed, aligned five-minute window ending at least 10 minutes before now, held back past the measured 139-365 s Groups ingestion lag, and reports one value per configured gateway: positive means Groups counted requests the REST log lacks, zero means the sources agree, and negative means Groups is behind REST. The Groups selection is `count` and `dimensions.gateway`, checked against the dataset's `availableFields`; a window older than the dataset's `notOlderThan` is skipped as a retention gap. The REST count pages the gateway log list and counts distinct log IDs. A failed commit retries the same window, and the gauge value for a window never accumulates. The collector polls every five minutes and commits five-minute windows whatever `interval` and `max_window` say, so each steady-state poll commits and exports one window; a poll that lands before the next window closes does nothing. During catch-up after an outage or at first start, several windows can commit before one metric export, so the exported gauge carries the newest committed window. An explicit collection range refuses any window that ends inside the 10-minute holdback. It also refuses a range spanning more than one closed five-minute window: the collector always registers with a five-minute `max_window`, so only an explicit `-since`/`-before` range (not the steady-state poll) can ask for more, and exporting just the first window while reporting success would silently hide the rest of the requested range. Request one five-minute window per call instead. Enable it in YAML with `enabled`, `interval`, `initial_lookback` and `max_window` under `collectors.aigateway.coverage`, or use environment overrides such as `CF2OTEL_COLLECTORS__AIGATEWAY_COVERAGE__ENABLED=true`; configuration validation still requires a positive `interval` and `max_window`.
 
 The retired AI Gateway dashboard's **Data boundaries** panel was static provenance guidance; **Gateway metadata exceptions** was a row grouping failed-request and DLP tables, not a separate API field. The AI Gateway Logs API inventory sampled on 2026-09-26 found no data-boundary or exception fields in 50 log-detail rows. Of that sample, 24 rows had a non-null `dlp_action` (`FLAG`), each with one `dlp_profiles` finding checking either the request (23) or the response (1); `dlp_action` maps to `flagged` (`FLAG`), `blocked` (`BLOCK`) or `other` (any other non-empty value), and a request with an action but no findings still counts once on `cloudflare.ai_gateway.dlp.requests` with direction `other`.
@@ -391,6 +407,7 @@ The retired AI Gateway dashboard's **Data boundaries** panel was static provenan
 | Access seats | `cloudflare.access.seat.type` (string enum `access`, `gateway`); no user, email, IP, device or account identity attributes. |
 | Access SCIM | `cloudflare.access.scim.resource_type`, `cloudflare.access.scim.method`, `cloudflare.access.scim.status`, `cloudflare.access.scim.idp_id`, `cloudflare.access.scim.resource_id`, `cloudflare.access.scim.user_email` |
 | HTTP | `cloudflare.http.host`, `cloudflare.http.method`, `cloudflare.http.path`, `cloudflare.http.query`, `cloudflare.http.status_code`, `cloudflare.http.origin_status_code`, `cloudflare.http.client_ip`, `cloudflare.http.user_agent`, `cloudflare.http.ray_id`, `cloudflare.http.zone`, `cloudflare.http.cache_status`, `cloudflare.http.security_action`, `cloudflare.http.colo` |
+| AI Gateway usage source | `cloudflare.ai_gateway.usage_source`: string `response_body` on request logs and GenAI spans when at least one zero or missing gateway token count is filled from a captured response. Log/span only, never a metric dimension. |
 | AI Gateway content | `cloudflare.ai_gateway.content.side`, `cloudflare.ai_gateway.content.length` |
 | AI Gateway non-JSON bodies | `cloudflare.ai_gateway.request.body_non_json`, `cloudflare.ai_gateway.response.body_non_json`: string `"true"` on the request log and span when that fetched body is not JSON. No content is exported from that side. `cloudflare.ai_gateway.body.side` is the counter dimension (`request` or `response`). |
 | AI Gateway DLP | `cloudflare.ai_gateway.dlp.action`, `cloudflare.ai_gateway.dlp.direction` are also bounded metric dimensions on `cloudflare.ai_gateway.dlp.requests`; `cloudflare.ai_gateway.dlp.policy.id` and `cloudflare.ai_gateway.dlp.profile.id` are log and span attributes, never metric dimensions. |

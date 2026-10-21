@@ -43,6 +43,7 @@ const (
 	AttrAIGatewayStatusCode              = "cloudflare.ai_gateway.status_code"
 	AttrAIGatewaySuccess                 = "cloudflare.ai_gateway.success"
 	AttrAIGatewayCached                  = "cloudflare.ai_gateway.cached"
+	AttrAIGatewayUsageSource             = "cloudflare.ai_gateway.usage_source"
 	AttrAIGatewayTotalTokens             = "cloudflare.ai_gateway.usage.total_tokens"
 	AttrAIGatewayTimingTotalMS           = "cloudflare.ai_gateway.timings.total_ms"
 	AttrAIGatewayTimingLatencyMS         = "cloudflare.ai_gateway.timings.latency_ms"

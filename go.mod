@@ -1,6 +1,6 @@
 module github.com/rknightion/cf2otel
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/go-viper/mapstructure/v2 v2.5.0

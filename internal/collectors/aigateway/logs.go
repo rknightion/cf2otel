@@ -231,19 +231,19 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 		add(semconv.AttrAIGatewayCached, strconv.FormatBool(*row.Cached))
 	}
 	input, output := row.TokensIn, row.TokensOut
+	var total *int64
+	bodyUsage := false
 	if row.Usage != nil {
-		if row.Usage.Input != nil {
+		if row.Usage.Input != nil && (*row.Usage.Input != 0 || input == nil || *input <= 0) {
 			input = row.Usage.Input
 		}
-		if row.Usage.Output != nil {
+		if row.Usage.Output != nil && (*row.Usage.Output != 0 || output == nil || *output <= 0) {
 			output = row.Usage.Output
 		}
-		addInt(&attrs, semconv.AttrAIGatewayTotalTokens, row.Usage.Total)
+		total = row.Usage.Total
 		addInt(&attrs, semconv.AttrGenAICacheReadTokens, row.Usage.Cached)
 		addInt(&attrs, semconv.AttrGenAIReasoningTokens, row.Usage.Reasoning)
 	}
-	addInt(&attrs, semconv.AttrGenAIInputTokens, input)
-	addInt(&attrs, semconv.AttrGenAIOutputTokens, output)
 	if row.Timings != nil {
 		addFloat(&attrs, semconv.AttrAIGatewayTimingTotalMS, row.Timings.Total)
 		addFloat(&attrs, semconv.AttrAIGatewayTimingLatencyMS, row.Timings.Latency)
@@ -333,6 +333,9 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 					continue
 				}
 				capped, truncated := capBody(body, c.cfg.AIGateway.MaxBodyBytes)
+				if side.suffix == "response" && !truncated {
+					bodyUsage = resolveResponseUsage(&input, &output, &total, capped)
+				}
 				contentAttrs = append(contentAttrs, telemetry.Attr{Key: side.truncatedKey, Value: strconv.FormatBool(truncated)})
 				contentBody := ""
 				parsed := false
@@ -382,6 +385,12 @@ func (c *logs) emit(ctx context.Context, gateway string, row logRow, out telemet
 			}
 			events = append(events, telemetry.SpanEvent{Name: semconv.EventGenAIContent, At: end, Attrs: contentAttrs})
 		}
+	}
+	addInt(&attrs, semconv.AttrGenAIInputTokens, input)
+	addInt(&attrs, semconv.AttrGenAIOutputTokens, output)
+	addInt(&attrs, semconv.AttrAIGatewayTotalTokens, total)
+	if bodyUsage {
+		add(semconv.AttrAIGatewayUsageSource, "response_body")
 	}
 	logAttrs := make([]telemetry.Attr, 0, len(attrs)+1)
 	for _, attr := range attrs {

@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-19 15:14'
-updated_date: '2026-10-21 01:27'
+updated_date: '2026-10-21 01:35'
 labels:
   - bug
 dependencies: []
@@ -50,4 +50,6 @@ CodeRabbit completed with zero findings and all 20 changed paths reviewed. Remot
 Original full gate timed out in TestPrometheusModesAndOccupiedBind after 10m; stack proves print-effective-config blocked writing stdout into undrained captureStdout pipe. A bounded 150kB-output regression fails on that helper and passes after concurrent draining. Focused local and remote CLI race tests pass; delta CodeRabbit complete with zero findings. Corrected full gate running from isolated worktree so unfinished token-usage work is excluded.
 
 Final isolated remote just check PASS: run 20261021T012144Z-cf2otel-71533f9c, candidate tree 7be1c7c8cad5e434531d456069ff3e83a62058f1 on c7e42eb. All race suites, lint, vet, tidy, build, vuln and generated checks passed. CodeRabbit complete zero findings for primary 20-path candidate and stdout-capture delta; independent review PASS. Both live acceptance criteria remain open. Publishing source correction; resume after exact-SHA CI and final rollout epoch, then observe p90/24h stale plus checkpoint lag.
+
+Limiter source published as 1661d4b. Exact-SHA CI exposed existing module Go1.27.2 vulnerability GO-2026-6809; next source commit aligns Go1.27.3 with the existing Docker pin and passed final composed remote gate 20261021T012928Z-cf2otel-2f357034. Live commit has not yet been observed. Bounded 36h read-only observer prepared at /Users/rob/repos/cf2otel/codex/cfo85-observe.py; receipt /Users/rob/repos/cf2otel/codex/cfo85-observation.json. It waits for final exact-SHA CI/Release/auto-rc, fences build/process identity, requires fresh checkpoint and last success, watches actual stale rule, and measures a continuous 24h <=300s histogram ratio. Both live AC remain open until a real pass and readback.
 <!-- SECTION:NOTES:END -->

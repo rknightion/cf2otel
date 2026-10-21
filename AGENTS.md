@@ -52,6 +52,9 @@ internal hostname in a task or doc.
 - AI Gateway full body capture needs three REST reads per log. REST and GraphQL share a
   combined 3.75 rps/burst 5 ceiling; REST can use spare capacity. Explicit old REST overrides
   still apply. Judge recovery by declining checkpoint age as well as scrape success.
+- AI Gateway token counts can fall back to complete, untruncated captured response JSON.
+  Positive gateway counts remain authoritative; `cloudflare.ai_gateway.usage_source`
+  marks body-derived log/span values and is never a metric dimension.
 - Grafana Cloud Tempo on the m7kni stack stores span attribute values truncated at 2048 characters.
   An attribute key present in Tempo proves nothing about its content length.
 

@@ -115,6 +115,7 @@ var denyAttributes = map[string]struct{}{
 	AttrAIGatewayStatusCode:              {},
 	AttrAIGatewaySuccess:                 {},
 	AttrAIGatewayCached:                  {},
+	AttrAIGatewayUsageSource:             {},
 	AttrAIGatewayTotalTokens:             {},
 	AttrAIGatewayTimingTotalMS:           {},
 	AttrAIGatewayTimingLatencyMS:         {},
