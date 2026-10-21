@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-21 03:13'
-updated_date: '2026-10-21 03:14'
+updated_date: '2026-10-21 03:30'
 labels:
   - bug
 dependencies: []
@@ -24,9 +24,9 @@ Each captured AI Gateway log costs three REST reads (detail, /request, /response
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 With complete heads, each captured log costs exactly one REST read (the detail GET); no /request or /response GET is made
-- [ ] #2 An incomplete head is exported as a truncated prefix (body truncated=true, no non-JSON classification, no response-body usage recovery); a null head marks that side unavailable
-- [ ] #3 Budgeted collection stops listing at a bounded row count and returns a whole-second mark, and consecutive calls deliver every row exactly once across same-second page boundaries
-- [ ] #4 Live: in one fenced epoch, aigateway.logs REST requests per exported log is at most 1.2 over a completed poll
+- [ ] #2 Budgeted collection stops listing at a bounded row count and returns a whole-second mark, and consecutive calls deliver every row exactly once across same-second page boundaries
+- [ ] #3 Live: in one fenced epoch, aigateway.logs REST requests per exported log is at most 1.2 over a completed poll
+- [ ] #4 A side whose head is incomplete, missing or not a JSON string falls back to its own raw body read, so usage recovery and non-JSON classification stay exact; the other side's complete head is still used
 <!-- AC:END -->
 
 ## Definition of Done
@@ -40,4 +40,6 @@ Each captured AI Gateway log costs three REST reads (detail, /request, /response
 
 <!-- SECTION:PLAN:BEGIN -->
 1. Red tests: one detail read per log with complete heads; incomplete head becomes a truncated prefix with no usage recovery or non-JSON count; null head is unavailable; budgeted listing stops at a row cap with an exactly-once boundary across same-second pages. 2. fetchLog: single detail GET, decode head JSON strings, carry completeness; emit forces truncated for incomplete sides. 3. CollectWindowBudget: page per gateway until a row cap, limit the window to the earliest gateway's last complete second, emit within it. 4. Update fixtures that model heads as header objects to the live string shape, keep the header-redaction test. 5. Focused race tests, gaterun just check, CodeRabbit, push, then live calls-per-log readback.
+
+Revised step 2: a head replaces a body read only when it is a complete JSON string; anything else keeps that side's raw read (404 code 7002 still marks it unavailable). Chosen over exporting incomplete prefixes because it keeps response-body usage recovery exact for rare bodies over the ~2 MB head cap at the cost of one extra read for those logs only.
 <!-- SECTION:PLAN:END -->
