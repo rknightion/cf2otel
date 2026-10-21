@@ -361,6 +361,9 @@ The seat source is `GET /accounts/{account}/access/users`. Cloudflare's [officia
 | `cf2otel.export.errors` | `1` | Failed OTLP exports. |
 | `cf2otel.build.info` | `1` | Build identity. |
 | `cf2otel.process.start_time` | `s` | Unix time the cf2otel process started. |
+| `cf2otel.scrape.interval` | `s` | Actual registered polling interval, per collector. |
+| `cf2otel.scrape.elapsed` | `s` | Maximum of active poll elapsed time and last completed poll duration, per collector. A new poll does not hide the previous overrun; a faster completion clears it. |
+| `cf2otel.checkpoint.backlog` | `s` | Checkpoint age beyond current source holdback (including dynamic bucket alignment), clamped to zero; only window collectors with an observed checkpoint. Initial/restored cursors are observed before fetching, even when the first pull stalls. |
 | `cf2otel.checkpoint.age` | `s` | Age of the oldest collector checkpoint. |
 | `cf2otel.api.requests` | `{request}` | Physical Cloudflare HTTP exchanges by scheduler collector, `rest`/`graphql` method and failure-only error class. |
 | `cf2otel.api.envelope_errors` | `{error}` | Logical errors in unsuccessful Cloudflare API envelopes returned with successful HTTP status. Certificate pack permission code 9109 increments once with `cf2otel.status_class=4xx`; the physical HTTP 2xx request carries no error class. HTTP 403 is counted only by the shared HTTP request observer with error class `auth`, not by this counter. |
@@ -449,6 +452,9 @@ This exhaustive inventory is keyed to the `internal/semconv` declarations. It in
 | Metric | `cf2otel.api.envelope_errors` |
 | Metric | `cf2otel.api.retries` |
 | Metric | `cf2otel.build.info` |
+| Metric | `cf2otel.scrape.interval` |
+| Metric | `cf2otel.scrape.elapsed` |
+| Metric | `cf2otel.checkpoint.backlog` |
 | Metric | `cf2otel.checkpoint.age` |
 | Metric | `cf2otel.export.errors` |
 | Metric | `cf2otel.export.success` |

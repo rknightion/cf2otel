@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-19 15:14'
-updated_date: '2026-10-21 01:35'
+updated_date: '2026-10-21 01:57'
 labels:
   - bug
 dependencies: []
@@ -52,4 +52,8 @@ Original full gate timed out in TestPrometheusModesAndOccupiedBind after 10m; st
 Final isolated remote just check PASS: run 20261021T012144Z-cf2otel-71533f9c, candidate tree 7be1c7c8cad5e434531d456069ff3e83a62058f1 on c7e42eb. All race suites, lint, vet, tidy, build, vuln and generated checks passed. CodeRabbit complete zero findings for primary 20-path candidate and stdout-capture delta; independent review PASS. Both live acceptance criteria remain open. Publishing source correction; resume after exact-SHA CI and final rollout epoch, then observe p90/24h stale plus checkpoint lag.
 
 Limiter source published as 1661d4b. Exact-SHA CI exposed existing module Go1.27.2 vulnerability GO-2026-6809; next source commit aligns Go1.27.3 with the existing Docker pin and passed final composed remote gate 20261021T012928Z-cf2otel-2f357034. Live commit has not yet been observed. Bounded 36h read-only observer prepared at /Users/rob/repos/cf2otel/codex/cfo85-observe.py; receipt /Users/rob/repos/cf2otel/codex/cfo85-observation.json. It waits for final exact-SHA CI/Release/auto-rc, fences build/process identity, requires fresh checkpoint and last success, watches actual stale rule, and measures a continuous 24h <=300s histogram ratio. Both live AC remain open until a real pass and readback.
+
+Live owner-requested check 2026-10-21 01:50 UTC: exact final efb6067 build observed and GitHub CI39528251783 completed success. Process uptime about588s at sample, aigateway.logs929physical requests,562.08s aggregate limiter wait and387.21s aggregate HTTP duration, zero completed-poll/checkpoint/exported-row series yet and scrape errors initialized0. Existing stale rule Alerting. This is first-run catch-up, NOT demonstrated improvement or recovery; both AC remain open. Receipt /Users/rob/repos/cf2otel/codex/cfo85-live-check-20261021.json. Missing checkpoint telemetry during restored first run motivates generic alert work and startup cursor observation.
+
+Follow-up live sample around01:56 UTC: efb6067 process completed2 failed aigateway.logs polls, total838.460s (mean419.23s), no success/checkpoint series, scrape error class other=2 and commit-failure counter0. Source recovery NOT established. Same-source auto-RC0.18.1-rc.12 began a new epoch, so never splice its counters into the earlier process. Loki query for runtime collector-failure lines returned none; precise failure cause remains unobserved. Existing stale alert remains correct.
 <!-- SECTION:NOTES:END -->

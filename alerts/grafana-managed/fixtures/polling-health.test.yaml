@@ -1,0 +1,362 @@
+{
+  "evaluation_interval": "1m",
+  "rule_files": [],
+  "tests": [
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "300"
+        },
+        {
+          "series": "cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "0"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "0"
+        }
+      ],
+      "interval": "1m",
+      "name": "healthy collector retains zero scores",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 0
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 0
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "300"
+        },
+        {
+          "series": "cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "600"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "0"
+        }
+      ],
+      "interval": "1m",
+      "name": "active slow poll crosses its interval",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 2
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 0
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "300"
+        },
+        {
+          "series": "cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "300"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "900"
+        }
+      ],
+      "interval": "1m",
+      "name": "threshold boundaries stay healthy",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"dns.metrics\"}",
+              "value": 1
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"dns.metrics\"}",
+              "value": 3
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "300"
+        },
+        {
+          "series": "cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "30"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "1800"
+        }
+      ],
+      "interval": "1m",
+      "name": "successful short pulls can leave a large backlog",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 0.1
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 6
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"httpreq.threats\"}",
+          "values": "3600"
+        },
+        {
+          "series": "cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"httpreq.threats\"}",
+          "values": "900"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"httpreq.threats\"}",
+          "values": "3600"
+        }
+      ],
+      "interval": "1m",
+      "name": "hourly collector uses runtime interval and adjusted backlog",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"httpreq.threats\"}",
+              "value": 0.25
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"httpreq.threats\"}",
+              "value": 1
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"certs.packs\"}",
+          "values": "3600"
+        },
+        {
+          "series": "cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"certs.packs\"}",
+          "values": "30"
+        }
+      ],
+      "interval": "1m",
+      "name": "snapshot has polling score but no backlog",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"certs.packs\"}",
+              "value": 0.008333333333333333
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [],
+          "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        }
+      ]
+    },
+    {
+      "input_series": [],
+      "interval": "1m",
+      "name": "disabled collectors and missing telemetry stay absent",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [],
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [],
+          "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "600"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "1800"
+        }
+      ],
+      "interval": "1m",
+      "name": "missing interval is not healthy zero",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [],
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [],
+          "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "0"
+        },
+        {
+          "series": "cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "600"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "1800"
+        }
+      ],
+      "interval": "1m",
+      "name": "invalid zero interval is excluded",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [],
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [],
+          "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"slow\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "300"
+        },
+        {
+          "series": "cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\",instance=\"slow\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "600"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"slow\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "1800"
+        },
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"hourly\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "3600"
+        },
+        {
+          "series": "cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\",instance=\"hourly\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "900"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"hourly\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "3600"
+        }
+      ],
+      "interval": "1m",
+      "name": "normalize each replica before worst score reduction",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"dns.metrics\"}",
+              "value": 2
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"dns.metrics\"}",
+              "value": 6
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        }
+      ]
+    }
+  ]
+}

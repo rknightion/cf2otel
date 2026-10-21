@@ -73,14 +73,16 @@ func (e *CommitDeadlineError) Error() string {
 func (e *CommitDeadlineError) Unwrap() error { return e.Err }
 
 type Scheduler struct {
-	Registry     *Registry
-	Emitter      telemetry.Emitter
-	Checkpoints  CheckpointStore
-	Now          func() time.Time
-	Logger       *slog.Logger
-	OnPoll       func(context.Context, string, time.Duration, error, time.Time)
-	OnCheckpoint func(string, time.Time)
-	Flusher      CommitFlusher
+	Registry      *Registry
+	Emitter       telemetry.Emitter
+	Checkpoints   CheckpointStore
+	Now           func() time.Time
+	Logger        *slog.Logger
+	OnPoll        func(context.Context, string, time.Duration, error, time.Time)
+	OnCheckpoint  func(string, time.Time)
+	OnStart       func(string, time.Time)
+	OnWindowStart func(string, time.Time)
+	Flusher       CommitFlusher
 	// CommitTimeout and CommitBudgetBytes override the aggregate commit budget
 	// and the payload a budgeted collector may buffer for one commit. Zero
 	// keeps the defaults.
@@ -147,6 +149,9 @@ func (s *Scheduler) runEntry(ctx context.Context, e Entry) {
 }
 func (s *Scheduler) RunOnce(ctx context.Context, e Entry) (err error) {
 	ctx = cfapi.WithCollector(ctx, e.Collector.Name())
+	if s.OnStart != nil {
+		s.OnStart(e.Collector.Name(), s.Now())
+	}
 	defer func() {
 		if p := recover(); p != nil {
 			err = fmt.Errorf("collector panic: %v", p)
@@ -197,6 +202,9 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 		if err := s.Checkpoints.Set(c.Name(), from); err != nil {
 			return err
 		}
+	}
+	if s.OnWindowStart != nil {
+		s.OnWindowStart(c.Name(), from)
 	}
 	// A budgeted collector that stopped before its window end has more of the
 	// same window to deliver, so it continues inside this run.

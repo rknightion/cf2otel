@@ -10,6 +10,42 @@ Select the OTLP service label first. Other log attributes are structured metadat
 
 Check the poller's `cf2otel.scrape.*` metrics and application logs for the collector name. A successful empty window is possible when no matching Cloudflare activity occurred.
 
+## Slow polling or a growing collection backlog
+
+A successful poll does not prove that a collector has caught up. Compare checkpoint age across
+several polls: a falling age shows recovery, while a rising age means collection is losing ground.
+Preserve the state file and checkpoints when investigating; resetting them can skip pending records.
+
+Two bundled alerts cover every enabled collector using its actual runtime polling interval:
+
+- **Collector polling exceeds its interval:** `cf2otel.scrape.elapsed` exceeds
+  `cf2otel.scrape.interval` for five minutes. Elapsed time follows a running poll and retains the
+  last completed duration between polls. This includes snapshot collectors and catches slow
+  successful pulls as well as stalled ones.
+- **Collector checkpoint backlog exceeds three intervals:** `cf2otel.checkpoint.backlog` exceeds
+  three times `cf2otel.scrape.interval` for five minutes. Backlog is unprocessed source time after
+  subtracting intentional source holdback and complete-bucket alignment. It therefore tolerates
+  normal hourly and bucketed collectors. Snapshot and disabled collectors have no backlog series;
+  missing data does not prove health. The separate collector-stale alert detects missing or stale
+  last-success telemetry.
+
+In Prometheus these metrics are `cf2otel_scrape_elapsed_seconds`,
+`cf2otel_scrape_interval_seconds` and `cf2otel_checkpoint_backlog_seconds`, grouped by
+`cf2otel_collector`. Alert ratios are calculated within each instance before taking the worst
+value for each collector, so a healthy replica cannot hide another replica's backlog.
+The alerts link to the dashboard's collector status and checkpoint age panels.
+These gauges require the periodic `selfobs` collector; disabling it removes the observation
+surface. Startup checkpoint age is observable before the first completed pull.
+
+The elapsed gauge retains the last completed duration while another poll runs, taking the maximum with current elapsed time. Repeated modest overruns therefore stay alertable; a faster completion clears the retained overrun.
+
+Check API limiter wait, request errors and retries, and OTLP export latency before changing the
+polling interval. AI Gateway full body capture requires three REST reads per request log and shares
+the API quota with other collectors. A larger interval can reduce polling pressure, but also delays
+collection; a large backlog needs enough sustained throughput to shrink. Raw checkpoint age still
+matters for source retention: the Access login alert warns at 12 hours because its REST history
+reaches back only about a day.
+
 ## Dry run behavior
 
 Run `-dry-run` with `-once` or with both `-since` and `-before`. Dry run polls Cloudflare but does

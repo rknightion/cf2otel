@@ -105,6 +105,12 @@ def collector_stale_expr() -> str:
         for threshold, selector in stale_classes())
 
 
+def poll_health_expr(metric: str) -> str:
+    """Normalize within each replica before reducing to one value per collector."""
+    return (f'max by (cf2otel_collector) (cf2otel_{metric}_seconds{{service_name="cf2otel"}} '
+            '/ (cf2otel_scrape_interval_seconds{service_name="cf2otel"} > 0))')
+
+
 def collector_stale_description() -> str:
     classes = stale_classes()
     named = [f"{threshold} seconds for {selector.split('=~', 1)[1].strip(chr(34)).replace('|', ', ')}" for threshold, selector in classes[1:]]
@@ -123,6 +129,10 @@ RULES = [
      '(max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel",cloudflare_tunnel_status!="healthy"} == 1) or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel"} == 1))) and on() (time() - max(cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="tunnels.status"}) < ' + str(TUNNELS_STATUS_FRESHNESS_SECONDS) + ')', 0, "NoData"),
     ("cf2otel-collector-stale", "cf2otel collector is stale", collector_stale_description(), 401,
      collector_stale_expr(), 0, "Alerting"),
+    ("cf2otel-collector-slow", "cf2otel collector polling exceeds its interval", "An active poll's elapsed time or the last completed poll's duration exceeds the collector's configured runtime interval for five minutes. Includes window and snapshot collectors; successful polls can still be slow. The query value is the worst elapsed-to-interval ratio across instances, calculated separately for each instance before reduction. Inspect collector status, API limiter waits and OTLP export latency.", 401,
+     poll_health_expr("scrape_elapsed"), 1, "Alerting"),
+    ("cf2otel-checkpoint-backlog", "cf2otel collector checkpoint backlog exceeds three intervals", "A window collector's unprocessed source time exceeds three configured runtime polling intervals for five minutes. Backlog excludes intentional source holdback and complete-bucket alignment, so it can grow despite successful pulls. The query value is the worst backlog-to-interval ratio across instances, calculated separately for each instance before reduction. Snapshot and disabled collectors have no backlog series. Absent backlog data is not proof of health; use the collector-stale rule for missing polling telemetry. Compare checkpoint age and catch-up progress before changing polling or body capture settings; preserve checkpoints.", 404,
+     poll_health_expr("checkpoint_backlog"), 3, "NoData"),
     ("cf2otel-export-failure", "cf2otel export is failing", "OTLP export failures occurred in the last 15 minutes.", 403,
      'sum(increase(cf2otel_export_errors_total{service_name="cf2otel"}[15m])) or on() (0 * sum(increase(cf2otel_export_success_total{service_name="cf2otel"}[15m])))', 0, "Alerting"),
     ("cf2otel-window-gap", "cf2otel window gap detected", "A retention-gap window was skipped in the last 15 minutes; that window's data is permanently lost.", 405,
@@ -255,6 +265,51 @@ def collector_stale_fixtures() -> dict:
     return {"rule_files": [], "evaluation_interval": "1m", "tests": tests}
 
 
+def polling_health_fixtures() -> dict:
+    """Runtime intervals and adjusted backlog define independent alert scores."""
+    tests = []
+    rules = {r[0]: r for r in RULES}
+    expressions = {"scrape_elapsed": rules["cf2otel-collector-slow"][4],
+                   "checkpoint_backlog": rules["cf2otel-checkpoint-backlog"][4]}
+
+    def case(name, rows, expected):
+        # Rows: instance, collector, interval seconds, elapsed seconds, backlog
+        # seconds (None means a snapshot collector, which has no checkpoint).
+        series = []
+        for instance, collector, interval, elapsed, backlog in rows:
+            labels = f'service_name="cf2otel",instance="{instance}",cf2otel_collector="{collector}"'
+            for metric, value in (("scrape_interval", interval), ("scrape_elapsed", elapsed), ("checkpoint_backlog", backlog)):
+                if value is not None:
+                    series.append({"series": f'cf2otel_{metric}_seconds{{{labels}}}', "values": str(value)})
+        tests.append({"name": name, "interval": "1m", "input_series": series,
+                      "promql_expr_test": [
+                          {"expr": expressions[metric], "eval_time": "0s",
+                           "exp_samples": [{"labels": f'{{cf2otel_collector="{collector}"}}', "value": score}
+                                           for collector, score in scores]}
+                          for metric, scores in zip(("scrape_elapsed", "checkpoint_backlog"), expected)]})
+
+    case("healthy collector retains zero scores", [("one", "aigateway.logs", 300, 0, 0)],
+         ([("aigateway.logs", 0)], [("aigateway.logs", 0)]))
+    case("active slow poll crosses its interval", [("one", "aigateway.logs", 300, 600, 0)],
+         ([("aigateway.logs", 2)], [("aigateway.logs", 0)]))
+    case("threshold boundaries stay healthy", [("one", "dns.metrics", 300, 300, 900)],
+         ([("dns.metrics", 1)], [("dns.metrics", 3)]))
+    case("successful short pulls can leave a large backlog", [("one", "aigateway.logs", 300, 30, 1800)],
+         ([("aigateway.logs", 0.1)], [("aigateway.logs", 6)]))
+    case("hourly collector uses runtime interval and adjusted backlog", [("one", "httpreq.threats", 3600, 900, 3600)],
+         ([("httpreq.threats", 0.25)], [("httpreq.threats", 1)]))
+    case("snapshot has polling score but no backlog", [("one", "certs.packs", 3600, 30, None)],
+         ([("certs.packs", 1 / 120)], []))
+    case("disabled collectors and missing telemetry stay absent", [], ([], []))
+    case("missing interval is not healthy zero", [("one", "dns.metrics", None, 600, 1800)], ([], []))
+    case("invalid zero interval is excluded", [("one", "dns.metrics", 0, 600, 1800)], ([], []))
+    case("normalize each replica before worst score reduction", [
+        ("slow", "dns.metrics", 300, 600, 1800),
+        ("hourly", "dns.metrics", 3600, 900, 3600)],
+         ([("dns.metrics", 2)], [("dns.metrics", 6)]))
+    return {"rule_files": [], "evaluation_interval": "1m", "tests": tests}
+
+
 def dashboard_panel_fixtures() -> dict:
     """Evaluate the shipped panel queries locally; no live data or replicas summed.
 
@@ -320,6 +375,7 @@ def main() -> None:
     artifacts = [(OUT / f"{rule[0]}.json", resource(*rule)) for rule in RULES]
     artifacts.append((OUT / "fixtures" / "certificates.test.yaml", certificate_fixtures()))
     artifacts.append((OUT / "fixtures" / "collector-stale.test.yaml", collector_stale_fixtures()))
+    artifacts.append((OUT / "fixtures" / "polling-health.test.yaml", polling_health_fixtures()))
     artifacts.append((OUT / "fixtures" / "dashboard-panels.test.yaml", dashboard_panel_fixtures()))
     for path, artifact in artifacts:
         content = json.dumps(artifact, indent=2, sort_keys=True) + "\n"

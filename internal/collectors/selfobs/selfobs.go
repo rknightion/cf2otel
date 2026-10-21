@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rknightion/cf2otel/internal/collector"
 	"github.com/rknightion/cf2otel/internal/identity"
 	"github.com/rknightion/cf2otel/internal/semconv"
 	"github.com/rknightion/cf2otel/internal/telemetry"
@@ -22,6 +23,7 @@ type Stats struct {
 	version, commit string
 	lastSuccess     map[string]time.Time
 	expected        map[string]struct{}
+	polling         map[string]pollingState
 	checkpoints     map[string]time.Time
 	identityStats   func() identity.Stats
 }
@@ -83,6 +85,13 @@ func (s *Stats) SetIdentityStats(snapshot func() identity.Stats) {
 // Poll records one completed scheduler attempt. The caller supplies completion time.
 func (s *Stats) Poll(ctx context.Context, name string, duration time.Duration, pollErr error, at time.Time) error {
 	attr := telemetry.Attr{Key: semconv.AttrCollector, Value: name}
+	s.mu.Lock()
+	if p, ok := s.polling[name]; ok {
+		p.started = time.Time{}
+		p.elapsed = duration
+		s.polling[name] = p
+	}
+	s.mu.Unlock()
 	if pollErr == nil {
 		s.mu.Lock()
 		s.lastSuccess[name] = at
@@ -137,8 +146,32 @@ func (s *Stats) Collect(ctx context.Context, now time.Time) error {
 	for k, v := range s.checkpoints {
 		points[k] = v
 	}
+	polls := make(map[string]pollingState, len(s.polling))
+	for name, p := range s.polling {
+		polls[name] = p
+	}
 	s.mu.Unlock()
 	var errs []error
+	for name, p := range polls {
+		attr := telemetry.Attr{Key: semconv.AttrCollector, Value: name}
+		duration := p.elapsed
+		if !p.started.IsZero() {
+			duration = max(p.elapsed, now.Sub(p.started))
+		}
+		for metric, value := range map[string]float64{semconv.MetricScrapeInterval: p.entry.Interval.Seconds(), semconv.MetricScrapeElapsed: duration.Seconds()} {
+			if err := s.emitter.Gauge(ctx, metric, value, attr); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		if c, ok := p.entry.Collector.(collector.WindowCollector); ok {
+			if checkpoint, exists := points[name]; exists {
+				backlog := max(0, now.Sub(checkpoint)-effectiveLag(c, now)).Seconds()
+				if err := s.emitter.Gauge(ctx, semconv.MetricCheckpointBacklog, backlog, attr); err != nil {
+					errs = append(errs, err)
+				}
+			}
+		}
+	}
 	for name, at := range last {
 		value := float64(0)
 		if !at.IsZero() {

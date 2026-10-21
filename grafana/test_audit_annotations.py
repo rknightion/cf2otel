@@ -702,6 +702,9 @@ class AlertRuleFixturesTest(unittest.TestCase):
                                 capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_polling_health_runtime_ratios(self):
+        self.run_fixture("polling-health.test.yaml")
+
     def test_certificate_status_ignores_backup_issued_but_flags_pending_validation(self):
         self.run_fixture("certificates.test.yaml")
 

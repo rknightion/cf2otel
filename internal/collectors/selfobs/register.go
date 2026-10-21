@@ -14,6 +14,7 @@ func Register(deps collector.Deps) {
 	}
 	if c, ok := deps.SelfObs.(*Collector); ok {
 		deps.Registry.ObserveRegistrations(func(entry collector.Entry) {
+			c.Stats.ObserveEntry(entry)
 			_, windowed := entry.Collector.(collector.WindowCollector)
 			if err := c.Stats.Register(context.Background(), entry.Collector.Name(), windowed); err != nil {
 				slog.Error("self-observability initialization failed", "collector", entry.Collector.Name(), "error", err)

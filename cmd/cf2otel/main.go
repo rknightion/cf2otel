@@ -202,6 +202,8 @@ func run(args []string) error {
 		}
 	}
 	scheduler.OnCheckpoint = stats.Checkpoint
+	scheduler.OnStart = stats.StartPoll
+	scheduler.OnWindowStart = stats.Checkpoint
 	if opts.Once || !opts.Since.IsZero() || !opts.Before.IsZero() {
 		return runOnce(ctx, scheduler, opts, dryEmitter)
 	}

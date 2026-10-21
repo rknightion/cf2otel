@@ -49,6 +49,10 @@ internal hostname in a task or doc.
 - The Access REST log reaches back only about a day. A long outage loses data; nothing can backfill it.
 - Loki receives OTLP log attributes as structured metadata, not stream labels. Only `service_name`
   is a stream label, so query `{service_name="cf2otel"} | event_name="..."`.
+- Poll health uses actual registered intervals: `cf2otel.scrape.elapsed` retains the larger
+  of active elapsed and last completed duration; `cf2otel.checkpoint.backlog` subtracts
+  current source holdback, including dynamic bucket alignment. Startup cursor observation
+  is distinct from the commit-only checkpoint callback.
 - AI Gateway full body capture needs three REST reads per log. REST and GraphQL share a
   combined 3.75 rps/burst 5 ceiling; REST can use spare capacity. Explicit old REST overrides
   still apply. Judge recovery by declining checkpoint age as well as scrape success.
