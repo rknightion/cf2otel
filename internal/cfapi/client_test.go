@@ -359,3 +359,20 @@ func TestGraphQLSaturatedWindowFails(t *testing.T) {
 		t.Fatalf("expected saturation, got %v", err)
 	}
 }
+
+func TestOverCapResponseIsTypedError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(strings.Repeat("x", 64)))
+	}))
+	defer srv.Close()
+	c := New(config.CloudflareConfig{APIBase: srv.URL, APIToken: "test", Timeout: time.Second, MaxResponseBytes: 8})
+	var out json.RawMessage
+	err := c.GetRaw(context.Background(), "/fixture", nil, &out)
+	var tooLarge *ResponseTooLargeError
+	if !errors.As(err, &tooLarge) || tooLarge.Cap != 8 {
+		t.Fatalf("over-cap read error = %#v, want *ResponseTooLargeError with cap 8", err)
+	}
+	if err.Error() != "cloudflare response exceeds 8 bytes" {
+		t.Fatalf("message changed: %q", err)
+	}
+}

@@ -34,6 +34,14 @@ func (e *HTTPError) Error() string {
 	return fmt.Sprintf("cloudflare HTTP %d: request failed", e.Status)
 }
 
+// ResponseTooLargeError reports a response body past the client's size cap.
+// Callers that can live without one body detect it with errors.As.
+type ResponseTooLargeError struct{ Cap int64 }
+
+func (e *ResponseTooLargeError) Error() string {
+	return fmt.Sprintf("cloudflare response exceeds %d bytes", e.Cap)
+}
+
 type HTTPClient struct {
 	base               string
 	token              string
@@ -113,7 +121,7 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, query url.Valu
 			return nil, readErr
 		}
 		if int64(len(raw)) > c.cap {
-			return nil, fmt.Errorf("cloudflare response exceeds %d bytes", c.cap)
+			return nil, &ResponseTooLargeError{Cap: c.cap}
 		}
 		if retry && attempt < 4 {
 			delay := time.Duration(1<<attempt) * 100 * time.Millisecond

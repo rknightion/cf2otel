@@ -51,8 +51,12 @@ func (c *logs) fetchLog(ctx context.Context, path string) (capturedLog, error) {
 		}
 		wg.Go(func() {
 			if err := raw.GetRaw(ctx, path+"/"+side, nil, &result.bodies[i]); err != nil {
+				// A body that is gone (404/7002) or past the client's size cap can
+				// never be read; retrying it would fail the run forever. Mark the
+				// side unavailable and keep the rest of the log.
 				var httpErr *cfapi.HTTPError
-				if errors.As(err, &httpErr) && httpErr.Status == 404 && httpErr.Code == 7002 {
+				var tooLarge *cfapi.ResponseTooLargeError
+				if (errors.As(err, &httpErr) && httpErr.Status == 404 && httpErr.Code == 7002) || errors.As(err, &tooLarge) {
 					result.unavailable[i] = true
 					return
 				}

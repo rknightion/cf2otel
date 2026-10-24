@@ -31,6 +31,7 @@ type fakeAPI struct {
 	listQueries                     []url.Values
 	list, detail, request, response string
 	missingResponse, missingRequest bool
+	oversizeResponse                bool
 }
 
 func (f *fakeAPI) Get(_ context.Context, path string, q url.Values, out any) error {
@@ -75,6 +76,9 @@ func (f *fakeAPI) GetRaw(_ context.Context, path string, _ url.Values, out any) 
 	if strings.HasSuffix(path, "/response") {
 		if f.missingResponse {
 			return &cfapi.HTTPError{Status: 404, Code: 7002}
+		}
+		if f.oversizeResponse {
+			return fmt.Errorf("fixture read: %w", &cfapi.ResponseTooLargeError{Cap: 16 << 20})
 		}
 		return json.Unmarshal([]byte(f.response), out)
 	}
@@ -181,6 +185,52 @@ func TestMissingResponseBodyKeepsRequest(t *testing.T) {
 	}
 	if len(out.spans[0].Logs) != 1 || attr(out.spans[0].Logs[0].Attrs, semconv.AttrAIGatewayContentSide) != "request" {
 		t.Fatal("expected only the available request content log")
+	}
+}
+
+// One log whose response body exceeds the client cap must not fail the run: it
+// is emitted with the response side marked unavailable and the request intact.
+func TestOversizedResponseBodyKeepsRequestAndCompletesRun(t *testing.T) {
+	api := &fakeAPI{
+		list:             `{"result":[{"id":"A","created_at":"2026-09-23T10:00:00Z","path":"chat/completions","duration":1,"tokens_in":3,"tokens_out":4}]}`,
+		detail:           `{}`,
+		request:          `{"messages":[{"role":"user","content":"fixture"}]}`,
+		oversizeResponse: true,
+	}
+	cfg := &config.Config{Cloudflare: config.CloudflareConfig{AccountID: "example"}, AIGateway: config.AIGatewayConfig{Gateways: []string{"gateway"}, CaptureBodies: true, MaxBodyBytes: 1024}}
+	logs := NewLogs(cfg, api)
+
+	captured, err := logs.fetchLog(context.Background(), logs.detailPath("gateway", "A"))
+	if err != nil {
+		t.Fatalf("fetchLog failed on an oversized body: %v", err)
+	}
+	if !captured.unavailable[1] || captured.unavailable[0] || len(captured.bodies[0]) == 0 || len(captured.bodies[1]) != 0 {
+		t.Fatalf("sides = unavailable %v bodies %q", captured.unavailable, captured.bodies)
+	}
+
+	out := &fakeEmitter{}
+	from := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	mark, err := logs.CollectWindow(context.Background(), from, from.Add(time.Minute), out)
+	if err != nil || !mark.Equal(from.Add(time.Minute)) {
+		t.Fatalf("run did not complete: mark=%s err=%v", mark, err)
+	}
+	if len(out.spans) != 1 {
+		t.Fatalf("spans = %d, want the log emitted", len(out.spans))
+	}
+	attrs := out.spans[0].Attrs
+	if attr(attrs, semconv.AttrAIGatewayResponseBodyUnavailable) != "true" || attr(attrs, semconv.AttrAIGatewayResponseBodyNonJSON) != "" || attr(attrs, semconv.AttrAIGatewayRequestBodyUnavailable) != "" {
+		t.Fatalf("unavailable markers wrong: %v", attrs)
+	}
+	if attr(attrs, semconv.AttrGenAIInputMessages) == "" {
+		t.Fatal("request content lost")
+	}
+	if attr(attrs, semconv.AttrAIGatewayUsageSource) != "" {
+		t.Fatal("usage recovered from an unavailable body")
+	}
+	for _, m := range out.counters {
+		if m.name == "cloudflare.ai_gateway.body_non_json" {
+			t.Fatalf("oversized body counted as non-JSON: %v", m)
+		}
 	}
 }
 func TestMissingRequestBodyKeepsResponse(t *testing.T) {
