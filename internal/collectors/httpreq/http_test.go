@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +31,8 @@ type fakeAPI struct {
 	queryErrors   map[string]error
 	groupSettings *cfapi.DatasetSettings
 	settingsErr   error
+	// eventsQuery, when set, answers httpRequestsAdaptive queries per window.
+	eventsQuery func(cfapi.GraphQLRequest) ([]map[string]any, error)
 }
 
 func (f *fakeAPI) Get(_ context.Context, path string, _ url.Values, out any) error {
@@ -55,6 +58,14 @@ func (f *fakeAPI) Query(_ context.Context, q cfapi.GraphQLRequest, out any) erro
 	f.queries = append(f.queries, q)
 	if err := f.queryErrors[q.ScopeID]; err != nil {
 		return err
+	}
+	if f.eventsQuery != nil && q.Dataset == "httpRequestsAdaptive" {
+		rows, err := f.eventsQuery(q)
+		if err != nil {
+			return err
+		}
+		*(out.(*[]map[string]any)) = rows
+		return nil
 	}
 	*(out.(*[]map[string]any)) = f.rows[q.Dataset]
 	return nil
@@ -189,6 +200,113 @@ func TestEventsScopeAndInference(t *testing.T) {
 	}
 	if len(f.queries) != 1 || !reflect.DeepEqual(f.queries[0].WantedFields, eventFields) || !reflect.DeepEqual(f.queries[0].JoinFields, []string{"rayName", "datetime"}) {
 		t.Fatalf("raw selection did not request bounded joinable fields: %+v", f.queries)
+	}
+}
+
+// saturatingEventsAPI answers any window wider than half an hour as saturated,
+// either with a typed SaturationError or with a full-limit page of filler
+// rows, and answers narrower windows from truth.
+func saturatingEventsAPI(truth []map[string]any, typed bool) *fakeAPI {
+	return &fakeAPI{apps: []accessApp{{Domain: "https://example.com"}}, eventsQuery: func(q cfapi.GraphQLRequest) ([]map[string]any, error) {
+		if q.To.Sub(q.From) > 30*time.Minute {
+			if typed {
+				return nil, &cfapi.SaturationError{Dataset: q.Dataset, From: q.From, To: q.To, Limit: q.Limit}
+			}
+			filler := make([]map[string]any, q.Limit)
+			for i := range filler {
+				filler[i] = map[string]any{"datetime": q.From.Format(time.RFC3339), "clientRequestHTTPHost": "example.com", "rayName": "filler"}
+			}
+			return filler, nil
+		}
+		var rows []map[string]any
+		for _, row := range truth {
+			if _, ok := inWindow(row, q.From, q.To); ok {
+				rows = append(rows, row)
+			}
+		}
+		return rows, nil
+	}}
+}
+
+func eventRows(from time.Time, offsets ...time.Duration) []map[string]any {
+	rows := make([]map[string]any, 0, len(offsets))
+	for i, offset := range offsets {
+		rows = append(rows, map[string]any{
+			"datetime": from.Add(offset).Format(time.RFC3339), "clientRequestHTTPHost": "example.com",
+			"clientRequestPath": "/p", "edgeResponseStatus": 200, "clientIP": "192.0.2.4", "rayName": "invented-" + strconv.Itoa(i),
+		})
+	}
+	return rows
+}
+
+func TestEventsSplitSaturatedWindow(t *testing.T) {
+	from := time.Date(2026, 10, 24, 1, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	for _, tc := range []struct {
+		name  string
+		typed bool
+	}{{"typed saturation error", true}, {"full limit row count", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			truth := eventRows(from, 0, 10*time.Minute, 29*time.Minute+59*time.Second, 30*time.Minute, 45*time.Minute, 59*time.Minute+59*time.Second)
+			f := saturatingEventsAPI(truth, tc.typed)
+			c := config.Default()
+			c.Identity.Enabled = false
+			e := &fakeEmitter{}
+			mark, err := events{base{cfg: &c, api: f}}.CollectWindow(context.Background(), from, to, e)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !mark.Equal(to) {
+				t.Fatalf("mark=%s, want %s", mark, to)
+			}
+			if len(f.queries) != 3 {
+				t.Fatalf("queries=%d, want the saturated hour and its two halves", len(f.queries))
+			}
+			if mid := from.Add(30 * time.Minute); !f.queries[1].From.Equal(from) || !f.queries[1].To.Equal(mid) || !f.queries[2].From.Equal(mid) || !f.queries[2].To.Equal(to) {
+				t.Fatalf("halves=%+v %+v", f.queries[1], f.queries[2])
+			}
+			if len(e.logs) != len(truth) {
+				t.Fatalf("logs=%d, want %d", len(e.logs), len(truth))
+			}
+			seen := map[string]int{}
+			for i, l := range e.logs {
+				var row map[string]any
+				if err := json.Unmarshal([]byte(l.body), &row); err != nil {
+					t.Fatal(err)
+				}
+				seen[row["rayName"].(string)]++
+				if row["rayName"] != truth[i]["rayName"] {
+					t.Fatalf("log %d is %v, want time-ordered %v", i, row["rayName"], truth[i]["rayName"])
+				}
+			}
+			for _, row := range truth {
+				if seen[row["rayName"].(string)] != 1 {
+					t.Fatalf("%v emitted %d times", row["rayName"], seen[row["rayName"].(string)])
+				}
+			}
+		})
+	}
+}
+
+func TestEventsErrorWhenOneMinuteStillSaturates(t *testing.T) {
+	from := time.Date(2026, 10, 24, 1, 0, 0, 0, time.UTC)
+	for _, typed := range []bool{true, false} {
+		f := &fakeAPI{eventsQuery: func(q cfapi.GraphQLRequest) ([]map[string]any, error) {
+			if typed {
+				return nil, &cfapi.SaturationError{Dataset: q.Dataset, From: q.From, To: q.To, Limit: q.Limit}
+			}
+			return make([]map[string]any, q.Limit), nil
+		}}
+		c := config.Default()
+		c.Identity.Enabled = false
+		e := &fakeEmitter{}
+		mark, err := events{base{cfg: &c, api: f}}.CollectWindow(context.Background(), from, from.Add(time.Minute), e)
+		if err == nil || !strings.Contains(err.Error(), "one-minute query window") {
+			t.Fatalf("typed=%v err=%v, want one-minute saturation error", typed, err)
+		}
+		if !mark.Equal(from) || len(e.logs) != 0 || len(f.queries) != 1 {
+			t.Fatalf("typed=%v mark=%s logs=%d queries=%d, want no progress and no partial events", typed, mark, len(e.logs), len(f.queries))
+		}
 	}
 }
 

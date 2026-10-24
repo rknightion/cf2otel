@@ -29,6 +29,11 @@ var eventFields = []string{
 	"clientIP", "userAgent", "cacheStatus", "securityAction", "coloCode",
 }
 
+const (
+	eventsDataset    = "httpRequestsAdaptive"
+	eventsQueryLimit = 10000
+)
+
 type accessApp struct {
 	Domain            string   `json:"domain"`
 	SelfHostedDomains []string `json:"self_hosted_domains"`
@@ -393,18 +398,14 @@ func (c events) CollectWindow(ctx context.Context, from, to time.Time, e telemet
 	var retentionGaps []error
 	for _, zone := range zones {
 		poll.Process(zone.ID)
-		var rows []map[string]any
-		req := cfapi.GraphQLRequest{Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: "httpRequestsAdaptive", WantedFields: eventFields, JoinFields: []string{"rayName", "datetime"}, From: from, To: to, Limit: 10000}
-		if err := c.api.Query(ctx, req, &rows); err != nil {
+		rows, err := c.queryWindow(ctx, zone, from, to)
+		if err != nil {
 			var gap *cfapi.RetentionGapError
 			if errors.As(err, &gap) {
 				retentionGaps = append(retentionGaps, fmt.Errorf("zone HTTP events: %w", err))
 				continue
 			}
 			return from, fmt.Errorf("zone HTTP events: %w", err)
-		}
-		if len(rows) >= req.Limit {
-			return from, fmt.Errorf("zone HTTP events reached the query limit; narrow the window")
 		}
 		for _, row := range rows {
 			at, ok := inWindow(row, from, to)
@@ -458,6 +459,31 @@ func (c events) CollectWindow(ctx context.Context, from, to time.Time, e telemet
 		return from, errors.Join(retentionGaps...)
 	}
 	return to, nil
+}
+
+// queryWindow reads one zone's raw events for [from, to). A window that
+// reaches the row limit may be truncated, so it is bisected down to one minute
+// and the leaf rows are returned in time order.
+func (c events) queryWindow(ctx context.Context, zone cfapi.Zone, from, to time.Time) ([]map[string]any, error) {
+	rows, err := collector.Bisect(from, to, time.Second, time.Minute, func(from, to time.Time) ([]map[string]any, bool, error) {
+		var rows []map[string]any
+		req := cfapi.GraphQLRequest{Scope: cfapi.ZoneScope, ScopeID: zone.ID, Dataset: eventsDataset, WantedFields: eventFields, JoinFields: []string{"rayName", "datetime"}, From: from, To: to, Limit: eventsQueryLimit}
+		err := c.api.Query(ctx, req, &rows)
+		sat, typed := cfapi.AsSaturation(err)
+		saturated := typed && sat.Dataset == eventsDataset || err == nil && len(rows) >= req.Limit
+		if saturated && err == nil {
+			err = fmt.Errorf("row count reached requested limit %d", req.Limit)
+		}
+		return rows, saturated, err
+	})
+	var window *collector.SaturatedWindowError
+	if errors.As(err, &window) {
+		if errors.Is(window.Reason, collector.ErrWindowIrreducible) {
+			return nil, fmt.Errorf("HTTP events still saturate a one-minute query window: %w", window.Cause)
+		}
+		return nil, fmt.Errorf("cannot split saturated HTTP event window %s..%s", window.From.Format(time.RFC3339), window.To.Format(time.RFC3339))
+	}
+	return rows, err
 }
 
 func (c metrics) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (mark time.Time, collectErr error) {
