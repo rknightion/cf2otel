@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.1](https://github.com/rknightion/cf2otel/compare/v0.19.0...v0.19.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* **aigateway:** mark an over-cap body unavailable instead of failing the run ([02de280](https://github.com/rknightion/cf2otel/commit/02de280fee8d1140b8c0547a4baec44e2ea869af))
+* **httpreq:** bisect a saturated HTTP events window ([1d3e8f6](https://github.com/rknightion/cf2otel/commit/1d3e8f6544c05a8a0f9140994ec25acabeb9cccd))
+
 ## [0.19.0](https://github.com/rknightion/cf2otel/compare/v0.18.0...v0.19.0) (2026-10-21)
 
 
