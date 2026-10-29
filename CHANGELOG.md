@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.2](https://github.com/rknightion/cf2otel/compare/v0.19.1...v0.19.2) (2026-10-28)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/prometheus/common to v0.73.0 ([#95](https://github.com/rknightion/cf2otel/issues/95)) ([7f10fa2](https://github.com/rknightion/cf2otel/commit/7f10fa2b22ea049c80c50fe066485e045e283049))
+
 ## [0.19.1](https://github.com/rknightion/cf2otel/compare/v0.19.0...v0.19.1) (2026-10-24)
 
 
