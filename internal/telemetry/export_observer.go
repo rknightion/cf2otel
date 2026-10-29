@@ -133,6 +133,9 @@ func safeExportError(err error) error {
 	if strings.Contains(statusLine, "OTLP partial success:") {
 		return errors.New("OTLP partial success: rejected records (message omitted)")
 	}
+	if strings.Contains(statusLine, "invalid UTF-8") {
+		return errors.New("OTLP export: protobuf marshal rejected invalid UTF-8 (value omitted)")
+	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return context.DeadlineExceeded
 	}

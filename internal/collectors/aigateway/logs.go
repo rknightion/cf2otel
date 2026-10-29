@@ -637,7 +637,7 @@ func optionalInt(n *int) string {
 }
 func capString(s string, n int) string {
 	if len(s) > n {
-		return s[:n]
+		return s[:runeBoundary(s, n)]
 	}
 	return s
 }

@@ -66,6 +66,9 @@ internal hostname in a task or doc.
 - AI Gateway token counts can fall back to complete, untruncated captured response JSON.
   Positive gateway counts remain authoritative; `cloudflare.ai_gateway.usage_source`
   marks body-derived log/span values and is never a metric dimension.
+- The OTLP protobuf marshal rejects a string with invalid UTF-8 before any request is sent, and one
+  such record fails its whole commit window on every retry. Byte caps stop on a rune boundary
+  (`runeBoundary`) and `internal/telemetry` repairs any remaining invalid string at emission.
 - Grafana Cloud Tempo on the m7kni stack stores span attribute values truncated at 2048 characters.
   An attribute key present in Tempo proves nothing about its content length.
 

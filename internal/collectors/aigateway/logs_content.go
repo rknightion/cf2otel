@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/trace"
 )
@@ -138,9 +139,23 @@ func capBody(body json.RawMessage, max int64) ([]byte, bool) {
 		return nil, len(body) > 0
 	}
 	if int64(len(body)) > max {
-		return body[:max], true
+		return body[:runeBoundary(body, int(max))], true
 	}
 	return body, false
+}
+
+// runeBoundary backs a byte cut off to the start of the rune it would split,
+// so a capped value stays valid UTF-8 for the OTLP protobuf marshal.
+func runeBoundary[T ~string | ~[]byte](s T, n int) int {
+	if n >= len(s) {
+		return len(s)
+	}
+	for i := n; i > 0 && n-i < utf8.UTFMax; i-- {
+		if utf8.RuneStart(s[i]) {
+			return i
+		}
+	}
+	return n
 }
 
 // dlpFinding is one entry of the AI Gateway logs API's `dlp_profiles` array.

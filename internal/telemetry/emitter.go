@@ -3,8 +3,10 @@ package telemetry
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -71,10 +73,19 @@ func attrs(a []Attr) []attribute.KeyValue {
 	out := make([]attribute.KeyValue, 0, len(a))
 	for _, v := range a {
 		if v.Key != "" {
-			out = append(out, attribute.String(v.Key, v.Value))
+			out = append(out, attribute.String(validUTF8(v.Key), validUTF8(v.Value)))
 		}
 	}
 	return out
+}
+
+// validUTF8 repairs a string the OTLP protobuf marshal would reject. One
+// invalid record otherwise fails its whole export and stalls the window.
+func validUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	return strings.ToValidUTF8(s, "\uFFFD")
 }
 func (e *otelEmitter) Gauge(ctx context.Context, n string, v float64, a ...Attr) error {
 	e.mu.Lock()
@@ -150,13 +161,13 @@ func (e *otelEmitter) LogEvent(ctx context.Context, event, body string, at time.
 	r.SetTimestamp(at)
 	r.SetObservedTimestamp(time.Now())
 	r.SetSeverity(severity)
-	r.SetBody(attribute.StringValue(body))
+	r.SetBody(attribute.StringValue(validUTF8(body)))
 	if !e.policy.attribute(semconv.AttrEventName) {
-		r.AddAttributes(attribute.String(semconv.AttrEventName, event))
+		r.AddAttributes(attribute.String(semconv.AttrEventName, validUTF8(event)))
 	}
 	for _, v := range a {
 		if v.Key != "" {
-			r.AddAttributes(attribute.String(v.Key, v.Value))
+			r.AddAttributes(attribute.String(validUTF8(v.Key), validUTF8(v.Value)))
 		}
 	}
 	e.logger.Emit(ctx, r)
@@ -175,16 +186,20 @@ func (e *otelEmitter) Span(ctx context.Context, s SpanSpec) error {
 		}
 	}
 	opts := []trace.SpanStartOption{trace.WithTimestamp(s.Start), trace.WithSpanKind(s.Kind), trace.WithAttributes(attrs(s.Attrs)...), trace.WithLinks(s.Links...)}
-	spanCtx, sp := e.tracer.Start(ctx, s.Name, opts...)
+	spanCtx, sp := e.tracer.Start(ctx, validUTF8(s.Name), opts...)
 	for _, ev := range s.Events {
 		if ev.At.IsZero() {
 			ev.At = s.Start
 		}
-		sp.AddEvent(ev.Name, trace.WithTimestamp(ev.At), trace.WithAttributes(attrs(ev.Attrs)...))
+		sp.AddEvent(validUTF8(ev.Name), trace.WithTimestamp(ev.At), trace.WithAttributes(attrs(ev.Attrs)...))
 	}
 	if s.Error != nil {
-		sp.RecordError(s.Error)
-		sp.SetStatus(codes.Error, s.Error.Error())
+		spanErr := s.Error
+		if msg := spanErr.Error(); !utf8.ValidString(msg) {
+			spanErr = errors.New(validUTF8(msg))
+		}
+		sp.RecordError(spanErr)
+		sp.SetStatus(codes.Error, spanErr.Error())
 	}
 	sp.End(trace.WithTimestamp(s.End))
 	for _, record := range s.Logs {

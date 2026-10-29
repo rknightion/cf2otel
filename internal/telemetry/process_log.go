@@ -89,7 +89,7 @@ func (h *processLogHandler) Handle(ctx context.Context, r slog.Record) error {
 	record.SetObservedTimestamp(time.Now())
 	record.SetSeverity(processSeverity(r.Level))
 	record.SetSeverityText(r.Level.String())
-	record.SetBody(attribute.StringValue(body))
+	record.SetBody(attribute.StringValue(validUTF8(body)))
 	if h.eventName {
 		record.AddAttributes(attribute.String(semconv.AttrEventName, semconv.EventProcessLog))
 	}
