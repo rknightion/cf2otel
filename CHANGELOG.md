@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.20.0](https://github.com/rknightion/cf2otel/compare/v0.19.2...v0.20.0) (2026-10-30)
+
+
+### Features
+
+* **alerts:** manage the AI Gateway daily input token alert as code ([3cf7c9b](https://github.com/rknightion/cf2otel/commit/3cf7c9b06a905cbceac21e020f3e7f53866a9f52))
+
+
+### Bug Fixes
+
+* **aigateway:** cap bodies on a rune boundary so one record cannot stall export ([b9fea61](https://github.com/rknightion/cf2otel/commit/b9fea613067544314c1b4d54d11543c0a56bae1a))
+* **alerts:** leave catch-up polls to the backlog alert ([51bcabb](https://github.com/rknightion/cf2otel/commit/51bcabb7d7be308d11abc8a2c8854ffec1e826f9))
+* **alerts:** measure a just-restarted collector from process start ([e76d567](https://github.com/rknightion/cf2otel/commit/e76d5672953abdcffd4dcc63e53c20b42fcc87f3))
+* **deps:** update module github.com/prometheus/common to v0.73.1 ([#103](https://github.com/rknightion/cf2otel/issues/103)) ([ba5f4cf](https://github.com/rknightion/cf2otel/commit/ba5f4cf2ae6e9882d0bec26070ee0635c54d19dc))
+
 ## [0.19.2](https://github.com/rknightion/cf2otel/compare/v0.19.1...v0.19.2) (2026-10-28)
 
 
