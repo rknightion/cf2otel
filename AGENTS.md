@@ -69,6 +69,8 @@ internal hostname in a task or doc.
 - The OTLP protobuf marshal rejects a string with invalid UTF-8 before any request is sent, and one
   such record fails its whole commit window on every retry. Byte caps stop on a rune boundary
   (`runeBoundary`) and `internal/telemetry` repairs any remaining invalid string at emission.
+- Every rule in the Grafana "cf2otel alerts" folder comes from `grafana/build_rules.py`. A rule
+  made by hand there fails grafana-sync's post-publish check as a stale live rule.
 - Grafana Cloud Tempo on the m7kni stack stores span attribute values truncated at 2048 characters.
   An attribute key present in Tempo proves nothing about its content length.
 
