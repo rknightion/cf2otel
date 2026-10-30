@@ -99,9 +99,18 @@ def collector_stale_expr() -> str:
     appears twice. A value of 0 or below means fresh; the rule keeps NoData as
     Alerting, so the query must keep returning fresh collectors rather than
     filtering them out.
+
+    The exporter reports a last success of 0 until a collector's first
+    successful poll after start. That replica's process start time stands in
+    for it, so a restart is not stale but a collector that never succeeds
+    still fires one threshold after the process started.
     """
+    def last_success(selector: str) -> str:
+        series = f'cf2otel_scrape_last_success_timestamp_seconds{{service_name="cf2otel",{selector}}}'
+        return (f'max by (cf2otel_collector) (({series} != 0) or (({series} == 0) + on (instance) group_left () '
+                'max by (instance) (cf2otel_process_start_time_seconds{service_name="cf2otel"})))')
     return " or ".join(
-        f'((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{{service_name="cf2otel",{selector}}})) - {threshold})'
+        f'((time() - {last_success(selector)}) - {threshold})'
         for threshold, selector in stale_classes())
 
 
@@ -121,6 +130,7 @@ def collector_stale_description() -> str:
     parts = ", ".join(named + [f"{classes[0][0]} seconds for every other collector"])
     return ("Collector last-success timestamp is older than three of that collector's polling intervals "
             f"({parts}). The query value is seconds beyond the threshold, so only a value above 0 fires. "
+            "Before a collector's first success after a restart, the process start time stands in for its last success. "
             "Regenerate with the matching GRAFANA_*_INTERVAL_SECONDS settings for non-default deployment intervals.")
 
 
@@ -301,6 +311,23 @@ def collector_stale_fixtures() -> dict:
         "promql_expr_test": [{"expr": expression, "eval_time": "5m", "exp_samples": [
             {"labels": f'{{cf2otel_collector="{c}"}}', "value": v}
             for c, v in (("certs.packs", 1200 - 10800), ("httpreq.threats", 11000 - 10800), ("access.logins", 300), ("firewall.events", 100 - 900))]}]})
+
+    # A last success of 0 means no success since this replica started.
+    def restart(name: str, series: list[tuple[str, str, int]], start_ages: dict[str, int], expected: list[tuple[str, int]]) -> None:
+        inputs = [{"series": f'cf2otel_scrape_last_success_timestamp_seconds{{service_name="cf2otel",instance="{i}",cf2otel_collector="{c}"}}',
+                   "values": f"{v} {v}"} for c, i, v in series]
+        inputs += [{"series": f'cf2otel_process_start_time_seconds{{service_name="cf2otel",instance="{i}"}}', "values": f"{300 - a} {300 - a}"}
+                    for i, a in start_ages.items()]
+        tests.append({"name": name, "interval": "1m", "input_series": inputs, "promql_expr_test": [{"expr": expression, "eval_time": "5m",
+            "exp_samples": [{"labels": f'{{cf2otel_collector="{c}"}}', "value": v} for c, v in expected]}]})
+
+    restart("just-restarted collector is measured from process start", [("access.logins", "new", 0)], {"new": 120}, [("access.logins", 120 - 900)])
+    restart("collector with no success since start fires one threshold after start", [("access.logins", "new", 0)], {"new": 901}, [("access.logins", 1)])
+    restart("hourly collector with no success since start keeps its own threshold",
+            [("certs.packs", "new", 0), ("access.logins", "new", 0)], {"new": 1200}, [("certs.packs", 1200 - 10800), ("access.logins", 300)])
+    restart("old replica's success still counts during a restart",
+            [("access.logins", "old", 300 - 60), ("access.logins", "new", 0)], {"old": 5000, "new": 30}, [("access.logins", 30 - 900)])
+    restart("successful collector ignores process start", [("access.logins", "new", 300 - 1200)], {"new": 60}, [("access.logins", 300)])
     return {"rule_files": [], "evaluation_interval": "1m", "tests": tests}
 
 

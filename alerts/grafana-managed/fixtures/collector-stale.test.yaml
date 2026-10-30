@@ -20,7 +20,7 @@
               "value": -9600
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -42,7 +42,7 @@
               "value": 0
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -64,7 +64,7 @@
               "value": 1
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -86,7 +86,7 @@
               "value": 9200
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -108,7 +108,7 @@
               "value": -9600
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -130,7 +130,7 @@
               "value": 0
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -152,7 +152,7 @@
               "value": 1
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -174,7 +174,7 @@
               "value": 9200
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -196,7 +196,7 @@
               "value": -9600
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -218,7 +218,7 @@
               "value": 0
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -240,7 +240,7 @@
               "value": 1
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -262,7 +262,7 @@
               "value": 9200
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -284,7 +284,7 @@
               "value": 0
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -306,7 +306,7 @@
               "value": 1
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -328,7 +328,7 @@
               "value": 300
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -350,7 +350,7 @@
               "value": -1500
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -372,7 +372,7 @@
               "value": 1
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     },
@@ -418,7 +418,153 @@
               "value": -800
             }
           ],
-          "expr": "((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"})) - 900) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"})) - 2700) or ((time() - max by (cf2otel_collector) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"})) - 10800)"
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",instance=\"new\",cf2otel_collector=\"access.logins\"}",
+          "values": "0 0"
+        },
+        {
+          "series": "cf2otel_process_start_time_seconds{service_name=\"cf2otel\",instance=\"new\"}",
+          "values": "180 180"
+        }
+      ],
+      "interval": "1m",
+      "name": "just-restarted collector is measured from process start",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"access.logins\"}",
+              "value": -780
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",instance=\"new\",cf2otel_collector=\"access.logins\"}",
+          "values": "0 0"
+        },
+        {
+          "series": "cf2otel_process_start_time_seconds{service_name=\"cf2otel\",instance=\"new\"}",
+          "values": "-601 -601"
+        }
+      ],
+      "interval": "1m",
+      "name": "collector with no success since start fires one threshold after start",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"access.logins\"}",
+              "value": 1
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",instance=\"new\",cf2otel_collector=\"certs.packs\"}",
+          "values": "0 0"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",instance=\"new\",cf2otel_collector=\"access.logins\"}",
+          "values": "0 0"
+        },
+        {
+          "series": "cf2otel_process_start_time_seconds{service_name=\"cf2otel\",instance=\"new\"}",
+          "values": "-900 -900"
+        }
+      ],
+      "interval": "1m",
+      "name": "hourly collector with no success since start keeps its own threshold",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"certs.packs\"}",
+              "value": -9600
+            },
+            {
+              "labels": "{cf2otel_collector=\"access.logins\"}",
+              "value": 300
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",instance=\"old\",cf2otel_collector=\"access.logins\"}",
+          "values": "240 240"
+        },
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",instance=\"new\",cf2otel_collector=\"access.logins\"}",
+          "values": "0 0"
+        },
+        {
+          "series": "cf2otel_process_start_time_seconds{service_name=\"cf2otel\",instance=\"old\"}",
+          "values": "-4700 -4700"
+        },
+        {
+          "series": "cf2otel_process_start_time_seconds{service_name=\"cf2otel\",instance=\"new\"}",
+          "values": "270 270"
+        }
+      ],
+      "interval": "1m",
+      "name": "old replica's success still counts during a restart",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"access.logins\"}",
+              "value": -870
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",instance=\"new\",cf2otel_collector=\"access.logins\"}",
+          "values": "-900 -900"
+        },
+        {
+          "series": "cf2otel_process_start_time_seconds{service_name=\"cf2otel\",instance=\"new\"}",
+          "values": "240 240"
+        }
+      ],
+      "interval": "1m",
+      "name": "successful collector ignores process start",
+      "promql_expr_test": [
+        {
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"access.logins\"}",
+              "value": 300
+            }
+          ],
+          "expr": "((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)"
         }
       ]
     }
