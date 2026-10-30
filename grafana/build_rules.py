@@ -167,6 +167,41 @@ def resource(name: str, title: str, description: str, panel_id: int, expr: str, 
         "panelRef": {"dashboardUID": "cf2otel", "panelID": panel_id}}}
 
 
+LOKI = "grafanacloud-logs"
+# jev's gateway log records report zero usage, so its input tokens come from the
+# captured response body; every other model uses the gateway's own count.
+DAILY_INPUT_TOKENS = (
+    '(sum(sum_over_time({service_name="cf2otel"} | event_name="gen_ai.client.inference.operation.details" '
+    '| gen_ai_request_model="jev" | json in="result.usage.input_tokens" | unwrap in [24h])) or vector(0)) + '
+    '(sum(sum_over_time({service_name="cf2otel"} | event_name="cloudflare.ai_gateway.request" '
+    '| gen_ai_request_model!="jev" | unwrap gen_ai_usage_input_tokens [24h])) or vector(0))')
+DAILY_INPUT_TOKENS_THRESHOLD = 150_000_000
+
+
+def daily_input_tokens_rule() -> dict:
+    """AI Gateway spend alert: a Loki rule outside the collector-health shape.
+
+    No `for` and Ok error states match the rule as first created; the verify
+    step treats an added `for: 0s` as drift from the live rule.
+    """
+    expr_ds = {"type": "__expr__", "uid": "__expr__"}
+    return {"apiVersion": "rules.alerting.grafana.app/v0alpha1", "kind": "AlertRule",
+        "metadata": {"name": "ai-gateway-daily-input-tokens", "annotations": {"grafana.app/folder": FOLDER}, "labels": {"grafana.app/folder": FOLDER}},
+        "spec": {"title": "AIGatewayDailyInputTokensHigh", "trigger": {"interval": "15m"}, "paused": False,
+        "noDataState": "Ok", "execErrState": "Ok",
+        "labels": {"category": "spend", "domain": "observability", "page": "false", "service": "cf2otel", "severity": "warning", "source": "cf2otel"},
+        "annotations": {"summary": "AI Gateway input tokens over the last 24h: {{ humanize $values.B.Value }} (threshold 150M)",
+            "description": "Rolling 24h input tokens through the Cloudflare AI Gateway. jevgrep's jev model is counted from the response body, "
+                           "because its gateway log records report 0 usage (cf2otel CFO-0086); every other model uses gen_ai.usage.input_tokens. "
+                           "Normal days are 15-40M. The 2026-10-19 spike was 355M, almost all from jg calls in loop lanes. "
+                           "Check which loops are running jg heavily, using the agent-history catalogue."},
+        "expressions": {"A": {"datasourceUID": LOKI, "queryType": "instant", "relativeTimeRange": {"from": "24h", "to": "0s"},
+            "model": {"refId": "A", "expr": DAILY_INPUT_TOKENS, "queryType": "instant", "datasource": {"type": "loki", "uid": LOKI}}},
+            "B": {"datasourceUID": "__expr__", "model": {"refId": "B", "type": "reduce", "expression": "A", "reducer": "last", "datasource": expr_ds}},
+            "C": {"source": True, "datasourceUID": "__expr__", "model": {"refId": "C", "type": "threshold", "expression": "B", "datasource": expr_ds,
+                "conditions": [{"evaluator": {"type": "gt", "params": [DAILY_INPUT_TOKENS_THRESHOLD]}}]}}}}}
+
+
 def certificate_fixtures() -> dict:
     """Promtool cases exercise generated queries against atomic snapshot exports.
 
@@ -386,6 +421,7 @@ def main() -> None:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     artifacts = [(OUT / f"{rule[0]}.json", resource(*rule)) for rule in RULES]
+    artifacts.append((OUT / "ai-gateway-daily-input-tokens.json", daily_input_tokens_rule()))
     artifacts.append((OUT / "fixtures" / "certificates.test.yaml", certificate_fixtures()))
     artifacts.append((OUT / "fixtures" / "collector-stale.test.yaml", collector_stale_fixtures()))
     artifacts.append((OUT / "fixtures" / "polling-health.test.yaml", polling_health_fixtures()))

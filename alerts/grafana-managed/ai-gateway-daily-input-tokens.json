@@ -1,0 +1,89 @@
+{
+  "apiVersion": "rules.alerting.grafana.app/v0alpha1",
+  "kind": "AlertRule",
+  "metadata": {
+    "annotations": {
+      "grafana.app/folder": "REPLACE_WITH_FOLDER_UID"
+    },
+    "labels": {
+      "grafana.app/folder": "REPLACE_WITH_FOLDER_UID"
+    },
+    "name": "ai-gateway-daily-input-tokens"
+  },
+  "spec": {
+    "annotations": {
+      "description": "Rolling 24h input tokens through the Cloudflare AI Gateway. jevgrep's jev model is counted from the response body, because its gateway log records report 0 usage (cf2otel CFO-0086); every other model uses gen_ai.usage.input_tokens. Normal days are 15-40M. The 2026-10-19 spike was 355M, almost all from jg calls in loop lanes. Check which loops are running jg heavily, using the agent-history catalogue.",
+      "summary": "AI Gateway input tokens over the last 24h: {{ humanize $values.B.Value }} (threshold 150M)"
+    },
+    "execErrState": "Ok",
+    "expressions": {
+      "A": {
+        "datasourceUID": "grafanacloud-logs",
+        "model": {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafanacloud-logs"
+          },
+          "expr": "(sum(sum_over_time({service_name=\"cf2otel\"} | event_name=\"gen_ai.client.inference.operation.details\" | gen_ai_request_model=\"jev\" | json in=\"result.usage.input_tokens\" | unwrap in [24h])) or vector(0)) + (sum(sum_over_time({service_name=\"cf2otel\"} | event_name=\"cloudflare.ai_gateway.request\" | gen_ai_request_model!=\"jev\" | unwrap gen_ai_usage_input_tokens [24h])) or vector(0))",
+          "queryType": "instant",
+          "refId": "A"
+        },
+        "queryType": "instant",
+        "relativeTimeRange": {
+          "from": "24h",
+          "to": "0s"
+        }
+      },
+      "B": {
+        "datasourceUID": "__expr__",
+        "model": {
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "reducer": "last",
+          "refId": "B",
+          "type": "reduce"
+        }
+      },
+      "C": {
+        "datasourceUID": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  150000000
+                ],
+                "type": "gt"
+              }
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "B",
+          "refId": "C",
+          "type": "threshold"
+        },
+        "source": true
+      }
+    },
+    "labels": {
+      "category": "spend",
+      "domain": "observability",
+      "page": "false",
+      "service": "cf2otel",
+      "severity": "warning",
+      "source": "cf2otel"
+    },
+    "noDataState": "Ok",
+    "paused": false,
+    "title": "AIGatewayDailyInputTokensHigh",
+    "trigger": {
+      "interval": "15m"
+    }
+  }
+}
