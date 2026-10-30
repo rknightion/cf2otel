@@ -28,7 +28,7 @@
               "value": 0
             }
           ],
-          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (cf2otel_collector) (max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) > 3)"
         },
         {
           "eval_time": "0s",
@@ -68,7 +68,7 @@
               "value": 2
             }
           ],
-          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (cf2otel_collector) (max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) > 3)"
         },
         {
           "eval_time": "0s",
@@ -108,7 +108,7 @@
               "value": 1
             }
           ],
-          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (cf2otel_collector) (max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) > 3)"
         },
         {
           "eval_time": "0s",
@@ -142,13 +142,8 @@
       "promql_expr_test": [
         {
           "eval_time": "0s",
-          "exp_samples": [
-            {
-              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
-              "value": 0.1
-            }
-          ],
-          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+          "exp_samples": [],
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (cf2otel_collector) (max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) > 3)"
         },
         {
           "eval_time": "0s",
@@ -156,6 +151,137 @@
             {
               "labels": "{cf2otel_collector=\"aigateway.logs\"}",
               "value": 6
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "300"
+        },
+        {
+          "series": "cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "600"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "1800"
+        }
+      ],
+      "interval": "1m",
+      "name": "slow catch-up poll is left to the backlog rule",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [],
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (cf2otel_collector) (max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) > 3)"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 6
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "300"
+        },
+        {
+          "series": "cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "600"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "900"
+        }
+      ],
+      "interval": "1m",
+      "name": "slow poll at the backlog threshold still scores",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 2
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (cf2otel_collector) (max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) > 3)"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 3
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "300"
+        },
+        {
+          "series": "cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "600"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "1800"
+        },
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "300"
+        },
+        {
+          "series": "cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "600"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"dns.metrics\"}",
+          "values": "0"
+        }
+      ],
+      "interval": "1m",
+      "name": "backlog on one collector leaves another slow collector scored",
+      "promql_expr_test": [
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"dns.metrics\"}",
+              "value": 2
+            }
+          ],
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (cf2otel_collector) (max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) > 3)"
+        },
+        {
+          "eval_time": "0s",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 6
+            },
+            {
+              "labels": "{cf2otel_collector=\"dns.metrics\"}",
+              "value": 0
             }
           ],
           "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
@@ -188,7 +314,7 @@
               "value": 0.25
             }
           ],
-          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (cf2otel_collector) (max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) > 3)"
         },
         {
           "eval_time": "0s",
@@ -224,7 +350,7 @@
               "value": 0.008333333333333333
             }
           ],
-          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (cf2otel_collector) (max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) > 3)"
         },
         {
           "eval_time": "0s",
@@ -241,7 +367,7 @@
         {
           "eval_time": "0s",
           "exp_samples": [],
-          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (cf2otel_collector) (max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) > 3)"
         },
         {
           "eval_time": "0s",
@@ -267,7 +393,7 @@
         {
           "eval_time": "0s",
           "exp_samples": [],
-          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (cf2otel_collector) (max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) > 3)"
         },
         {
           "eval_time": "0s",
@@ -297,7 +423,7 @@
         {
           "eval_time": "0s",
           "exp_samples": [],
-          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (cf2otel_collector) (max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) > 3)"
         },
         {
           "eval_time": "0s",
@@ -318,7 +444,7 @@
         },
         {
           "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"slow\",cf2otel_collector=\"dns.metrics\"}",
-          "values": "1800"
+          "values": "600"
         },
         {
           "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"hourly\",cf2otel_collector=\"dns.metrics\"}",
@@ -344,14 +470,14 @@
               "value": 2
             }
           ],
-          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
+          "expr": "max by (cf2otel_collector) (cf2otel_scrape_elapsed_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (cf2otel_collector) (max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) > 3)"
         },
         {
           "eval_time": "0s",
           "exp_samples": [
             {
               "labels": "{cf2otel_collector=\"dns.metrics\"}",
-              "value": 6
+              "value": 2
             }
           ],
           "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))"
