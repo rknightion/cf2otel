@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.1](https://github.com/rknightion/cf2otel/compare/v0.20.0...v0.20.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* **deps:** update module go.yaml.in/yaml/v3 to v3.0.6 ([#105](https://github.com/rknightion/cf2otel/issues/105)) ([caf8207](https://github.com/rknightion/cf2otel/commit/caf82078ca616a1f47706e426754b55bb52d3776))
+
 ## [0.20.0](https://github.com/rknightion/cf2otel/compare/v0.19.2...v0.20.0) (2026-10-30)
 
 
