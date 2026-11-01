@@ -160,12 +160,17 @@ RULES = [
 ]
 
 
+# Export failures come in bursts whenever the network blips (a switch firmware reboot
+# takes the host offline for a few minutes). The query counts over 15m, so a 20m hold
+# needs failures to keep happening past one window before it fires.
+FOR_OVERRIDES = {"cf2otel-export-failure": "20m"}
+
 def resource(name: str, title: str, description: str, panel_id: int, expr: str, threshold: int, no_data_state: str) -> dict:
     if f"panel-{panel_id}" not in render()["spec"]["elements"]:
         raise ValueError(f"missing dashboard panel {panel_id}")
     return {"apiVersion": "rules.alerting.grafana.app/v0alpha1", "kind": "AlertRule",
         "metadata": {"name": name, "annotations": {"grafana.app/folder": FOLDER}, "labels": {"grafana.app/folder": FOLDER}},
-        "spec": {"title": title, "trigger": {"interval": "1m"}, "for": "5m", "paused": False,
+        "spec": {"title": title, "trigger": {"interval": "1m"}, "for": FOR_OVERRIDES.get(name, "5m"), "paused": False,
         "noDataState": no_data_state, "execErrState": "Error", "labels": {"category": "collector", "pipeline": "cf2otel", "service": "cf2otel", "severity": "warning", "source": "cf2otel"},
         "annotations": {"__dashboardUid__": "cf2otel", "__panelId__": str(panel_id), "summary": title,
             "description": description, "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md"},

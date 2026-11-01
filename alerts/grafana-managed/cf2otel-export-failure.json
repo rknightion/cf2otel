@@ -75,7 +75,7 @@
         "source": true
       }
     },
-    "for": "5m",
+    "for": "20m",
     "labels": {
       "category": "collector",
       "pipeline": "cf2otel",
