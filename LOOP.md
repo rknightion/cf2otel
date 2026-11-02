@@ -1,6 +1,6 @@
 # Loop: cf2otel
 tier: guarded
-gate: just check
+gate: just check && just groma-check
 ci-required: ci-success
 release-on-push: yes
 deploy-on-push: yes

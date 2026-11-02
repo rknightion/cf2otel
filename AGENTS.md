@@ -12,6 +12,16 @@ Off the Mac, when the remote gate runner is installed (`which gaterun`): `gateru
 `just check`), paced across lanes with `gaterun-slot <lane> -- gaterun -- just ci`; `.gaterunner.yaml`
 is its contract. Run one test or package locally.
 
+## Review and architecture map
+
+- Before committing a non-trivial change, run `just review` and read `.review/report.md`: duplication
+  and complexity the change introduced. Advisory; act on what is real.
+- `.groma/` is the Groma architecture map (one component per package). `just groma-check` gates CI
+  and the loop. A new or deleted non-test `.go` file under `cmd/` or `internal/` needs
+  `just groma-scan`, then `npx -y groma.md@<groma_version> edit <package-component> --combine <new-id>`
+  (or `remove <id>`), committed with the change. Never hand-edit `.groma/` except to drop a code
+  reference to a deleted file, which the CLI cannot remove.
+
 ## Tracker
 
 Tasks are `CFO-NNNN` in `backlog/`. **Cloudflare API surface - live-verified reference** is the data

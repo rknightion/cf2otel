@@ -12,6 +12,10 @@ golangci_lint_version := "v2.14.0"
 govulncheck_version := "v1.3.0"
 # renovate: datasource=go depName=github.com/goreleaser/goreleaser/v2
 goreleaser_version := "v2.18.0"
+# renovate: datasource=npm depName=groma.md
+groma_version := "0.7.8"
+# renovate: datasource=git-refs depName=https://github.com/rknightion/fleet-review currentValue=main
+fleet_review_rev := "5352a064f4140509b58c679162ecb6cc17642040"
 golangci_lint_dir := tools_dir + "/golangci-lint-" + golangci_lint_version
 
 # List available recipes
@@ -126,3 +130,66 @@ push-scan base head:
 [group('release')]
 relnotes-check notes_file commit_range="":
     go run ./tools/relnotes --range "{{ commit_range }}" --notes "{{ notes_file }}"
+
+# Advisory report of duplication and complexity a change introduced against base (merge-base)
+[group('check')]
+review base="origin/main":
+    uvx --from "git+https://github.com/rknightion/fleet-review@{{ fleet_review_rev }}" fleet-review --base {{ base }}
+
+# Rescan source into the Groma architecture map in .groma/
+[group('dev')]
+groma-scan:
+    npx -y groma.md@{{ groma_version }} plugin install
+    npx -y groma.md@{{ groma_version }} scan
+
+# Fail if the Groma architecture map has drifted from the source tree
+[group('check')]
+[no-exit-message]
+groma-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    groma() { npx -y "groma.md@{{ groma_version }}" "$@"; }
+    groma plugin install
+    plugins="$(groma plugin list)"
+    printf '%s\n' "$plugins"
+    if grep -q missing <<<"$plugins" || ! grep -q found <<<"$plugins"; then
+        echo "groma-check: a scanner is missing, so a scan would assert nothing" >&2
+        exit 1
+    fi
+    groma scanner check
+    report="$(groma scan)"
+    printf '%s\n' "$report"
+    seen="$(sed -nE 's/^created ([0-9]+), refreshed ([0-9]+), matched ([0-9]+).*/\1 \2 \3/p' <<<"$report" | awk '{print $1 + $2 + $3}')"
+    if [ -z "$seen" ] || [ "$seen" -eq 0 ]; then
+        echo "groma-check: the scan reported no components" >&2
+        exit 1
+    fi
+    # groma scan returns while a detached "scanner refresh" child still holds .groma/.groma.lock.
+    for _ in $(seq 1 120); do
+        [ -e .groma/.groma.lock ] || break
+        sleep 0.5
+    done
+    if [ -e .groma/.groma.lock ]; then
+        echo "groma-check: .groma/.groma.lock is still held after 60 s" >&2
+        exit 1
+    fi
+    fail=0
+    drift="$(git status --porcelain --untracked-files=all -- .groma ':(exclude).groma/.groma.lock')"
+    if [ -n "$drift" ]; then
+        echo "groma-check: .groma/ differs from HEAD; run 'just groma-scan', curate, and commit:" >&2
+        printf '%s\n' "$drift" >&2
+        fail=1
+    fi
+    empty="$(find .groma -path '*/components/*.md' -exec grep -L '^      file:' {} + || true)"
+    if [ -n "$empty" ]; then
+        echo "groma-check: components with an empty code list (groma remove <id> or combine):" >&2
+        printf '%s\n' "$empty" >&2
+        fail=1
+    fi
+    stale="$(find .groma -path '*/components/*.md' -exec sed -nE 's/^      file: (.*)$/\1/p' {} + | sort -u | while read -r f; do [ -e "$f" ] || echo "$f"; done)"
+    if [ -n "$stale" ]; then
+        echo "groma-check: code references to files that no longer exist:" >&2
+        printf '%s\n' "$stale" >&2
+        fail=1
+    fi
+    exit "$fail"
