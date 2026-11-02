@@ -11,7 +11,7 @@ golangci_lint_version := "v2.15.0"
 # renovate: datasource=go depName=golang.org/x/vuln
 govulncheck_version := "v1.3.0"
 # renovate: datasource=go depName=github.com/goreleaser/goreleaser/v2
-goreleaser_version := "v2.18.0"
+goreleaser_version := "v2.19.0"
 # renovate: datasource=npm depName=groma.md
 groma_version := "0.7.8"
 # renovate: datasource=git-refs depName=https://github.com/rknightion/fleet-review currentValue=main
