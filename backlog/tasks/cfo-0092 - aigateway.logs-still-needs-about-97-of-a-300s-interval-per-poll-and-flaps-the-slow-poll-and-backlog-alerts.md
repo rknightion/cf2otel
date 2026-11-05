@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-11-05T21:58:00Z'
-updated_date: '2026-11-05T23:29:00Z'
+updated_date: '2026-11-05T23:40:00Z'
 labels:
   - bug
 dependencies: []
@@ -55,4 +55,6 @@ Focused race regressions passed; dsreview PASS with zero findings. Full local ga
 Final isolated local just check PASS, including all race suites, build, vulnerability and generated Grafana checks. Remote hosts were unreachable. dsreview PASS with no findings; advisory review assessed. Source fix ready to publish; live calls-per-record and 24h alert acceptance remain open. No new signals or packaging change.
 
 Rollout checkpoint: exact b05d69e CI42128369086 and Release42128369543 passed. Compose host pulled and ran exact image; already automatically updated, healthy with0 restarts and0 runtime errors. First completed diagnostic poll:28 source spans,40 physical requests,95.835s total,69.444s collect,26.389s commit. Prior0135e04 epoch baseline:3 successes,488 source records,514 requests,510.402s total. Release PR106 passed own CI42128447280, reviewed metadata-only diff including both fixes, merged as153f5313811341526adaa52ceb718362c653d066. Await final release/CI and process stabilization, then run15min inspections with stable epoch; no pushes during proof. Baseline/local read helper and bounded observer are in machine-local codex/. 24h alert criterion remains open.
+
+Current observation state: release153f5313811341526adaa52ceb718362c653d066 / version0.20.1 pulled and running healthy, process start1793921557.2273192. Release42129579918, CI42129579022 and final auto-rc42130956461 all success; prior RC also completed. Runtime errors0. Impact watcher PID2316868/session94254 writes /Users/rob/repos/cf2otel/codex/cfo92-release-impact-live.json every900s (bounded2h); unchanged live-hour helper session70164 writes /Users/rob/repos/cf2otel/codex/cfo92-release-hour.json (14 reads/300s,49 collectors, actual intervals). Both sleep-protected with Linux systemd-inhibit because caffeinate is unavailable. First impact read:64 spans,75 requests,165.543s,0 failed polls. One failed monitor bootstrap receipt retained separately, not proof. Next action: inspect15min receipts, verify epoch unchanged and final65min delivery witness; no pushes during observation.
 <!-- SECTION:NOTES:END -->
