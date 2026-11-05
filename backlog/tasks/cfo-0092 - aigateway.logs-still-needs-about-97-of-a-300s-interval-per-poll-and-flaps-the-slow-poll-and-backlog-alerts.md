@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-11-05T21:58:00Z'
-updated_date: '2026-11-05T22:31:00Z'
+updated_date: '2026-11-05T23:29:00Z'
 labels:
   - bug
 dependencies: []
@@ -39,6 +39,8 @@ Measured 2026-11-05 on the m7kni stack, build e7c8ae0 (0.20.1-rc.5): aigateway.l
 
 <!-- SECTION:PLAN:BEGIN -->
 Measure current fenced calls per record and poll health; reproduce sequential detail latency with bounded fake upstreams; implement ordered bounded concurrency if supported; run focused regression checks, required gate and reviews, then observe live throughput. Preserve 10m interval pending evidence; leave 24h criteria open until observed.
+
+Owner authorized deploy verification: wait exact candidate CI/image publication, pull and run on compose host, inspect runtime errors, merge release PR after clean runtime check, then inspect every15min with build/process epoch fencing until measured impact is established. Keep24h alert criterion open until full observed window. Do not push tracker changes during live proof.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -51,4 +53,6 @@ Candidate skips raw request/response GETs only for explicit collect_log_payload=
 Focused race regressions passed; dsreview PASS with zero findings. Full local gate passed lint/vet and is running race suite. Sparse concurrency reproduction retained as follow-up evidence; no concurrency/budget contract changes in this candidate.
 
 Final isolated local just check PASS, including all race suites, build, vulnerability and generated Grafana checks. Remote hosts were unreachable. dsreview PASS with no findings; advisory review assessed. Source fix ready to publish; live calls-per-record and 24h alert acceptance remain open. No new signals or packaging change.
+
+Rollout checkpoint: exact b05d69e CI42128369086 and Release42128369543 passed. Compose host pulled and ran exact image; already automatically updated, healthy with0 restarts and0 runtime errors. First completed diagnostic poll:28 source spans,40 physical requests,95.835s total,69.444s collect,26.389s commit. Prior0135e04 epoch baseline:3 successes,488 source records,514 requests,510.402s total. Release PR106 passed own CI42128447280, reviewed metadata-only diff including both fixes, merged as153f5313811341526adaa52ceb718362c653d066. Await final release/CI and process stabilization, then run15min inspections with stable epoch; no pushes during proof. Baseline/local read helper and bounded observer are in machine-local codex/. 24h alert criterion remains open.
 <!-- SECTION:NOTES:END -->
