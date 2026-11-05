@@ -29,6 +29,10 @@ groma:
       file: internal/telemetry/provider.go
     - scanner: go
       file: internal/telemetry/snapshot.go
+    - scanner: go
+      file: internal/telemetry/poll.go
+    - scanner: go
+      file: internal/telemetry/operational_trace.go
   technology: Go, OpenTelemetry Go SDK, OTLP
   group: Collection core
 description: The only package that touches OTLP

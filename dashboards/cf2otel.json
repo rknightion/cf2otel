@@ -2443,16 +2443,40 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (cf2otel_status_class) (rate(cf2otel_api_requests_total{service_name=\"cf2otel\"}[$__rate_interval]))",
+                        "expr": "sum(rate(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
-                        "legendFormat": "{{cf2otel_status_class}}",
+                        "legendFormat": "No transport error",
                         "range": true,
                         "refId": "A"
                       },
                       "version": "v0"
                     },
                     "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (cf2otel_error_class) (rate(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class!=\"\"}[$__rate_interval]))",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cf2otel_error_class}}",
+                        "range": true,
+                        "refId": "B"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "B"
                   }
                 }
               ],
@@ -2462,10 +2486,10 @@
               "transformations": []
             }
           },
-          "description": "cf2otel's own Cloudflare API request rate. 4xx and 5xx here mean polls are failing; 0xx means the request never got an HTTP response (network error or timeout).",
+          "description": "Physical Cloudflare requests by transport error class. Handled errors, such as unavailable bodies, do not necessarily fail the poll.",
           "id": 1032,
           "links": [],
-          "title": "Cloudflare API calls by status class",
+          "title": "Cloudflare API request outcomes",
           "vizConfig": {
             "group": "timeseries",
             "kind": "VizConfig",
@@ -2496,98 +2520,7 @@
                   },
                   "unit": "reqps"
                 },
-                "overrides": [
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "1xx"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "fixedColor": "purple",
-                          "mode": "fixed"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "2xx"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "fixedColor": "green",
-                          "mode": "fixed"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "3xx"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "fixedColor": "blue",
-                          "mode": "fixed"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "4xx"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "fixedColor": "orange",
-                          "mode": "fixed"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "5xx"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "fixedColor": "red",
-                          "mode": "fixed"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "0xx"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "fixedColor": "text",
-                          "mode": "fixed"
-                        }
-                      }
-                    ]
-                  }
-                ]
+                "overrides": []
               },
               "options": {
                 "legend": {
@@ -20134,7 +20067,7 @@
               "transformations": []
             }
           },
-          "description": "95th percentile poll duration over the selected range for the 10 slowest collectors. The histogram has finite buckets through 120 s; these are bucket-bound estimates, not exact timings.",
+          "description": "95th percentile poll duration over the selected range for the 10 slowest collectors. The histogram has finite buckets through 7200 s; these are bucket-bound estimates, not exact timings.",
           "id": 2713,
           "links": [],
           "title": "Slowest collectors (poll p95)",
@@ -20495,7 +20428,7 @@
               "transformations": []
             }
           },
-          "description": "Cloudflare API attempt duration from the cf2otel.api.duration histogram.",
+          "description": "Cloudflare API time to response headers from the cf2otel.api.duration histogram; excludes response body download and limiter wait.",
           "id": 2721,
           "links": [],
           "title": "API latency distribution",
@@ -20645,7 +20578,7 @@
               "transformations": []
             }
           },
-          "description": "Median, p95 and p99 Cloudflare API attempt duration.",
+          "description": "Median, p95 and p99 Cloudflare API time to response headers; excludes response body download and limiter wait.",
           "id": 2722,
           "links": [],
           "title": "API latency percentiles",
@@ -21052,6 +20985,159 @@
           "id": 2741,
           "links": [],
           "title": "Retention-gap events",
+          "vizConfig": {
+            "group": "logs",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              },
+              "options": {
+                "dedupStrategy": "none",
+                "enableInfiniteScrolling": true,
+                "enableLogDetails": true,
+                "prettifyLogMessage": false,
+                "showCommonLabels": false,
+                "showLabels": false,
+                "showTime": true,
+                "sortOrder": "Descending",
+                "wrapLogMessage": true
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2742": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (cf2otel_collector, cf2otel_poll_phase) (rate(cf2otel_poll_phase_duration_seconds_sum{service_name=\"cf2otel\"}[$__rate_interval])) / sum by (cf2otel_collector, cf2otel_poll_phase) (rate(cf2otel_poll_phase_duration_seconds_count{service_name=\"cf2otel\"}[$__rate_interval]))",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cf2otel_collector}} {{cf2otel_poll_phase}}",
+                        "range": true,
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "5m"
+              },
+              "transformations": []
+            }
+          },
+          "description": "Mean wall time per completed poll phase, including failed polls. Collection includes upstream body download and processing. API header and limiter sums overlap concurrent work and must not be added to these phases.",
+          "id": 2742,
+          "links": [],
+          "title": "Completed poll phase time",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "axisSoftMin": 0,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "gradientMode": "opacity",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "unit": "s"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
+      "panel-2743": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_loki}"
+                      },
+                      "group": "loki",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "{service_name=\"cf2otel\"} | event_name=\"cf2otel.poll.completed\"",
+                        "legendFormat": "",
+                        "queryType": "range",
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "One summary per completed poll with outcome, request roles, aggregate API waits, phase timing and checkpointed record counts. Includes failed and canceled polls; trace correlation leads to operational API spans.",
+          "id": 2743,
+          "links": [],
+          "title": "Completed poll diagnostics",
           "vizConfig": {
             "group": "logs",
             "kind": "VizConfig",
@@ -23405,16 +23491,40 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (cf2otel_status_class) (rate(cf2otel_api_requests_total{service_name=\"cf2otel\"}[$__rate_interval]))",
+                        "expr": "sum(rate(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
-                        "legendFormat": "{{cf2otel_status_class}}",
+                        "legendFormat": "No transport error",
                         "range": true,
                         "refId": "A"
                       },
                       "version": "v0"
                     },
                     "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_prometheus}"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (cf2otel_error_class) (rate(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class!=\"\"}[$__rate_interval]))",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{cf2otel_error_class}}",
+                        "range": true,
+                        "refId": "B"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "B"
                   }
                 }
               ],
@@ -23424,10 +23534,10 @@
               "transformations": []
             }
           },
-          "description": "Cloudflare API request rate by status class. 0xx means the request got no HTTP response.",
+          "description": "Physical Cloudflare requests by transport error class; a handled HTTP error does not necessarily fail a poll.",
           "id": 408,
           "links": [],
-          "title": "API requests by status class",
+          "title": "API request outcomes",
           "vizConfig": {
             "group": "timeseries",
             "kind": "VizConfig",
@@ -23458,98 +23568,7 @@
                   },
                   "unit": "reqps"
                 },
-                "overrides": [
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "1xx"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "fixedColor": "purple",
-                          "mode": "fixed"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "2xx"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "fixedColor": "green",
-                          "mode": "fixed"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "3xx"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "fixedColor": "blue",
-                          "mode": "fixed"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "4xx"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "fixedColor": "orange",
-                          "mode": "fixed"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "5xx"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "fixedColor": "red",
-                          "mode": "fixed"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "0xx"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "fixedColor": "text",
-                          "mode": "fixed"
-                        }
-                      }
-                    ]
-                  }
-                ]
+                "overrides": []
               },
               "options": {
                 "legend": {
@@ -31359,6 +31378,46 @@
                           }
                         },
                         "title": "Polling and windows"
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "collapse": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2742"
+                                  },
+                                  "height": 8,
+                                  "width": 24,
+                                  "x": 0,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2743"
+                                  },
+                                  "height": 10,
+                                  "width": 24,
+                                  "x": 0,
+                                  "y": 8
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "title": "Poll diagnostics"
                       }
                     },
                     {

@@ -20,6 +20,8 @@ groma:
       file: internal/collectors/aigateway/logs_usage.go
     - scanner: go
       file: internal/collectors/aigateway/logs.go
+    - scanner: go
+      file: internal/collectors/aigateway/logs_cache.go
   technology: Go
   group: Collector domains
 description: AI Gateway requests as GenAI spans, logs and metrics

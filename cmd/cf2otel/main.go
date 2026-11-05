@@ -203,6 +203,7 @@ func run(args []string) error {
 	scheduler := collector.NewScheduler(registry, emitter, checkpoints)
 	if providers != nil {
 		scheduler.Flusher = providers
+		scheduler.OnRun = providers.ObservePoll
 	}
 	scheduler.OnPoll = func(ctx context.Context, name string, duration time.Duration, err error, at time.Time) {
 		if e := stats.Poll(ctx, name, duration, err, at); e != nil {

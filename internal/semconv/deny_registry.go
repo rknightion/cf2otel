@@ -41,6 +41,8 @@ var denyAttributes = map[string]struct{}{
 	AttrExportSignal:                     {},
 	AttrBuildVersion:                     {},
 	AttrBuildCommit:                      {},
+	AttrPollOutcome:                      {},
+	AttrPollPhase:                        {},
 	AttrAPIMethod:                        {},
 	AttrZoneReason:                       {},
 	AttrRUMSiteTag:                       {},

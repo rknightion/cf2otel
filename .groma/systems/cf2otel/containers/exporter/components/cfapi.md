@@ -23,6 +23,8 @@ groma:
       file: internal/cfapi/request_observer.go
     - scanner: go
       file: internal/cfapi/types.go
+    - scanner: go
+      file: internal/cfapi/poll_requests.go
   technology: Go, HTTPS, GraphQL
   group: Collection core
 description: The only package that talks to Cloudflare, read-only by construction

@@ -73,6 +73,11 @@ internal hostname in a task or doc.
   per token, `Ratelimit-Policy` `q=1200;w=300`. REST and GraphQL share a
   combined 3.75 rps/burst 5 ceiling; REST can use spare capacity. Explicit old REST overrides
   still apply. Judge recovery by declining checkpoint age as well as scrape success.
+- AI Gateway budgeted detail reads overlap across source seconds, but emission and checkpoints
+  remain ordered whole-second operations. Three-row lookahead shares a two-request physical
+  read cap, including raw-body fallbacks, to preserve competing GraphQL throughput.
+  Boundary reuse is limited to six entries, 16MiB
+  and five minutes from fetch; cursor changes and failed-delivery replays discard reuse.
 - AI Gateway detail `collect_log_payload=false` explicitly disables body storage: null heads
   then lead to 404/code7002 on both raw endpoints. Skip those reads while preserving detail
   metadata and unavailable-body accounting; missing/null flags still require fallback reads.
@@ -82,6 +87,9 @@ internal hostname in a task or doc.
 - The OTLP protobuf marshal rejects a string with invalid UTF-8 before any request is sent, and one
   such record fails its whole commit window on every retry. Byte caps stop on a rune boundary
   (`runeBoundary`) and `internal/telemetry` repairs any remaining invalid string at emission.
+- Completed poll diagnostics use an operational trace pipeline separate from source delivery.
+  API header/limiter durations are overlapping request sums, not wall-time phases; committed
+  items count checkpointed windows and telemetry records, not AI source rows.
 - Every rule in the Grafana "cf2otel alerts" folder comes from `grafana/build_rules.py`. A rule
   made by hand there fails grafana-sync's post-publish check as a stale live rule.
 - Grafana Cloud Tempo on the m7kni stack stores span attribute values truncated at 2048 characters.

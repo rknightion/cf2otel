@@ -39,13 +39,14 @@ type ProviderOptions struct {
 	PrometheusReader sdkmetric.Reader
 }
 type Providers struct {
-	Emitter Emitter
-	metrics *sdkmetric.MeterProvider
-	logs    *sdklog.LoggerProvider
-	process *sdklog.LoggerProvider
-	policy  *denyPolicy
-	traces  *sdktrace.TracerProvider
-	hook    *exportObserver
+	Emitter    Emitter
+	metrics    *sdkmetric.MeterProvider
+	logs       *sdklog.LoggerProvider
+	process    *sdklog.LoggerProvider
+	policy     *denyPolicy
+	traces     *sdktrace.TracerProvider
+	operations *sdktrace.TracerProvider
+	hook       *exportObserver
 }
 
 func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
@@ -81,7 +82,7 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 	base := strings.TrimRight(o.Endpoint, "/")
 	var mx sdkmetric.Exporter
 	var lx, plx sdklog.Exporter
-	var tx sdktrace.SpanExporter
+	var tx, ox sdktrace.SpanExporter
 	var err error
 	switch o.Protocol {
 	case "", "http":
@@ -111,6 +112,10 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 		if err != nil {
 			return nil, err
 		}
+		ox, err = otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(base+"/v1/traces"), otlptracehttp.WithHeaders(h), otlptracehttp.WithRetry(otlptracehttp.RetryConfig{Enabled: false}))
+		if err != nil {
+			return nil, err
+		}
 	case "grpc":
 		u, parseErr := url.Parse(base)
 		if parseErr != nil || u.Host == "" || u.Scheme != "https" {
@@ -130,6 +135,10 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 			return nil, err
 		}
 		tx, err = otlptracegrpc.New(ctx, otlptracegrpc.WithEndpoint(endpoint), otlptracegrpc.WithHeaders(h), otlptracegrpc.WithRetry(otlptracegrpc.RetryConfig{Enabled: false}))
+		if err != nil {
+			return nil, err
+		}
+		ox, err = otlptracegrpc.New(ctx, otlptracegrpc.WithEndpoint(endpoint), otlptracegrpc.WithHeaders(h), otlptracegrpc.WithRetry(otlptracegrpc.RetryConfig{Enabled: false}))
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +171,7 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 	if !policy.metric(semconv.MetricCardinalityOverflows) {
 		counter, err := mp.Meter(semconv.ServiceName).Int64Counter(semconv.MetricCardinalityOverflows, metric.WithUnit(spec.Unit), metric.WithDescription(spec.Description))
 		if err != nil {
-			return nil, errors.Join(err, mp.Shutdown(ctx), lx.Shutdown(ctx), plx.Shutdown(ctx), tx.Shutdown(ctx))
+			return nil, errors.Join(err, mp.Shutdown(ctx), lx.Shutdown(ctx), plx.Shutdown(ctx), tx.Shutdown(ctx), ox.Shutdown(ctx))
 		}
 		overflow.setCounter(counter)
 	}
@@ -170,11 +179,12 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 	// loss through ForceFlush. Synchronous bounded export retains backpressure.
 	lp := sdklog.NewLoggerProvider(sdklog.WithResource(res), sdklog.WithProcessor(sdklog.NewSimpleProcessor(lx)))
 	tp := sdktrace.NewTracerProvider(sdktrace.WithResource(res), sdktrace.WithBatcher(tx, sdktrace.WithBlocking()))
+	op := sdktrace.NewTracerProvider(sdktrace.WithResource(res), sdktrace.WithBatcher(operationalTraceExporter{SpanExporter: ox, hook: hook}, sdktrace.WithBlocking()))
 	emitter := NewEmitter(mp.Meter(semconv.ServiceName), lp.Logger(semconv.ServiceName), tp.Tracer(semconv.ServiceName)).(*otelEmitter)
 	// Process logs are diagnostics: batched, outside the commit export
 	// observer, so their loss or failure never fails a checkpoint commit.
 	pp := sdklog.NewLoggerProvider(sdklog.WithResource(res), sdklog.WithProcessor(sdklog.NewBatchProcessor(plx)))
-	return &Providers{Emitter: filterEmitterWithPolicy(emitter, policy), metrics: mp, logs: lp, process: pp, policy: policy, traces: tp, hook: hook}, nil
+	return &Providers{Emitter: filterEmitterWithPolicy(emitter, policy), metrics: mp, logs: lp, process: pp, policy: policy, traces: tp, operations: op, hook: hook}, nil
 }
 func (p *Providers) SetExportObserver(fn func(context.Context, string, error)) {
 	p.hook.Set(fn)
@@ -198,7 +208,18 @@ func (p *Providers) FlushCommit(ctx context.Context, since uint64) error {
 	return errors.Join(failures...)
 }
 func (p *Providers) Shutdown(ctx context.Context) error {
-	return errors.Join(p.metrics.Shutdown(ctx), p.logs.Shutdown(ctx), p.traces.Shutdown(ctx), p.process.Shutdown(ctx))
+	// Required source signals get the caller's budget before diagnostics can
+	// spend it. Even callers without a deadline have a bounded shutdown.
+	sourceCtx, sourceCancel := context.WithTimeout(ctx, 10*time.Second)
+	sourceErr := errors.Join(p.logs.Shutdown(sourceCtx), p.traces.Shutdown(sourceCtx), p.metrics.Shutdown(sourceCtx))
+	sourceCancel()
+	diagnosticCtx, diagnosticCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer diagnosticCancel()
+	var opErr error
+	if p.operations != nil {
+		opErr = p.operations.Shutdown(diagnosticCtx)
+	}
+	return errors.Join(sourceErr, opErr, p.process.Shutdown(diagnosticCtx))
 }
 
 // ProcessLogHandler tees the process logger to OTLP as cf2otel.process.log.

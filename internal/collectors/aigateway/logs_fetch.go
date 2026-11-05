@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
 )
@@ -30,7 +31,9 @@ func (c *logs) fetchLog(ctx context.Context, path string, collectPayload *bool) 
 			return result, errors.New("aigateway API does not support raw body reads")
 		}
 	}
-	if err := c.api.Get(ctx, path, nil, &result.detail); err != nil {
+	if err := c.withFetchSlot(ctx, func() error {
+		return c.api.Get(cfapi.WithRequestRole(ctx, cfapi.RequestRoleDetail), path, nil, &result.detail)
+	}); err != nil {
 		return capturedLog{}, fmt.Errorf("aigateway log detail: %w", err)
 	}
 	if raw == nil {
@@ -61,7 +64,9 @@ func (c *logs) fetchLog(ctx context.Context, path string, collectPayload *bool) 
 			continue
 		}
 		wg.Go(func() {
-			if err := raw.GetRaw(ctx, path+"/"+side, nil, &result.bodies[i]); err != nil {
+			if err := c.withFetchSlot(ctx, func() error {
+				return raw.GetRaw(cfapi.WithRequestRole(ctx, cfapi.RequestRoleBody), path+"/"+side, nil, &result.bodies[i])
+			}); err != nil {
 				// A body that is gone (404/7002) or past the client's size cap can
 				// never be read; retrying it would fail the run forever. Mark the
 				// side unavailable and keep the rest of the log.
@@ -106,33 +111,43 @@ func completeHead(head json.RawMessage, complete *bool) (json.RawMessage, bool) 
 // (up to ~4 MB of heads), so one at a time leaves most of the quota idle.
 const detailConcurrency = 3
 
+// Two physical reads leave admission opportunities for other collectors even
+// when every prefetched detail needs both raw-body fallbacks.
+const physicalReadConcurrency = 2
+
 func (c *logs) detailPath(gateway, id string) string {
 	return "/accounts/" + url.PathEscape(c.cfg.Cloudflare.AccountID) + "/ai-gateway/gateways/" + url.PathEscape(gateway) + "/logs/" + url.PathEscape(id)
 }
 
 type fetchedLog struct {
-	log capturedLog
-	err error
+	log        capturedLog
+	err        error
+	fetchedAt  time.Time
+	cacheBytes int
 }
 
 // detailPrefetch fetches row details at most detailConcurrency ahead of the
 // consumer, which reads them strictly in order. A nil prefetch means rows need
 // no detail and emit fetches nothing.
 type detailPrefetch struct {
-	c       *logs
-	ctx     context.Context
-	cancel  context.CancelFunc
-	rows    []namedRow
-	results []chan fetchedLog
-	wg      sync.WaitGroup
+	c        *logs
+	ctx      context.Context
+	cancel   context.CancelFunc
+	rows     []namedRow
+	results  []chan fetchedLog
+	wg       sync.WaitGroup
+	retained detailCache
+	retain   bool
+	stopped  bool
 }
 
-func (c *logs) prefetchDetails(ctx context.Context, rows []namedRow) *detailPrefetch {
+func (c *logs) prefetchDetails(ctx context.Context, rows []namedRow, retain bool) *detailPrefetch {
 	if !c.cfg.AIGateway.CaptureBodies && !c.cfg.AIGateway.LinkCallerTraces {
 		return nil
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	p := &detailPrefetch{c: c, ctx: ctx, cancel: cancel, rows: rows, results: make([]chan fetchedLog, len(rows))}
+	p := &detailPrefetch{c: c, ctx: ctx, cancel: cancel, rows: rows, results: make([]chan fetchedLog, len(rows)), retained: c.retained, retain: retain}
+	c.retained = detailCache{}
 	for i := 0; i < min(detailConcurrency, len(rows)); i++ {
 		p.start(i)
 	}
@@ -141,9 +156,13 @@ func (c *logs) prefetchDetails(ctx context.Context, rows []namedRow) *detailPref
 
 func (p *detailPrefetch) start(i int) {
 	p.results[i] = make(chan fetchedLog, 1)
+	if result, ok := p.retained.take(p.rows[i]); ok {
+		p.results[i] <- result
+		return
+	}
 	p.wg.Go(func() {
 		log, err := p.c.fetchLog(p.ctx, p.c.detailPath(p.rows[i].gateway, p.rows[i].row.ID), p.rows[i].row.CollectLogPayload)
-		p.results[i] <- fetchedLog{log, err}
+		p.results[i] <- fetchedLog{log: log, err: err, fetchedAt: time.Now()}
 	})
 }
 
@@ -153,6 +172,9 @@ func (p *detailPrefetch) get(i int) *fetchedLog {
 		return nil
 	}
 	result := <-p.results[i]
+	if p.retain {
+		p.retained.put(p.rows[i], result)
+	}
 	if next := i + detailConcurrency; next < len(p.rows) {
 		p.start(next)
 	}
@@ -161,9 +183,37 @@ func (p *detailPrefetch) get(i int) *fetchedLog {
 
 // stop cancels unread fetches and waits for them, so none outlives its window.
 func (p *detailPrefetch) stop() {
-	if p == nil {
+	if p == nil || p.stopped {
 		return
 	}
+	p.stopped = true
 	p.cancel()
 	p.wg.Wait()
+	for i, ch := range p.results {
+		if ch == nil {
+			continue
+		}
+		select {
+		case result := <-ch:
+			if p.retain {
+				p.retained.put(p.rows[i], result)
+			}
+		default:
+		}
+	}
+}
+
+// Bound physical reads as well as prefetched rows: missing heads can otherwise
+// double the number of REST requests competing for the shared token budget.
+func (c *logs) withFetchSlot(ctx context.Context, read func() error) error {
+	select {
+	case c.fetchSlots <- struct{}{}:
+		defer func() { <-c.fetchSlots }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return read()
 }

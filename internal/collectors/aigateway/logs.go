@@ -29,15 +29,21 @@ const logPageSize = 50
 const listRowCap = 500
 
 type logs struct {
-	cfg *config.Config
-	api cfapi.Client
+	cfg          *config.Config
+	api          cfapi.Client
+	collectGuard chan struct{}
+	fetchSlots   chan struct{}
+	retained     detailCache
+	retainedFrom time.Time
 }
 
-func NewLogs(cfg *config.Config, api cfapi.Client) *logs { return &logs{cfg: cfg, api: api} }
-func (*logs) Name() string                               { return "aigateway.logs" }
-func (*logs) DefaultInterval() time.Duration             { return 5 * time.Minute }
-func (*logs) Lag() time.Duration                         { return time.Minute }
-func (*logs) AdaptiveCommitWindow() bool                 { return true }
+func NewLogs(cfg *config.Config, api cfapi.Client) *logs {
+	return &logs{cfg: cfg, api: api, collectGuard: make(chan struct{}, 1), fetchSlots: make(chan struct{}, physicalReadConcurrency)}
+}
+func (*logs) Name() string                   { return "aigateway.logs" }
+func (*logs) DefaultInterval() time.Duration { return 5 * time.Minute }
+func (*logs) Lag() time.Duration             { return time.Minute }
+func (*logs) AdaptiveCommitWindow() bool     { return true }
 
 type logRow struct {
 	ID          string    `json:"id"`
@@ -106,13 +112,29 @@ func (c *logs) CollectWindow(ctx context.Context, from, to time.Time, out teleme
 
 // CollectWindowBudget emits whole source seconds in order and returns a
 // second boundary before to once the buffered records reach budgetBytes or
-// listRowCap rows have been listed. One commit then never delivers, or holds in
-// memory, more than the budget plus one second, and bodies past the mark are
-// not fetched. The second that would overflow is fetched to be measured and
-// left for the next call.
-func (c *logs) CollectWindowBudget(ctx context.Context, from, to time.Time, budgetBytes int, out telemetry.Emitter) (time.Time, error) {
+// listRowCap rows have been listed. Buffered output is bounded by the budget
+// plus one source second. Independently, at most three details are in flight,
+// with up to six completed details / 16 MiB retained across a budget cut.
+func (c *logs) CollectWindowBudget(ctx context.Context, from, to time.Time, budgetBytes int, out telemetry.Emitter) (mark time.Time, err error) {
 	if !from.Before(to) || c.cfg == nil || c.api == nil {
 		return time.Time{}, errors.New("aigateway logs: invalid window or dependencies")
+	}
+	select {
+	case c.collectGuard <- struct{}{}:
+		defer func() {
+			if err != nil || !mark.Before(to) {
+				c.retained = detailCache{}
+			}
+			<-c.collectGuard
+		}()
+	case <-ctx.Done():
+		return time.Time{}, ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return time.Time{}, err
+	}
+	if budgetBytes <= 0 || !from.Equal(c.retainedFrom) {
+		c.retained = detailCache{}
 	}
 	pagers := make([]*logPager, 0, len(c.cfg.AIGateway.Gateways))
 	for _, gateway := range c.cfg.AIGateway.Gateways {
@@ -131,7 +153,7 @@ func (c *logs) CollectWindowBudget(ctx context.Context, from, to time.Time, budg
 			}
 		}
 		rows := takeBefore(pagers, to)
-		details := c.prefetchDetails(ctx, rows)
+		details := c.prefetchDetails(ctx, rows, false)
 		defer details.stop()
 		for i, item := range rows {
 			if err := c.emitWith(ctx, item.gateway, item.row, details.get(i), out); err != nil {
@@ -175,9 +197,11 @@ func (c *logs) CollectWindowBudget(ctx context.Context, from, to time.Time, budg
 
 // emitSeconds delivers rows a whole source second at a time and reports the
 // second that would overflow the budget, if any.
-// Details are prefetched one second at a time: nothing past the second that
-// overflows is fetched, and sparse traffic keeps its share of the limiter.
+// Details overlap across source seconds, while emission and budget decisions
+// remain ordered and whole-second. Retention is only a read optimisation.
 func (c *logs) emitSeconds(ctx context.Context, rows []namedRow, budgetBytes int, buffered *int, emitted *bool, out telemetry.Emitter) (time.Time, bool, error) {
+	details := c.prefetchDetails(ctx, rows, true)
+	defer details.stop()
 	for start := 0; start < len(rows); {
 		second := rows[start].row.CreatedAt.Truncate(time.Second)
 		end := start
@@ -185,17 +209,20 @@ func (c *logs) emitSeconds(ctx context.Context, rows []namedRow, budgetBytes int
 			end++
 		}
 		group := &telemetry.Buffer{}
-		details := c.prefetchDetails(ctx, rows[start:end])
 		for i := start; i < end; i++ {
-			if err := c.emitWith(ctx, rows[i].gateway, rows[i].row, details.get(i-start), group); err != nil {
+			if err := c.emitWith(ctx, rows[i].gateway, rows[i].row, details.get(i), group); err != nil {
 				details.stop()
 				return time.Time{}, false, err
 			}
 		}
-		details.stop()
 		size := group.ApproxBytes()
 		// The first second is always delivered whole, whatever its size.
 		if *emitted && *buffered+size > budgetBytes {
+			details.stop()
+			if details != nil {
+				details.retained.pruneBefore(second)
+				c.retained, c.retainedFrom = details.retained, second
+			}
 			return second, true, nil
 		}
 		if err := group.ReplayInto(ctx, out); err != nil {
@@ -204,6 +231,9 @@ func (c *logs) emitSeconds(ctx context.Context, rows []namedRow, budgetBytes int
 		*buffered += size
 		*emitted = true
 		start = end
+		if details != nil {
+			details.retained.pruneBefore(second.Add(time.Second))
+		}
 	}
 	return time.Time{}, false, nil
 }
@@ -227,7 +257,7 @@ func (p *logPager) next(ctx context.Context) error {
 	p.page++
 	query := url.Values{"page": {strconv.Itoa(p.page)}, "per_page": {strconv.Itoa(logPageSize)}, "order_by": {"created_at"}, "order_by_direction": {"asc"}, "start_date": {p.from.UTC().Format(time.RFC3339Nano)}, "end_date": {p.to.UTC().Format(time.RFC3339Nano)}}
 	var page []logRow
-	if err := p.api.Get(ctx, p.path, query, &page); err != nil {
+	if err := p.api.Get(cfapi.WithRequestRole(ctx, cfapi.RequestRoleList), p.path, query, &page); err != nil {
 		return fmt.Errorf("aigateway logs page %d: %w", p.page, err)
 	}
 	horizon := p.horizon()

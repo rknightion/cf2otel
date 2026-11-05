@@ -156,6 +156,8 @@ var metricSpecs = map[string]MetricSpec{
 	MetricScrapeElapsed:                  {Unit: "s", Description: "Maximum of active elapsed time and last completed poll duration."},
 	MetricCheckpointBacklog:              {Unit: "s", Description: "Checkpoint age beyond the current source holdback."},
 	MetricCheckpointAge:                  {Unit: "s", Description: "Age of the oldest collector checkpoint."},
+	MetricPollPhaseDuration:              {Unit: "s", Description: "Poll wall time in collection, commit-lock wait and commit delivery; excludes overlapping aggregate HTTP times.", Boundaries: scrapeDurationBuckets},
+	MetricPollCommitted:                  {Unit: "{item}", Description: "Checkpointed windows, logs and spans after successful delivery and checkpoint persistence."},
 	MetricAPIRequests:                    {Unit: "{request}", Description: "Physical Cloudflare HTTP requests by collector, REST/GraphQL method and failure-only error class."},
 	MetricAPIEnvelopeErrors:              {Unit: "{error}", Description: "Unsuccessful Cloudflare API envelopes returned with successful HTTP status."},
 	MetricAPIDuration:                    {Unit: "s", Description: "Physical Cloudflare HTTP request duration through response headers, excluding limiter wait, by collector and REST/GraphQL method.", Boundaries: pollerDurationBuckets},

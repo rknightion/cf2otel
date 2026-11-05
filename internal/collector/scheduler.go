@@ -78,6 +78,7 @@ type Scheduler struct {
 	Checkpoints   CheckpointStore
 	Now           func() time.Time
 	Logger        *slog.Logger
+	OnRun         func(context.Context, string) (context.Context, func(telemetry.PollSummary))
 	OnPoll        func(context.Context, string, time.Duration, error, time.Time)
 	OnCheckpoint  func(string, time.Time)
 	OnStart       func(string, time.Time)
@@ -159,6 +160,28 @@ func (s *Scheduler) runEntry(ctx context.Context, e Entry) {
 }
 func (s *Scheduler) RunOnce(ctx context.Context, e Entry) (err error) {
 	ctx = cfapi.WithCollector(ctx, e.Collector.Name())
+	ctx, requests := cfapi.WithPollRequests(ctx)
+	summary := &telemetry.PollSummary{Collector: e.Collector.Name()}
+	ctx = context.WithValue(ctx, pollSummaryKey{}, summary)
+	started := time.Now()
+	var finish func(telemetry.PollSummary)
+	if s.OnRun != nil {
+		ctx, finish = s.OnRun(ctx, e.Collector.Name())
+	}
+	defer func() {
+		summary.DurationSeconds = time.Since(started).Seconds()
+		summary.Requests = requests.Snapshot()
+		summary.Outcome = "success"
+		if err != nil {
+			summary.Outcome = "error"
+			if ctx.Err() != nil && errors.Is(err, context.Canceled) {
+				summary.Outcome = "canceled"
+			}
+		}
+		if finish != nil {
+			finish(*summary)
+		}
+	}()
 	if s.OnStart != nil {
 		s.OnStart(e.Collector.Name(), s.Now())
 	}
@@ -171,6 +194,8 @@ func (s *Scheduler) RunOnce(ctx context.Context, e Entry) (err error) {
 		return s.runWindow(ctx, c, e)
 	}
 	if c, ok := e.Collector.(SnapshotCollector); ok {
+		start := time.Now()
+		defer func() { summary.CollectSeconds += time.Since(start).Seconds() }()
 		return c.Collect(ctx, s.Emitter)
 	}
 	return fmt.Errorf("collector %s implements no collection mode", e.Collector.Name())
@@ -225,7 +250,7 @@ func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) e
 		}
 		// Leave the leading window for the normal cadence. Unbounded entries
 		// already cover their whole backlog in one commit.
-		limit := s.sourceWindowLimit(c, e)
+		limit := s.sourceWindowLimit(ctx, c, e)
 		if adaptiveWindow(c) && limit > 0 && limit < time.Second {
 			return fmt.Errorf("collector %s: adaptive source-window bound must be at least one second", c.Name())
 		}
@@ -274,12 +299,12 @@ func adaptiveWindow(c WindowCollector) bool {
 	return ok && adaptive.AdaptiveCommitWindow()
 }
 
-func (s *Scheduler) sourceWindowLimit(c WindowCollector, e Entry) time.Duration {
+func (s *Scheduler) sourceWindowLimit(ctx context.Context, c WindowCollector, e Entry) time.Duration {
 	limit := EffectiveCommitWindow(e)
 	if !adaptiveWindow(c) {
 		return limit
 	}
-	commitMu.Lock()
+	lockCommit(ctx)
 	reduced := s.adaptiveWindows[c.Name()]
 	commitMu.Unlock()
 	if reduced > 0 && (limit <= 0 || reduced < limit) {
@@ -318,8 +343,8 @@ func (s *Scheduler) configuredCommitBudget() int {
 	return commitBudgetBytes
 }
 
-func (s *Scheduler) commitBudget(c WindowCollector) int {
-	commitMu.Lock()
+func (s *Scheduler) commitBudget(ctx context.Context, c WindowCollector) int {
+	lockCommit(ctx)
 	defer commitMu.Unlock()
 	if reduced := s.commitBudgets[c.Name()]; reduced.bytes > 0 {
 		return reduced.bytes
@@ -359,7 +384,7 @@ func (s *Scheduler) restoreCommitBudget(c WindowCollector) {
 }
 
 func (s *Scheduler) commitWindow(ctx context.Context, c WindowCollector, e Entry, from, to time.Time) (time.Time, error) {
-	commitMu.Lock()
+	lockCommit(ctx)
 	if pending, found := s.failed400[c.Name()]; found {
 		if pending.from.Equal(from) {
 			to = pending.to
@@ -374,11 +399,21 @@ func (s *Scheduler) commitWindow(ctx context.Context, c WindowCollector, e Entry
 	var mark time.Time
 	var err error
 	if isBudgeted {
-		budget = s.commitBudget(c)
-		mark, err = budgeted.CollectWindowBudget(ctx, from, to, budget, buffer)
-	} else {
-		mark, err = c.CollectWindow(ctx, from, to, buffer)
+		budget = s.commitBudget(ctx, c)
 	}
+	func() {
+		started := time.Now()
+		defer func() {
+			if summary := pollSummary(ctx); summary != nil {
+				summary.CollectSeconds += time.Since(started).Seconds()
+			}
+		}()
+		if isBudgeted {
+			mark, err = budgeted.CollectWindowBudget(ctx, from, to, budget, buffer)
+		} else {
+			mark, err = c.CollectWindow(ctx, from, to, buffer)
+		}
+	}()
 	if err != nil {
 		var gap *cfapi.RetentionGapError
 		if errors.As(err, &gap) {
@@ -399,8 +434,15 @@ func (s *Scheduler) commitWindow(ctx context.Context, c WindowCollector, e Entry
 	if adaptiveWindow(c) && (from.Nanosecond() != 0 || to.Nanosecond() != 0 || mark.Nanosecond() != 0 || !mark.Equal(to) && !isBudgeted) {
 		return from, fmt.Errorf("collector %s: adaptive commit requires a complete whole-second source window", c.Name())
 	}
-	commitMu.Lock()
+	lockCommit(ctx)
 	defer commitMu.Unlock()
+	commitStarted := time.Now()
+	defer func() {
+		if summary := pollSummary(ctx); summary != nil {
+			summary.CommitSeconds += time.Since(commitStarted).Seconds()
+		}
+	}()
+	delivered := false
 	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.commitTimeout())
 	defer cancel()
 	if err := s.commit(commitCtx, buffer); err != nil {
@@ -442,6 +484,7 @@ func (s *Scheduler) commitWindow(ctx context.Context, c WindowCollector, e Entry
 		if isBudgeted {
 			s.restoreCommitBudget(c)
 		}
+		delivered = true
 		for _, m := range buffer.Metrics {
 			if err := m.Replay(commitCtx, s.Emitter); err != nil {
 				return from, err
@@ -450,6 +493,19 @@ func (s *Scheduler) commitWindow(ctx context.Context, c WindowCollector, e Entry
 	}
 	if err := s.Checkpoints.Set(c.Name(), mark); err != nil {
 		return from, err
+	}
+	if delivered {
+		if summary := pollSummary(ctx); summary != nil {
+			summary.CommittedWindows++
+			for _, r := range buffer.Records {
+				if r.Span != nil {
+					summary.CommittedSpans++
+					summary.CommittedLogs += int64(len(r.Span.Logs))
+				} else {
+					summary.CommittedLogs++
+				}
+			}
+		}
 	}
 	if s.OnCheckpoint != nil {
 		s.OnCheckpoint(c.Name(), mark)
@@ -490,7 +546,7 @@ func (s *Scheduler) CollectRange(ctx context.Context, c WindowCollector, from, t
 	if mark.After(to) || !mark.After(from) {
 		return fmt.Errorf("collector %s returned invalid high-water mark", c.Name())
 	}
-	commitMu.Lock()
+	lockCommit(ctx)
 	defer commitMu.Unlock()
 	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.commitTimeout())
 	defer cancel()
@@ -587,7 +643,7 @@ func (s *Scheduler) skipGap(ctx context.Context, c WindowCollector, e Entry, fro
 	if !mark.After(from) {
 		return cause
 	}
-	commitMu.Lock()
+	lockCommit(ctx)
 	defer commitMu.Unlock()
 	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.commitTimeout())
 	defer cancel()
@@ -619,4 +675,21 @@ func (s *Scheduler) skipGap(ctx context.Context, c WindowCollector, e Entry, fro
 		s.OnCheckpoint(c.Name(), mark)
 	}
 	return nil
+}
+
+type pollSummaryKey struct{}
+
+func pollSummary(ctx context.Context) *telemetry.PollSummary {
+	s, _ := ctx.Value(pollSummaryKey{}).(*telemetry.PollSummary)
+	return s
+}
+
+// lockCommit accounts for every scheduler acquisition, including short state
+// reads that can queue behind another collector's long export.
+func lockCommit(ctx context.Context) {
+	started := time.Now()
+	commitMu.Lock()
+	if summary := pollSummary(ctx); summary != nil {
+		summary.CommitLockSeconds += time.Since(started).Seconds()
+	}
 }

@@ -76,7 +76,7 @@ func TestCommitBudgetHalvesOnDeadlineAndRecovers(t *testing.T) {
 			t.Fatalf("deadline %d moved the checkpoint to %s", i, mark)
 		}
 	}
-	if got := s.sourceWindowLimit(w, entry); got != entry.MaxWindow {
+	if got := s.sourceWindowLimit(context.Background(), w, entry); got != entry.MaxWindow {
 		t.Fatalf("a budgeted collector also shrank its source window to %s", got)
 	}
 

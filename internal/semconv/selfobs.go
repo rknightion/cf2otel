@@ -1,6 +1,12 @@
 package semconv
 
 const (
+	SpanPoll                   = "cf2otel.poll"
+	EventPoll                  = "cf2otel.poll.completed"
+	AttrPollOutcome            = "cf2otel.poll.outcome"
+	AttrPollPhase              = "cf2otel.poll.phase"
+	MetricPollPhaseDuration    = "cf2otel.poll.phase.duration"
+	MetricPollCommitted        = "cf2otel.poll.committed.items"
 	AttrErrorClass             = "cf2otel.error.class"
 	AttrIdentityOutcome        = "cf2otel.identity.outcome"
 	MetricCardinalityOverflows = "cf2otel.metric.cardinality_overflows"

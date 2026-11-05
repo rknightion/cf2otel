@@ -41,7 +41,7 @@ func TestAdaptiveDeadlineFloorAndRestart(t *testing.T) {
 			t.Fatalf("deadline lost required-signal identity: %v", err)
 		}
 		want := max(time.Second, (window / 2).Truncate(time.Second))
-		if got := s.sourceWindowLimit(w, entry); got != want || got%time.Second != 0 {
+		if got := s.sourceWindowLimit(context.Background(), w, entry); got != want || got%time.Second != 0 {
 			t.Fatalf("limit=%s want whole-second half %s", got, want)
 		}
 		window = want
@@ -53,10 +53,10 @@ func TestAdaptiveDeadlineFloorAndRestart(t *testing.T) {
 		t.Fatalf("irreducible group must fail closed, not become a payload drop: %v", err)
 	}
 	// Neither a healthy unopted collector nor a new scheduler learns this limit.
-	if got := s.sourceWindowLimit(&w.windowFake, entry); got != entry.MaxWindow {
+	if got := s.sourceWindowLimit(context.Background(), &w.windowFake, entry); got != entry.MaxWindow {
 		t.Fatalf("unopted collector inherited adaptive limit %s", got)
 	}
-	if got := NewScheduler(nil, nil, nil).sourceWindowLimit(w, entry); got != entry.MaxWindow {
+	if got := NewScheduler(nil, nil, nil).sourceWindowLimit(context.Background(), w, entry); got != entry.MaxWindow {
 		t.Fatalf("process restart did not restore configured bound: %s", got)
 	}
 }

@@ -525,10 +525,10 @@ def overview(d: Dashboard) -> dict:
         [loki(f'sum by (cloudflare_firewall_client_country) (count_over_time({LOG} | event_name="cloudflare.firewall.event" '
               f'| cloudflare_firewall_zone=~"$zone" [$__range]))', instant=True)],
         country_field="cloudflare_firewall_client_country", value_field="Sampled events", transformations=loki_rows("Sampled events"))
-    d.ts(1032, "Cloudflare API calls by status class", "cf2otel's own Cloudflare API request rate. 4xx and 5xx here mean polls are failing; "
-        "0xx means the request never got an HTTP response (network error or timeout).",
-        [prom(f'sum by (cf2otel_status_class) (rate(cf2otel_api_requests_total{{{S}}}[$__rate_interval]))', "{{cf2otel_status_class}}")],
-        unit="reqps", stack=True, overrides=color_overrides(STATUS_COLORS))
+    d.ts(1032, "Cloudflare API request outcomes", "Physical Cloudflare requests by transport error class. Handled errors, such as unavailable bodies, do not necessarily fail the poll.",
+        [prom(f'sum(rate(cf2otel_api_requests_total{{{S},cf2otel_error_class=""}}[$__rate_interval]))', "No transport error", ref="A"),
+         prom(f'sum by (cf2otel_error_class) (rate(cf2otel_api_requests_total{{{S},cf2otel_error_class!=""}}[$__rate_interval]))', "{{cf2otel_error_class}}", ref="B")],
+        unit="reqps", stack=True)
 
     return tab("Overview", [
         row("About", [(1000, 24, 2)], hide_header=True),
@@ -1615,20 +1615,21 @@ def collector_tab(d: Dashboard) -> dict:
         [prom(f'sum by (cf2otel_collector) (increase(cf2otel_window_catchup_windows_total{{{S}}}[$__interval])) > 0', "{{cf2otel_collector}}")],
         unit="short", bars=True, stack=True, decimals=0, interval="15m", no_value="No catch-up in range")
     d.bargauge(2713, "Slowest collectors (poll p95)", "95th percentile poll duration over the selected range for the 10 slowest collectors. "
-        "The histogram has finite buckets through 120 s; these are bucket-bound estimates, not exact timings.",
+        "The histogram has finite buckets through 7200 s; these are bucket-bound estimates, not exact timings.",
         [prom(f'sort_desc(topk(10, histogram_quantile(0.95, sum by (cf2otel_collector, le) (rate(cf2otel_scrape_duration_seconds_bucket{{{S}}}[$__range])))))',
               "{{cf2otel_collector}}", instant=True)], unit="s", decimals=1, thresholds=steps((GREEN, None), (YELLOW, 10), (RED, 30)), mode="lcd")
 
-    d.ts(408, "API requests by status class", "Cloudflare API request rate by status class. 0xx means the request got no HTTP response.",
-        [prom(f'sum by (cf2otel_status_class) (rate(cf2otel_api_requests_total{{{S}}}[$__rate_interval]))', "{{cf2otel_status_class}}")],
-        unit="reqps", stack=True, overrides=color_overrides(STATUS_COLORS))
+    d.ts(408, "API request outcomes", "Physical Cloudflare requests by transport error class; a handled HTTP error does not necessarily fail a poll.",
+        [prom(f'sum(rate(cf2otel_api_requests_total{{{S},cf2otel_error_class=""}}[$__rate_interval]))', "No transport error", ref="A"),
+         prom(f'sum by (cf2otel_error_class) (rate(cf2otel_api_requests_total{{{S},cf2otel_error_class!=""}}[$__rate_interval]))', "{{cf2otel_error_class}}", ref="B")],
+        unit="reqps", stack=True)
     d.ts(2723, "API logical envelope errors", "Unsuccessful Cloudflare envelopes returned with HTTP 200, separate from actual HTTP attempt status. Permission code 9109 is classified as 4xx.",
         [prom(f'sum by (cf2otel_status_class) (rate(cf2otel_api_envelope_errors_total{{{S}}}[$__rate_interval]))', "{{cf2otel_status_class}}")], unit="ops")
     d.ts(2724, "Metric cardinality overflows", "Datapoints exceeding the SDK cardinality limit, by instrument. The default limit is 10000; config zero removes the limit.",
         [prom(f'sum by (cf2otel_instrument) (rate(cf2otel_metric_cardinality_overflows_total{{{S}}}[$__rate_interval]))', "{{cf2otel_instrument}}")], unit="ops")
-    d.heatmap(2721, "API latency distribution", "Cloudflare API attempt duration from the cf2otel.api.duration histogram.",
+    d.heatmap(2721, "API latency distribution", "Cloudflare API time to response headers from the cf2otel.api.duration histogram; excludes response body download and limiter wait.",
         [prom(f'sum by (le) (increase(cf2otel_api_duration_seconds_bucket{{{S}}}[$__rate_interval]))', "{{le}}", fmt="heatmap")])
-    d.ts(2722, "API latency percentiles", "Median, p95 and p99 Cloudflare API attempt duration.",
+    d.ts(2722, "API latency percentiles", "Median, p95 and p99 Cloudflare API time to response headers; excludes response body download and limiter wait.",
         [prom(f'histogram_quantile({q}, sum by (le) (rate(cf2otel_api_duration_seconds_bucket{{{S}}}[$__rate_interval])))', f"p{int(q * 100)}", ref=r)
          for r, q in (("A", 0.5), ("B", 0.95), ("C", 0.99))], unit="s")
 
@@ -1637,12 +1638,18 @@ def collector_tab(d: Dashboard) -> dict:
          prom(f'sum by (cf2otel_export_signal) (rate(cf2otel_export_errors_total{{{S}}}[$__rate_interval]))', "{{cf2otel_export_signal}} failed", ref="B")],
         unit="ops", min_zero=False, overrides=[by_regexp(".* failed", custom={"transform": "negative-Y"}, color=fixed(RED))])
 
+    d.ts(2742, "Completed poll phase time", "Mean wall time per completed poll phase, including failed polls. Collection includes upstream body download and processing. API header and limiter sums overlap concurrent work and must not be added to these phases.",
+        [prom(f'sum by (cf2otel_collector, cf2otel_poll_phase) (rate(cf2otel_poll_phase_duration_seconds_sum{{{S}}}[$__rate_interval])) / sum by (cf2otel_collector, cf2otel_poll_phase) (rate(cf2otel_poll_phase_duration_seconds_count{{{S}}}[$__rate_interval]))', "{{cf2otel_collector}} {{cf2otel_poll_phase}}")], unit="s")
+    d.logs(2743, "Completed poll diagnostics", "One summary per completed poll with outcome, request roles, aggregate API waits, phase timing and checkpointed record counts. Includes failed and canceled polls; trace correlation leads to operational API spans.",
+        f'{LOG} | event_name="cf2otel.poll.completed"')
+
     d.logs(2741, "Retention-gap events", "One event per skipped window with the collector, the window start and the retention floor. Empty is healthy.",
         f'{LOG} | event_name="cf2otel.window.gap"')
 
     return tab(TAB_COLLECTOR, [
         row("Status", [(2701, 4, 4), (2702, 4, 4), (403, 4, 4), (407, 4, 4), (2703, 4, 4), (2704, 4, 4), (401, 24, 12), (2711, 24, 18)]),
         row("Polling and windows", [(402, 12, 8), (404, 12, 16), (405, 6, 8), (406, 6, 8), (2712, 12, 8), (2713, 12, 8)]),
+        row("Poll diagnostics", [(2742, 24, 8), (2743, 24, 10)]),
         row("Selection and error classes", [(2715, 24, 10), (2714, 24, 8)]),
         row("Cloudflare API and export", [(408, 8, 8), (2721, 8, 8), (2722, 8, 8), (2731, 24, 7), (2723, 12, 8), (2724, 12, 8)]),
         row("Retention-gap logs", [(2741, 24, 8)], collapse=True),

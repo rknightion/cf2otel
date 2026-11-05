@@ -178,6 +178,11 @@ func (c *HTTPClient) doRedirects(req *http.Request) (*http.Response, error) {
 		if resp != nil && budget == restBudget {
 			budget.observeRESTHeaders(resp.Header)
 		}
+		statusCode := 0
+		if resp != nil {
+			statusCode = resp.StatusCode
+		}
+		observePollRequest(req.Context(), time.Since(started), wait, requestErrorClass(statusCode, err) != "")
 		if c.requestObserver != nil {
 			status := 0
 			if resp != nil {

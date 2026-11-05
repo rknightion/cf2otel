@@ -888,3 +888,41 @@ unentitled zones provide no contribution, so these are not necessarily complete
 account totals. Empty/denied valid traffic clears prior request counts. Both snapshots
 expire after three configured polling intervals. Regional/origin health and origin RTT
 remain explicitly unimplemented.
+
+## Completed poll diagnostics
+
+`cf2otel.poll.completed` is one structured process-pipeline log per scheduler run,
+including successful, failed and shutdown-canceled runs. `cf2otel.poll.outcome` is
+`success`, `error` or `canceled`; `cf2otel.collector` is a registered collector name.
+Its JSON body includes wall durations (`duration_seconds`, `collect_seconds`,
+`commit_lock_seconds`, `commit_seconds`), `committed_windows`, `committed_logs`,
+`committed_spans`, and `api` request totals split into `list_requests`,
+`detail_requests`, `body_requests` and `other_requests`. HTTP failures are physical
+header/transport failures, including handled 404s. `http_header_seconds_sum` and
+`limiter_wait_seconds_sum` sum overlapping requests and must not be added to wall
+phases. Collection wall time includes body reading and decoding. Committed items
+are counted only after delivery, metric replay and checkpoint persistence succeed;
+partial exports, dropped windows and snapshots are not checkpointed item counts.
+A log count includes span-attached log records. These are telemetry records, not
+necessarily source rows.
+
+The internal `cf2otel.poll` span parents operational API spans and correlates the
+completion log. Imported source spans keep their existing parentage. Operational
+traces use an independent exporter/processor with the same configured endpoint
+and resource under the existing provider lifecycle. Their export outcome uses
+`cf2otel.export.signal=operational_traces`, outside source-commit failure tracking.
+No SDK global provider, sampling or destination changes are introduced.
+
+| Metric | Unit | Description |
+| --- | --- | --- |
+| `cf2otel.poll.phase.duration` | `s` | Wall time by collector and `cf2otel.poll.phase` (`collect`, `commit_lock`, `commit`), with scrape-duration buckets through 7200 seconds. |
+| `cf2otel.poll.committed.items` | `{item}` | Checkpointed items by collector and `cf2otel.export.signal` (`windows`, `logs`, `spans`). |
+
+| Kind | Name |
+| --- | --- |
+| Event | `cf2otel.poll.completed` |
+| Span | `cf2otel.poll` |
+| Metric | `cf2otel.poll.phase.duration` |
+| Metric | `cf2otel.poll.committed.items` |
+| Attribute | `cf2otel.poll.outcome` |
+| Attribute | `cf2otel.poll.phase` |
