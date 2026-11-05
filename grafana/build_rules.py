@@ -51,7 +51,7 @@ LOGPUSH_FINAL_FAILURE = f'(increase({LOGPUSH_FINAL}[15m]) > 0) or ({LOGPUSH_FINA
 # presence before aggregating expiry, so an unknown expiry never becomes zero.
 CERT_PACK = 'cloudflare_certificate_pack{service_name="cf2otel"}'
 CERT_ID = 'cloudflare_certificate_zone, cloudflare_certificate_pack_id'
-CERT_EXPIRY = f'max by ({CERT_ID}) (((cloudflare_certificate_expiry_seconds{{service_name="cf2otel"}} < bool 1209600) and ({CERT_PACK} == 1)) and on(instance) {CERT_FRESH})'
+CERT_EXPIRY = f'max by ({CERT_ID}) (((cloudflare_certificate_expiry_seconds{{service_name="cf2otel",cloudflare_certificate_status!="backup_issued"}} < bool 1209600) and ({CERT_PACK} == 1)) and on(instance) {CERT_FRESH})'
 CERT_STATUS = f'(max by ({CERT_ID}) ((cloudflare_certificate_pack{{service_name="cf2otel",cloudflare_certificate_status!~"active|backup_issued"}} == 1) and on(instance) {CERT_FRESH}) or on ({CERT_ID}) (0 * max by ({CERT_ID}) (({CERT_PACK} == 1) and on(instance) {CERT_FRESH})))'
 CERT_DESCRIPTION = (f"Requires opt-in certs.packs and collector last success less than {CERTS_PACKS_FRESHNESS_SECONDS} seconds old "
                     f"(three deployment polling intervals of {CERTS_PACKS_INTERVAL_SECONDS} seconds). Removed packs and previous statuses retire. "
@@ -135,7 +135,7 @@ def collector_stale_description() -> str:
 
 
 RULES = [
-    ("cf2otel-certificate-expiry", "Cloudflare certificate expires in under 14 days", "Earliest observed expiry in a present pack is under 14 days, including already expired packs. Seconds to expiry are observed at the last successful poll, not a live countdown. " + CERT_DESCRIPTION, 2640,
+    ("cf2otel-certificate-expiry", "Cloudflare certificate expires in under 14 days", "Earliest observed expiry in a present pack is under 14 days, including already expired packs. Backup-issued standby packs are excluded because they do not serve traffic. Seconds to expiry are observed at the last successful poll, not a live countdown. " + CERT_DESCRIPTION, 2640,
      CERT_EXPIRY, 0, "NoData"),
     ("cf2otel-certificate-status", "Cloudflare certificate pack is not active", "A present certificate pack has a status other than active or backup_issued (Cloudflare's normal standby state for a second-CA backup certificate), including packs with unknown expiry. " + CERT_DESCRIPTION, 2645,
      CERT_STATUS, 0, "NoData"),
@@ -234,7 +234,9 @@ def certificate_fixtures() -> dict:
         ("expired", -1, "active", 0, 1, 0),
         ("pending unknown expiry", None, "pending", 0, None, 1),
         # backup_issued is Cloudflare's normal standby (second-CA) state and must not alert.
-        ("backup issued standby", 2000000, "backup_issued", 0, 0, 0),
+        ("backup issued standby", 2000000, "backup_issued", 0, None, 0),
+        # A standby pack near expiry is not serving traffic, so it must not alert either.
+        ("backup issued near expiry", 100, "backup_issued", 0, None, 0),
         # A real not-yet-valid state must still alert.
         ("pending validation", 2000000, "pending_validation", 0, 0, 1),
         ("fresh just inside three intervals", 100, "pending", CERTS_PACKS_FRESHNESS_SECONDS - 1, 1, 1),
