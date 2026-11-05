@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-11-05T21:58:00Z'
-updated_date: '2026-11-05T23:40:00Z'
+updated_date: '2026-11-05T23:57:00Z'
 labels:
   - bug
 dependencies: []
@@ -57,4 +57,6 @@ Final isolated local just check PASS, including all race suites, build, vulnerab
 Rollout checkpoint: exact b05d69e CI42128369086 and Release42128369543 passed. Compose host pulled and ran exact image; already automatically updated, healthy with0 restarts and0 runtime errors. First completed diagnostic poll:28 source spans,40 physical requests,95.835s total,69.444s collect,26.389s commit. Prior0135e04 epoch baseline:3 successes,488 source records,514 requests,510.402s total. Release PR106 passed own CI42128447280, reviewed metadata-only diff including both fixes, merged as153f5313811341526adaa52ceb718362c653d066. Await final release/CI and process stabilization, then run15min inspections with stable epoch; no pushes during proof. Baseline/local read helper and bounded observer are in machine-local codex/. 24h alert criterion remains open.
 
 Current observation state: release153f5313811341526adaa52ceb718362c653d066 / version0.20.1 pulled and running healthy, process start1793921557.2273192. Release42129579918, CI42129579022 and final auto-rc42130956461 all success; prior RC also completed. Runtime errors0. Impact watcher PID2316868/session94254 writes /Users/rob/repos/cf2otel/codex/cfo92-release-impact-live.json every900s (bounded2h); unchanged live-hour helper session70164 writes /Users/rob/repos/cf2otel/codex/cfo92-release-hour.json (14 reads/300s,49 collectors, actual intervals). Both sleep-protected with Linux systemd-inhibit because caffeinate is unavailable. First impact read:64 spans,75 requests,165.543s,0 failed polls. One failed monitor bootstrap receipt retained separately, not proof. Next action: inspect15min receipts, verify epoch unchanged and final65min delivery witness; no pushes during observation.
+
+Observation correction: short-name SSH began failing because it resolves to the LAN SSH service and the forwarded agent has no identities. Explicit Tailscale SSH to the existing host succeeds; manual host check confirms original process uptime, healthy,0 restarts and no ERROR/FATAL logs. Original failed watcher receipt retained. Resumable continuation session47580 uses explicit Tailscale SSH and writes /Users/rob/repos/cf2otel/codex/cfo92-release-telemetry-impact.json, preserving the initial observation plus a61s-delayed second read. Original unchanged hour witness still running. Second telemetry read:2 successful polls,103 records,118 requests(1.146/record),123.977s mean,0 failed scrapes. Do not treat the host-check gap as uninterrupted host evidence.
 <!-- SECTION:NOTES:END -->
