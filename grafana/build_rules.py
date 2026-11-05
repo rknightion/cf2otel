@@ -155,8 +155,8 @@ RULES = [
      'sum(increase(cf2otel_window_commit_failures_total{service_name="cf2otel",outcome="dropped"}[15m])) or on() (0 * sum(increase(cf2otel_scrape_success_total{service_name="cf2otel"}[15m])))', 0, "Alerting"),
     ("cf2otel-access-checkpoint-age", "Access logins checkpoint age exceeds 12 hours", "Access logins checkpoint age is over 12 hours, approaching the Access REST log's roughly one-day reach; further delay risks permanent data loss.", 404,
      'max(cf2otel_checkpoint_age_seconds{service_name="cf2otel",cf2otel_collector="access.logins"})', 43200, "Alerting"),
-    ("cf2otel-logpush-final-failure", "Cloudflare Logpush final upload attempt failed", "Final-attempt upload failures with destination status >=300 increased or were first observed in the last 15 minutes, grouped by scope, zone, job and destination. First-seen positive counters include startup/backfill observations. Requires opt-in logpush.failures; absent data is not proof of successful delivery.", 2650,
-     f'sum by (cloudflare_logpush_scope, cloudflare_logpush_zone, cloudflare_logpush_job_id, cloudflare_logpush_destination_type) ({LOGPUSH_FINAL_FAILURE})', 0, "NoData"),
+    ("cf2otel-logpush-final-failure", "Cloudflare Logpush final upload attempt failed", "Final-attempt upload failures with destination status >=300 increased or were first observed in the last 15 minutes, grouped by scope, zone, job and destination. First-seen positive counters include startup/backfill observations. Requires opt-in logpush.failures; absent data is not proof of successful delivery. No data evaluates as OK because the failure counter has no series until a final attempt fails.", 2650,
+     f'sum by (cloudflare_logpush_scope, cloudflare_logpush_zone, cloudflare_logpush_job_id, cloudflare_logpush_destination_type) ({LOGPUSH_FINAL_FAILURE})', 0, "Ok"),
 ]
 
 

@@ -14,7 +14,7 @@
     "annotations": {
       "__dashboardUid__": "cf2otel",
       "__panelId__": "2650",
-      "description": "Final-attempt upload failures with destination status >=300 increased or were first observed in the last 15 minutes, grouped by scope, zone, job and destination. First-seen positive counters include startup/backfill observations. Requires opt-in logpush.failures; absent data is not proof of successful delivery.",
+      "description": "Final-attempt upload failures with destination status >=300 increased or were first observed in the last 15 minutes, grouped by scope, zone, job and destination. First-seen positive counters include startup/backfill observations. Requires opt-in logpush.failures; absent data is not proof of successful delivery. No data evaluates as OK because the failure counter has no series until a final attempt fails.",
       "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
       "summary": "Cloudflare Logpush final upload attempt failed"
     },
@@ -83,7 +83,7 @@
       "severity": "warning",
       "source": "cf2otel"
     },
-    "noDataState": "NoData",
+    "noDataState": "Ok",
     "panelRef": {
       "dashboardUID": "cf2otel",
       "panelID": 2650
