@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.20.1](https://github.com/rknightion/cf2otel/compare/v0.20.0...v0.20.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **aigateway:** skip raw reads when payload storage is disabled ([0135e04](https://github.com/rknightion/cf2otel/commit/0135e04e6c8946198e75d4f1296aa756d7158de8))
+* **alerts:** ignore backup-issued certificate packs in the expiry rule ([34b709d](https://github.com/rknightion/cf2otel/commit/34b709dcf7c7b4077f1761322399a5ccc4187795))
+* **alerts:** treat no data as OK on the Logpush final-failure rule ([9f03867](https://github.com/rknightion/cf2otel/commit/9f038672a538cc25791b730622681424fcf6186a))
+* **deps:** update module go.yaml.in/yaml/v3 to v3.0.6 ([#105](https://github.com/rknightion/cf2otel/issues/105)) ([caf8207](https://github.com/rknightion/cf2otel/commit/caf82078ca616a1f47706e426754b55bb52d3776))
+* **renovate:** use managerFilePatterns for the justfile regex managers ([589e5f0](https://github.com/rknightion/cf2otel/commit/589e5f0f6c2e75f79aeaea1c0ee7ab0bbb141777))
+
+
+### Performance
+
+* **aigateway:** overlap bounded reads and instrument completed polls ([b05d69e](https://github.com/rknightion/cf2otel/commit/b05d69edd6b5a84103cc65f80de304f40b944d5b))
+
 ## [0.20.0](https://github.com/rknightion/cf2otel/compare/v0.19.2...v0.20.0) (2026-10-30)
 
 
