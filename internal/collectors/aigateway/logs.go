@@ -83,6 +83,7 @@ type logRow struct {
 	UserAgent            string          `json:"user_agent"`
 	DLPAction            string          `json:"dlp_action"`
 	DLPProfiles          json.RawMessage `json:"dlp_profiles"`
+	CollectLogPayload    *bool           `json:"collect_log_payload"`
 	RequestHead          json.RawMessage `json:"request_head"`
 	ResponseHead         json.RawMessage `json:"response_head"`
 	RequestHeadComplete  *bool           `json:"request_head_complete"`
@@ -406,7 +407,7 @@ func (c *logs) emitWith(ctx context.Context, gateway string, row logRow, prefetc
 		if prefetched != nil {
 			captured, err = prefetched.log, prefetched.err
 		} else {
-			captured, err = c.fetchLog(ctx, c.detailPath(gateway, row.ID))
+			captured, err = c.fetchLog(ctx, c.detailPath(gateway, row.ID), row.CollectLogPayload)
 		}
 		if err != nil {
 			return err

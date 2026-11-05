@@ -20,7 +20,7 @@ type capturedLog struct {
 // The detail carries each body as a head with a completeness flag. A complete
 // head is the whole body, so only an incomplete side costs a raw read; any
 // remaining reads overlap. All parsing, buffering and emission stays on the caller.
-func (c *logs) fetchLog(ctx context.Context, path string) (capturedLog, error) {
+func (c *logs) fetchLog(ctx context.Context, path string, collectPayload *bool) (capturedLog, error) {
 	var result capturedLog
 	var raw cfapi.RawGetter
 	if c.cfg.AIGateway.CaptureBodies {
@@ -36,6 +36,11 @@ func (c *logs) fetchLog(ctx context.Context, path string) (capturedLog, error) {
 	if raw == nil {
 		return result, nil
 	}
+	// The detail is newer than the list; retain the list's decision only when
+	// the detail does not report one. Missing/null is unknown, never disabled.
+	if result.detail.CollectLogPayload != nil {
+		collectPayload = result.detail.CollectLogPayload
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	fatal := make(chan error, 1)
@@ -47,6 +52,12 @@ func (c *logs) fetchLog(ctx context.Context, path string) (capturedLog, error) {
 	for i, side := range []string{"request", "response"} {
 		if body, ok := completeHead(heads[i].head, heads[i].complete); ok {
 			result.bodies[i] = body
+			continue
+		}
+		// Payload-disabled records retain metadata but never store raw bodies.
+		// Keep any complete head already supplied, otherwise avoid a futile 404.
+		if collectPayload != nil && !*collectPayload {
+			result.unavailable[i] = true
 			continue
 		}
 		wg.Go(func() {
@@ -131,7 +142,7 @@ func (c *logs) prefetchDetails(ctx context.Context, rows []namedRow) *detailPref
 func (p *detailPrefetch) start(i int) {
 	p.results[i] = make(chan fetchedLog, 1)
 	p.wg.Go(func() {
-		log, err := p.c.fetchLog(p.ctx, p.c.detailPath(p.rows[i].gateway, p.rows[i].row.ID))
+		log, err := p.c.fetchLog(p.ctx, p.c.detailPath(p.rows[i].gateway, p.rows[i].row.ID), p.rows[i].row.CollectLogPayload)
 		p.results[i] <- fetchedLog{log, err}
 	})
 }

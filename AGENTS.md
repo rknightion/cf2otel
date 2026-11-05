@@ -73,6 +73,9 @@ internal hostname in a task or doc.
   per token, `Ratelimit-Policy` `q=1200;w=300`. REST and GraphQL share a
   combined 3.75 rps/burst 5 ceiling; REST can use spare capacity. Explicit old REST overrides
   still apply. Judge recovery by declining checkpoint age as well as scrape success.
+- AI Gateway detail `collect_log_payload=false` explicitly disables body storage: null heads
+  then lead to 404/code7002 on both raw endpoints. Skip those reads while preserving detail
+  metadata and unavailable-body accounting; missing/null flags still require fallback reads.
 - AI Gateway token counts can fall back to complete, untruncated captured response JSON.
   Positive gateway counts remain authoritative; `cloudflare.ai_gateway.usage_source`
   marks body-derived log/span values and is never a metric dimension.

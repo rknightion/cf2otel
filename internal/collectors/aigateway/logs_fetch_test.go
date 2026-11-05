@@ -3,6 +3,7 @@ package aigateway
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/rknightion/cf2otel/internal/cfapi"
 	"github.com/rknightion/cf2otel/internal/config"
+	"github.com/rknightion/cf2otel/internal/semconv"
 )
 
 // Body reads the detail could not satisfy must overlap upstream latency while
@@ -109,4 +111,55 @@ func TestCaptureFailureCancelsAndJoinsSiblingReads(t *testing.T) {
 			t.Fatal("failed capture emitted partial records")
 		}
 	})
+}
+
+// An explicit payload-disabled flag makes raw reads futile; unknown flags must
+// still try the raw endpoints when complete heads are absent.
+func TestPayloadCollectionFlagAvoidsUnavailableBodyReads(t *testing.T) {
+	for _, tc := range []struct {
+		name, listFlag, detailFlag string
+		bodies                     int32
+	}{
+		{"list disabled", `,"collect_log_payload":false`, "", 0},
+		{"detail disabled", "", `,"collect_log_payload":false`, 0},
+		{"unknown", `,"collect_log_payload":null`, "", 2},
+		{"enabled", `,"collect_log_payload":true`, `,"collect_log_payload":true`, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var details, bodies atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/logs"):
+					if r.URL.Query().Get("page") == "1" {
+						_, _ = fmt.Fprintf(w, `{"result":[{"id":"row","created_at":"2026-10-20T00:00:00Z","duration":1%s}]}`, tc.listFlag)
+					} else {
+						_, _ = w.Write([]byte(`{"result":[]}`))
+					}
+				case strings.HasSuffix(r.URL.Path, "/logs/row"):
+					details.Add(1)
+					_, _ = fmt.Fprintf(w, `{"result":{"request_head":null,"response_head":null,"request_head_complete":true,"response_head_complete":true,"request_size":123%s}}`, tc.detailFlag)
+				default:
+					bodies.Add(1)
+					w.WriteHeader(http.StatusNotFound)
+					_, _ = w.Write([]byte(`{"success":false,"errors":[{"code":7002,"message":"not found"}]}`))
+				}
+			}))
+			defer server.Close()
+			cfg := config.Default()
+			cfg.Cloudflare.APIBase, cfg.Cloudflare.AccountID = server.URL, "fixture"
+			cfg.AIGateway.Gateways, cfg.AIGateway.CaptureBodies = []string{"gateway"}, true
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			from := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+			out := &fakeEmitter{}
+			mark, err := NewLogs(&cfg, cfapi.New(cfg.Cloudflare)).CollectWindowBudget(ctx, from, from.Add(time.Minute), 1<<20, out)
+			if err != nil || !mark.Equal(from.Add(time.Minute)) || len(out.spans) != 1 || details.Load() != 1 || bodies.Load() != tc.bodies {
+				t.Fatalf("mark=%s spans=%d details=%d bodies=%d want=%d err=%v", mark, len(out.spans), details.Load(), bodies.Load(), tc.bodies, err)
+			}
+			attrs := out.spans[0].Attrs
+			if attr(attrs, semconv.AttrAIGatewayRequestBodyUnavailable) != "true" || attr(attrs, semconv.AttrAIGatewayResponseBodyUnavailable) != "true" || attr(attrs, semconv.AttrAIGatewayRequestSize) != "123" {
+				t.Fatalf("missing unavailable flags or detail metadata: %v", attrs)
+			}
+		})
+	}
 }

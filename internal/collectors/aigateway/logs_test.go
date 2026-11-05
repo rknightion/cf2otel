@@ -200,7 +200,7 @@ func TestOversizedResponseBodyKeepsRequestAndCompletesRun(t *testing.T) {
 	cfg := &config.Config{Cloudflare: config.CloudflareConfig{AccountID: "example"}, AIGateway: config.AIGatewayConfig{Gateways: []string{"gateway"}, CaptureBodies: true, MaxBodyBytes: 1024}}
 	logs := NewLogs(cfg, api)
 
-	captured, err := logs.fetchLog(context.Background(), logs.detailPath("gateway", "A"))
+	captured, err := logs.fetchLog(context.Background(), logs.detailPath("gateway", "A"), nil)
 	if err != nil {
 		t.Fatalf("fetchLog failed on an oversized body: %v", err)
 	}

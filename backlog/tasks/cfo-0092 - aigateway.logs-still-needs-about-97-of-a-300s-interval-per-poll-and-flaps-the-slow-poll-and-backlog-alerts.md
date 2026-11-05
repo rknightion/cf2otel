@@ -3,10 +3,11 @@ id: CFO-0092
 title: >-
   aigateway.logs still needs about 97% of a 300s interval per poll and flaps the
   slow-poll and backlog alerts
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@codex'
 created_date: '2026-11-05T21:58:00Z'
-updated_date: '2026-11-05T21:58:00Z'
+updated_date: '2026-11-05T22:31:00Z'
 labels:
   - bug
 dependencies: []
@@ -29,7 +30,25 @@ Measured 2026-11-05 on the m7kni stack, build e7c8ae0 (0.20.1-rc.5): aigateway.l
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
+- [x] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Measure current fenced calls per record and poll health; reproduce sequential detail latency with bounded fake upstreams; implement ordered bounded concurrency if supported; run focused regression checks, required gate and reviews, then observe live throughput. Preserve 10m interval pending evidence; leave 24h criteria open until observed.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Live diagnosis: sampled metadata-only records explicitly return collect_log_payload=false with null complete heads; both raw body endpoints return 404/code7002. Current collector still performs both reads, costing three requests per such log. Official logging docs confirm false disables payload storage while retaining metadata. Prioritize skipping these impossible reads, preserving detail metadata and unavailable-body counters. Missing/null flags retain fallback. Sparse cross-second prefetch limitation also reproduced but is deliberately constrained by budget semantics; defer until call amplification is fixed.
+
+Candidate skips raw request/response GETs only for explicit collect_log_payload=false; detail value overrides list, unknown retains fallback, complete heads remain usable. Real-HTTP regression failed with two unnecessary reads then passed. Keep 10m interval pending deployed evidence; no alert threshold changes. Advisory review found no introduced duplication and fetchLog complexity 14 to17, justified by tri-state precedence and per-side fallback. Remote gate hosts unreachable; local isolated just check running.
+
+Focused race regressions passed; dsreview PASS with zero findings. Full local gate passed lint/vet and is running race suite. Sparse concurrency reproduction retained as follow-up evidence; no concurrency/budget contract changes in this candidate.
+
+Final isolated local just check PASS, including all race suites, build, vulnerability and generated Grafana checks. Remote hosts were unreachable. dsreview PASS with no findings; advisory review assessed. Source fix ready to publish; live calls-per-record and 24h alert acceptance remain open. No new signals or packaging change.
+<!-- SECTION:NOTES:END -->
