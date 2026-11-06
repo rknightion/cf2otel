@@ -3,11 +3,11 @@ id: CFO-0089
 title: >-
   aigateway.logs: take bodies from the log detail and stop listing at the commit
   budget
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: 2026-10-21 03:13
-updated_date: '2026-11-05T22:29:00Z'
+updated_date: '2026-11-06T00:03:00Z'
 labels:
   - bug
 dependencies: []
@@ -25,13 +25,13 @@ Each captured AI Gateway log costs three REST reads (detail, /request, /response
 <!-- AC:BEGIN -->
 - [x] #1 With complete heads, each captured log costs exactly one REST read (the detail GET); no /request or /response GET is made
 - [x] #2 Budgeted collection stops listing at a bounded row count and returns a whole-second mark, and consecutive calls deliver every row exactly once across same-second page boundaries
-- [ ] #3 Live: in one fenced epoch, aigateway.logs REST requests per exported log is at most 1.2 over a completed poll
+- [x] #3 Live: in one fenced epoch, aigateway.logs REST requests per exported log is at most 1.2 over a completed poll
 - [x] #4 A side whose head is incomplete, missing or not a JSON string falls back to its own raw body read, so usage recovery and non-JSON classification stay exact; the other side's complete head is still used
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
+- [x] #1 just check (fmt-check, lint, vet, test, tidy-check, build, vuln)
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
@@ -53,3 +53,9 @@ Live readback, epoch 0.19.0-rc.2 (commit 8e62766, process start 1792554303, one 
 
 Revalidated source behavior during AI poller performance work: focused race checks cover complete-head reads, raw fallback, ordered overlap and dense budget delivery; full AI Gateway race suite passed in 194.094s. Source criteria 1,2,4 now checked. Live calls-per-record criterion remains open; recent deployment epochs restarted before a clean completed-poll measurement.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Live completed-poll evidence now satisfies the remaining calls-per-record criterion. Release0.20.1 commit153f5313811341526adaa52ceb718362c653d066, process start1793921557.2273192: first completed successful AI poll committed64 source spans with75 physical requests(1.172 per record); two completed polls total103 records/118 requests(1.146). These are poll-completed diagnostics, not cumulative counters contaminated by the next in-flight poll. Source regression and final composed just check passed; release CI42129579022 passed. Local receipts: /Users/rob/repos/cf2otel/codex/cfo92-release-impact-live.json (first valid poll, later host-check failure retained) and /Users/rob/repos/cf2otel/codex/cfo92-release-telemetry-impact.json (continuation). No packaging changes or new signals specific to this original task. Sustained alert/throughput observation remains under CFO-0092 (AI polling slow/backlog alerts).
+<!-- SECTION:FINAL_SUMMARY:END -->
