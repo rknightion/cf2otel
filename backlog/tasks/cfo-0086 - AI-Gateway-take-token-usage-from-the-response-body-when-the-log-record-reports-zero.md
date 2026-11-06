@@ -3,11 +3,11 @@ id: CFO-0086
 title: >-
   AI Gateway: take token usage from the response body when the log record
   reports zero
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: 2026-10-21 01:10
-updated_date: '2026-11-06T12:11:00Z'
+updated_date: '2026-11-06T12:34:00Z'
 labels:
   - ai-gateway
   - bug
@@ -27,7 +27,7 @@ Workers AI custom-model requests through the gateway (jevgrep's `jev` model, pat
 - [x] #1 When the request record's usage is zero or missing and the response body parses with result.usage or usage, the request log, GenAI span and token metrics carry the body's input and output tokens
 - [x] #2 An attribute marks body-derived usage (for example cloudflare.ai_gateway.usage_source=response_body) so it stays distinguishable from gateway-reported usage
 - [x] #3 Tests cover the Workers AI result.usage shape, the OpenAI-style top-level usage shape, a truncated body and a non-JSON body
-- [ ] #4 After deploy, daily input tokens for jev in Grafana match the Cloudflare dashboard to within 2%
+- [x] #4 After deploy, daily input tokens for jev in Grafana match the Cloudflare dashboard to within 2%
 <!-- AC:END -->
 
 ## Definition of Done
@@ -57,4 +57,12 @@ Source acceptance 1-3 established by failing then passing integrated log/span/me
 Final composed remote just check PASS on Go1.27.3: run 20261021T012928Z-cf2otel-2f357034, tree fadea47c2999d5ef3e43d05d986db4d2f84cd712 on 1661d4b; all race suites, lint/vet, tidy, build, vulnerability and generated checks passed. Independent review PASS and complete CodeRabbit zero findings. Publishing recovery source plus Go patch alignment. AC4 remains open: compare a complete post-deploy daily source window once checkpoint lag recovers; no historical replay or cost estimation. No packaging definition change; just ci conditional not applicable.
 
 Closedday2026-11-05UTC: Cloudflare modeltypesafe/jev inputtokens165991. Raw requestlogs341394; logIDdedupe331982; each providerleg workers-ai andtypesafe has165991 unique tokens. Both legs have105uniquelogs,107rawrecords. Existing dailybodyquery also341394,so AC4 remainsopen untilreportingcorrection. Generic tokenmetricpanels countprovideroperations acrossbothlegs; universalwholesale exclusion is unsafe. Model-specific outerworkers-ai response dedupe matches reference exactly.
+
+Final reporting correction landed as 42a2c7c1a0026c49f8cb4e40568358cee5205cc0. For the closed UTC day 2026-11-05, Cloudflare analytics and the exact generated Grafana jev reconciliation query both return 165991 input tokens (0% difference). The query selects the outer workers-ai response and deduplicates by gateway/log ID; this excludes paired provider records and delivery replays. Generic counters remain provider-operation totals. Missing captured usage remains no data in the standalone panel. The combined spend alert retains its existing per-term zero fallback so absent jev traffic does not suppress other models. Full just check and all 23 Grafana tests passed. Combined Kodus and independent local review passed after correcting the panel no-data finding; the alert-only fallback advisory was rejected with independent code review and a live absence experiment. Grafana sync run 42218534739 succeeded, including exact dashboard GitSync identity read-back and semantic verification of all managed rules. No container or release definition changed; just ci packaging criterion is not applicable.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Recovered body-derived token usage was already deployed. Closed the remaining daily accuracy criterion with an explicit deduplicated jev reconciliation panel and corrected daily alert. Closed-day Grafana and Cloudflare totals match exactly at 165991 input tokens. Dashboard and alert publication verified by grafana-sync run 42218534739; full local gate, 23 Grafana tests and both required reviews passed. Captured-body availability limits this model-specific view; it is not universal billing accounting.
+<!-- SECTION:FINAL_SUMMARY:END -->
