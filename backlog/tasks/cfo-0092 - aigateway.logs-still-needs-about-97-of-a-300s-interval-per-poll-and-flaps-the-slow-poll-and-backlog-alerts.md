@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-11-05T21:58:00Z'
-updated_date: '2026-11-06T00:25:00Z'
+updated_date: '2026-11-06T00:44:00Z'
 labels:
   - bug
 dependencies: []
@@ -23,8 +23,8 @@ Measured 2026-11-05 on the m7kni stack, build e7c8ae0 (0.20.1-rc.5): aigateway.l
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Live calls per exported aigateway.logs record are measured in one fenced epoch and compared with the CFO-0089 target of at most 1.2
-- [ ] #2 A decision on the interval is recorded: keep 10m, return to 5m after a throughput fix, or another value, with the measurement it rests on
+- [x] #1 Live calls per exported aigateway.logs record are measured in one fenced epoch and compared with the CFO-0089 target of at most 1.2
+- [x] #2 A decision on the interval is recorded: keep 10m, return to 5m after a throughput fix, or another value, with the measurement it rests on
 - [ ] #3 cf2otel-collector-slow and cf2otel-checkpoint-backlog do not fire for aigateway.logs over a 24h window at the chosen interval
 <!-- AC:END -->
 
@@ -61,4 +61,6 @@ Current observation state: release153f5313811341526adaa52ceb718362c653d066 / ver
 Observation correction: short-name SSH began failing because it resolves to the LAN SSH service and the forwarded agent has no identities. Explicit Tailscale SSH to the existing host succeeds; manual host check confirms original process uptime, healthy,0 restarts and no ERROR/FATAL logs. Original failed watcher receipt retained. Resumable continuation session47580 uses explicit Tailscale SSH and writes /Users/rob/repos/cf2otel/codex/cfo92-release-telemetry-impact.json, preserving the initial observation plus a61s-delayed second read. Original unchanged hour witness still running. Second telemetry read:2 successful polls,103 records,118 requests(1.146/record),123.977s mean,0 failed scrapes. Do not treat the host-check gap as uninterrupted host evidence.
 
 45-minute observation: same release/process,5 successful AI polls,0 failed polls,146 records,189 requests(1.295 overall),71.532s mean. Poll durations165.543,82.411,73.533,25.423,10.752s; lower traffic confounds speedup claims. First2 polls met1.2 target; later missing-body fallback4xx raised aggregate. Tempo operational traces verified correlated poll/API spans:27 total4xx errors across successful polls, consistent with tolerated404/7002 body-unavailable handling. Container remains healthy/no restarts/no runtime ERROR or FATAL; latest checkpoint backlog290.335s, down from590.335s. All3 AI slow/backlog/stale alerts currentlyNormal with healthy evaluations. Keep10m interval; no threshold changes. Delivery hour witness still running/pass. Host short-name DNS fixed persistently with DHCP domains routing-only; explicit Tailscale route remains in observer. Next: final15min sample and unchanged65min delivery completion. No push during observation.
+
+Observation complete: unchanged sustained delivery witness PASS over3900s,14 reads,49 collectors,session70164 exit0. Receipt /Users/rob/repos/cf2otel/codex/cfo92-release-hour.json. Impact observer exit0/evidence_collected over3600s:6 completed successful AI polls,278 committed records,352 physical calls(1.266 per record),mean105.382s,max274.630s,zero failed polls; aggregate excludes in-flight next-poll counters. First2 polls met<=1.2; payload fallback and boundary work raised the overall ratio. All observed completed polls stayed below600s; traffic variation prevents a clean causal throughput claim. Keep10m based on busiest poll274.630s and174.034s commit cost; do not restore5m on this evidence. Final short-name SSH host check succeeded after DNS fix: release0.20.1/153f5313811341526adaa52ceb718362c653d066,original start2026-11-05T23:32:37Z,healthy,0 restarts,0 ERROR/FATAL lines across process lifetime. Operational traces and poll summaries verified live. CFO-0095 (explain and reduce AI commit/export time) captures the measured remaining cost. AC3 stays open:24h quiet-alert window has not been observed. No observation processes remain active and no unattended24h monitor is implied. Board-only commits remain local for the next ordinary push.
 <!-- SECTION:NOTES:END -->
