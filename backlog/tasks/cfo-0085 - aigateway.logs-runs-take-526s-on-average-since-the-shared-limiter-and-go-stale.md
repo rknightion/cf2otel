@@ -1,11 +1,11 @@
 ---
 id: CFO-0085
 title: aigateway.logs runs take 526s on average since the shared limiter and go stale
-status: In Progress
+status: Done
 assignee:
   - '@codex'
-created_date: '2026-10-19 15:14'
-updated_date: '2026-10-21 03:12'
+created_date: 2026-10-19 15:14
+updated_date: '2026-11-06T12:11:00Z'
 labels:
   - bug
 dependencies: []
@@ -21,8 +21,8 @@ Measured 2026-10-19 on the m7kni stack: aigateway.logs averaged 526 s per run ov
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 aigateway.logs completes a run within its polling interval at the p90
-- [ ] #2 cf2otel-collector-stale does not fire for aigateway.logs over a 24h window
+- [x] #1 aigateway.logs completes a run within its polling interval at the p90
+- [x] #2 cf2otel-collector-stale does not fire for aigateway.logs over a 24h window
 <!-- AC:END -->
 
 ## Definition of Done
@@ -61,3 +61,9 @@ After bundling generic poll/backlog alerts, observer retargeted to23fbd865ae06b3
 
 Read-only diagnosis 2026-10-21 ~03:00 UTC, epoch fenced on commit 23fbd86 + process start 1792548903 + one instance (service_version 0.19.0-rc.1). One successful aigateway.logs poll took 2100.9s and advanced the checkpoint only 654s of source (0.31x wall time; 4 commits, catch-up windows 3), so checkpoint progress does NOT exceed wall time. Cause: source density, not failures. The cursor (~2026-10-20 00:05 UTC) is inside the jg fan-out spike: exported rows were 10623/h and 9096/h for 2026-10-19 22:00-24:00, and REST paging shows 10000-15000 logs in 2026-10-20 00:00-01:00, then under 1000/h for every sampled later hour. Capture ceiling: the process made 8215 Cloudflare calls in ~2100s (about 3.9 rps against the 3.75 combined ceiling); GraphQL collectors took about 38%, leaving aigateway.logs about 2.4 rps. It exported 1313 logs for 5072 REST calls (3.86 calls per log; floor 3.02), about 1950 logs/h. The excess is replay: each budget-truncated window re-lists every page to the 15-minute window end before committing about 16 MB. Ruled out this epoch: upstream failures (scrape errors 0, retries 0), export pressure (commit failures 0, no export-error series). The success-counter-1/last-success-0 reading is selfobs snapshot skew, not lost state: Poll() exports the success counter immediately but last-success, elapsed and checkpoint-age gauges refresh only in the 5-minute selfobs snapshot; the 02:55:53 snapshot showed last success 02:51:04 and elapsed 2100.9s. Live Ratelimit-Policy on the runtime token is default q=1200 w=300 (4 rps), so the ceiling has little headroom on one token. Detail GET already carries request_head/response_head bodies with *_head_complete flags; 20 of 20 sampled logs had both complete and the request head matched the raw /request body byte-for-byte (117379 bytes), so the two body GETs per log are redundant. Fix tracked separately. Earlier epochs' poll-failure cause stays unobserved: process logs are not in Loki.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Live verification2026-11-06: current0.20.2-rc.1 process has13 successfulpolls, exact completed-poll nearest-rankp9034.097s andmax91.786s vsactual600s interval. Grafana statehistory acrossNov5 12:05:04 toNov6 12:05:04 containszero staleAlerting transitions,with startingNormal stateestablishedfrom precedinghistory;fivePending episodesresolved. Intervalcoverage1441/1441minute samples. The24h alertcriterion isverified acrossdeployments/intervalchange,notclaimed as24h ononebuild. Sourcechecks already passed. No newcode incloseout; packaging/newsignalDoD conditions inapplicable. Evidence /Users/rob/repos/cf2otel/codex/reliability-summary-20261106.json and raw siblingJSON.
+<!-- SECTION:FINAL_SUMMARY:END -->

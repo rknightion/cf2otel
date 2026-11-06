@@ -6,8 +6,8 @@ title: >-
 status: In Progress
 assignee:
   - '@codex'
-created_date: '2026-10-21 01:10'
-updated_date: '2026-10-21 01:35'
+created_date: 2026-10-21 01:10
+updated_date: '2026-11-06T12:11:00Z'
 labels:
   - ai-gateway
   - bug
@@ -41,6 +41,8 @@ Workers AI custom-model requests through the gateway (jevgrep's `jev` model, pat
 
 <!-- SECTION:PLAN:BEGIN -->
 1. Reproduce zero/missing gateway usage using captured Workers AI and OpenAI response fixtures. 2. Recover validated nonnegative integer input/output counts from complete untruncated JSON response bodies only when gateway values are zero/missing; preserve positive gateway counts, mark body-derived usage and avoid duplicate attributes. 3. Verify request log, span and metrics consistency, malformed/truncated/non-JSON handling and capture-off behavior; independent review, CodeRabbit delta and remote gate. 4. Deploy and retain the daily dashboard within-2-percent comparison as an explicit live criterion until observed.
+
+Complete live daily reconciliation for a closedUTC day using Cloudflare GraphQL analytics and matching source timestamps inLoki. Correct the existing model-specific dailyjev reporting branch to select the outer workers-ai response once per gateway/logID, and expose the same explicit reconciliation view. Preserve generic provider-operation counters; do not blanketexclude wholesale. Verify exactquery against live totals, generatedassets/fullgate and combinedreview.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -53,4 +55,6 @@ Independent review found zero usage_metadata could override positive top-level t
 Source acceptance 1-3 established by failing then passing integrated log/span/metric fixtures; invalid, truncated and non-JSON cases included, no duplicate attributes or provenance metric dimension. Independent review PASS after precedence correction; CodeRabbit completed zero findings with all token-usage paths covered. Existing GitHub CI on limiter SHA 1661d4b failed govulncheck GO-2026-6809 under Go1.27.2; module floor aligned to already-used Docker Go1.27.3 and final composed gate rerunning on that toolchain. Daily live dashboard criterion remains unchecked.
 
 Final composed remote just check PASS on Go1.27.3: run 20261021T012928Z-cf2otel-2f357034, tree fadea47c2999d5ef3e43d05d986db4d2f84cd712 on 1661d4b; all race suites, lint/vet, tidy, build, vulnerability and generated checks passed. Independent review PASS and complete CodeRabbit zero findings. Publishing recovery source plus Go patch alignment. AC4 remains open: compare a complete post-deploy daily source window once checkpoint lag recovers; no historical replay or cost estimation. No packaging definition change; just ci conditional not applicable.
+
+Closedday2026-11-05UTC: Cloudflare modeltypesafe/jev inputtokens165991. Raw requestlogs341394; logIDdedupe331982; each providerleg workers-ai andtypesafe has165991 unique tokens. Both legs have105uniquelogs,107rawrecords. Existing dailybodyquery also341394,so AC4 remainsopen untilreportingcorrection. Generic tokenmetricpanels countprovideroperations acrossbothlegs; universalwholesale exclusion is unsafe. Model-specific outerworkers-ai response dedupe matches reference exactly.
 <!-- SECTION:NOTES:END -->
