@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.20.2](https://github.com/rknightion/cf2otel/compare/v0.20.1...v0.20.2) (2026-11-06)
+
+
+### Bug Fixes
+
+* **grafana:** reconcile daily jev usage without duplicate provider legs ([42a2c7c](https://github.com/rknightion/cf2otel/commit/42a2c7c1a0026c49f8cb4e40568358cee5205cc0))
+
+
+### Performance
+
+* **telemetry:** overlap acknowledged source signal flushes ([177a147](https://github.com/rknightion/cf2otel/commit/177a147abb939d6c0ea237f679f6064c6982f68f))
+
 ## [0.20.1](https://github.com/rknightion/cf2otel/compare/v0.20.0...v0.20.1) (2026-11-05)
 
 
