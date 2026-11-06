@@ -1,9 +1,11 @@
 ---
 id: CFO-0095
 title: Explain and reduce AI poll commit/export wall time
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@codex'
 created_date: '2026-11-06T00:40:00Z'
+updated_date: '2026-11-06T09:24:00Z'
 labels: []
 dependencies: []
 priority: medium
@@ -29,3 +31,9 @@ Release0.20.1 live completed-poll instrumentation exposed commit/export work dom
 - [ ] #2 just ci before a change that touches the Dockerfile, goreleaser or the image (adds snapshot + image)
 - [ ] #3 Every new signal or attribute name declared in internal/semconv and listed in docs/signals.md
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Attribute commit wall time through scheduler/exporter inspection and a bounded reproduction. Optimize only the measured cost while retaining flush acknowledgement, replay and checkpoint ordering. Compare identical payload workloads, run focused failures and required gate, obtain combined review, then publish and verify the live change if supported.
+<!-- SECTION:PLAN:END -->
