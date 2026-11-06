@@ -92,6 +92,9 @@ internal hostname in a task or doc.
 - Completed poll diagnostics use an operational trace pipeline separate from source delivery.
   API header/limiter durations are overlapping request sums, not wall-time phases; committed
   items count checkpointed windows and telemetry records, not AI source rows.
+- The model-specific daily `jev` reconciliation counts outer `workers-ai` response usage
+  once per gateway/log ID. Nested `typesafe` records and delivery replays otherwise double-count
+  this workload. Generic token counters remain provider-operation totals, not deduplicated billing.
 - Every rule in the Grafana "cf2otel alerts" folder comes from `grafana/build_rules.py`. A rule
   made by hand there fails grafana-sync's post-publish check as a stale live rule.
 - Grafana Cloud Tempo on the m7kni stack stores span attribute values truncated at 2048 characters.

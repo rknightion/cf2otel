@@ -105,6 +105,17 @@ WRK = S + ',cloudflare_workers_script_name=~"$script"'
 R2 = S + ',cloudflare_r2_bucket_name=~"$bucket"'
 LOG = '{service_name="cf2otel"}'
 
+# Reconcile jev's paired provider records using the outer Workers AI response.
+# Retries can re-emit a source log, so count each gateway/log ID once. This is
+# source-log time, independent of when cf2otel exports the record or metric.
+DAILY_JEV_INPUT_TOKENS = (
+    '(sum(max by (cloudflare_ai_gateway_gateway_name, cloudflare_ai_gateway_log_id) '
+    '(max_over_time({service_name="cf2otel"} | event_name="gen_ai.client.inference.operation.details" '
+    '| gen_ai_request_model="jev" | gen_ai_provider_name="workers-ai" '
+    '| cloudflare_ai_gateway_content_side="response" '
+    '| cloudflare_ai_gateway_gateway_name!="" | cloudflare_ai_gateway_log_id!="" '
+    '| json in="result.usage.input_tokens" | unwrap in | __error__="" [24h]))))')
+
 CACHED = "hit|stale|updating|revalidated"
 CACHEABLE = CACHED + "|miss|expired"
 
@@ -984,6 +995,13 @@ def access_tab(d: Dashboard) -> dict:
 
 
 def ai_tab(d: Dashboard) -> dict:
+    d.stat(2415, "jev daily input reconciliation (all gateways)",
+        "Rolling 24h input tokens at the selected end time, using source-log timestamps. Counts the outer Workers AI "
+        "response leg for jev once per gateway/log ID, excluding the paired provider leg and replay copies. "
+        "Uses captured result.usage.input_tokens; missing bodies or invalid values are omitted. No matching captured usage is shown as no data. "
+        "Uses the same jev definition as the daily input alert across all gateways, regardless of the gateway filter. "
+        "Set the end to UTC midnight to compare a closed UTC day with Cloudflare. This is jev reconciliation, not universal billable usage.",
+        [loki(DAILY_JEV_INPUT_TOKENS, instant=True)], decimals=0)
     d.stat(2401, "Requests", "Completed AI Gateway requests from the REST gateway log over the selected range.",
         [prom(f'sum(increase(cloudflare_ai_gateway_requests_total{{{GW}}}[$__range]))', instant=True)], decimals=0)
     d.stat(302, "AI Gateway cost", "Gateway-reported cost values; currency is unverified, so no currency unit is asserted.",
@@ -1088,6 +1106,7 @@ def ai_tab(d: Dashboard) -> dict:
         row("Traffic", [(301, 10, 8), (309, 8, 8), (2411, 6, 8)]),
         row("Latency", [(2412, 12, 9), (303, 12, 9), (2413, 24, 7)]),
         row("Tokens and cost", [(304, 12, 8), (307, 12, 8), (308, 16, 8), (2414, 8, 8)]),
+        row("Daily jev reconciliation (all gateways)", [(2415, 24, 4)]),
         row("DLP and log coverage", [(310, 9, 8), (2421, 7, 8), (2422, 8, 8)]),
         row("Body capture data quality (all gateways)", [(2423, 24, 7)]),
         row("Traces", [(2431, 24, 9)]),

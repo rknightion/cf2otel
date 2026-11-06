@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 
-from build_dashboard import (ACCESS_SEATS_INTERVAL_SECONDS, CERT_FRESH, CERTS_PACKS_FRESHNESS_SECONDS,
+from build_dashboard import (ACCESS_SEATS_INTERVAL_SECONDS, CERT_FRESH, CERTS_PACKS_FRESHNESS_SECONDS, DAILY_JEV_INPUT_TOKENS,
                              CERTS_PACKS_INTERVAL_SECONDS, WARP_INTERVAL_SECONDS, render, warp_deployment_seconds)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -183,11 +183,10 @@ def resource(name: str, title: str, description: str, panel_id: int, expr: str, 
 
 
 LOKI = "grafanacloud-logs"
-# jev's gateway log records report zero usage, so its input tokens come from the
-# captured response body; every other model uses the gateway's own count.
+# jev uses one outer Workers AI response per source log, shared with its daily
+# reconciliation panel; every other model keeps the gateway's own count.
 DAILY_INPUT_TOKENS = (
-    '(sum(sum_over_time({service_name="cf2otel"} | event_name="gen_ai.client.inference.operation.details" '
-    '| gen_ai_request_model="jev" | json in="result.usage.input_tokens" | unwrap in [24h])) or vector(0)) + '
+    '(' + DAILY_JEV_INPUT_TOKENS + ' or vector(0)) + '
     '(sum(sum_over_time({service_name="cf2otel"} | event_name="cloudflare.ai_gateway.request" '
     '| gen_ai_request_model!="jev" | unwrap gen_ai_usage_input_tokens [24h])) or vector(0))')
 DAILY_INPUT_TOKENS_THRESHOLD = 150_000_000
@@ -206,8 +205,10 @@ def daily_input_tokens_rule() -> dict:
         "noDataState": "Ok", "execErrState": "Ok",
         "labels": {"category": "spend", "domain": "observability", "page": "false", "service": "cf2otel", "severity": "warning", "source": "cf2otel"},
         "annotations": {"summary": "AI Gateway input tokens over the last 24h: {{ humanize $values.B.Value }} (threshold 150M)",
-            "description": "Rolling 24h input tokens through the Cloudflare AI Gateway. jevgrep's jev model is counted from the response body, "
-                           "because its gateway log records report 0 usage (cf2otel CFO-0086); every other model uses gen_ai.usage.input_tokens. "
+            "description": "Rolling 24h input tokens by source-log timestamp. jev uses captured result.usage.input_tokens from the outer "
+                           "Workers AI response leg, once per gateway/log ID, excluding the paired provider leg and replay copies. "
+                           "Missing bodies or invalid usage are omitted. Every other model keeps its request-log gen_ai.usage.input_tokens sum. "
+                           "This model-specific reconciliation is not universal billable accounting. "
                            "Normal days are 15-40M. The 2026-10-19 spike was 355M, almost all from jg calls in loop lanes. "
                            "Check which loops are running jg heavily, using the agent-history catalogue."},
         "expressions": {"A": {"datasourceUID": LOKI, "queryType": "instant", "relativeTimeRange": {"from": "24h", "to": "0s"},

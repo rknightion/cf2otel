@@ -11313,6 +11313,89 @@
           }
         }
       },
+      "panel-2415": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${ds_loki}"
+                      },
+                      "group": "loki",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(sum(max by (cloudflare_ai_gateway_gateway_name, cloudflare_ai_gateway_log_id) (max_over_time({service_name=\"cf2otel\"} | event_name=\"gen_ai.client.inference.operation.details\" | gen_ai_request_model=\"jev\" | gen_ai_provider_name=\"workers-ai\" | cloudflare_ai_gateway_content_side=\"response\" | cloudflare_ai_gateway_gateway_name!=\"\" | cloudflare_ai_gateway_log_id!=\"\" | json in=\"result.usage.input_tokens\" | unwrap in | __error__=\"\" [24h]))))",
+                        "legendFormat": "",
+                        "queryType": "instant",
+                        "refId": "A"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Rolling 24h input tokens at the selected end time, using source-log timestamps. Counts the outer Workers AI response leg for jev once per gateway/log ID, excluding the paired provider leg and replay copies. Uses captured result.usage.input_tokens; missing bodies or invalid values are omitted. No matching captured usage is shown as no data. Uses the same jev definition as the daily input alert across all gateways, regardless of the gateway filter. Set the end to UTC midnight to compare a closed UTC day with Cloudflare. This is jev reconciliation, not universal billable usage.",
+          "id": 2415,
+          "links": [],
+          "title": "jev daily input reconciliation (all gateways)",
+          "vizConfig": {
+            "group": "stat",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "decimals": 0,
+                  "mappings": [],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "blue",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "none",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "value",
+                "wideLayout": true
+              }
+            },
+            "version": "12.1.0"
+          }
+        }
+      },
       "panel-2421": {
         "kind": "Panel",
         "spec": {
@@ -29296,6 +29379,33 @@
                           }
                         },
                         "title": "Tokens and cost"
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "collapse": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2415"
+                                  },
+                                  "height": 4,
+                                  "width": 24,
+                                  "x": 0,
+                                  "y": 0
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "title": "Daily jev reconciliation (all gateways)"
                       }
                     },
                     {

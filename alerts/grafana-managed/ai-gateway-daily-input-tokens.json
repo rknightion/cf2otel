@@ -12,7 +12,7 @@
   },
   "spec": {
     "annotations": {
-      "description": "Rolling 24h input tokens through the Cloudflare AI Gateway. jevgrep's jev model is counted from the response body, because its gateway log records report 0 usage (cf2otel CFO-0086); every other model uses gen_ai.usage.input_tokens. Normal days are 15-40M. The 2026-10-19 spike was 355M, almost all from jg calls in loop lanes. Check which loops are running jg heavily, using the agent-history catalogue.",
+      "description": "Rolling 24h input tokens by source-log timestamp. jev uses captured result.usage.input_tokens from the outer Workers AI response leg, once per gateway/log ID, excluding the paired provider leg and replay copies. Missing bodies or invalid usage are omitted. Every other model keeps its request-log gen_ai.usage.input_tokens sum. This model-specific reconciliation is not universal billable accounting. Normal days are 15-40M. The 2026-10-19 spike was 355M, almost all from jg calls in loop lanes. Check which loops are running jg heavily, using the agent-history catalogue.",
       "summary": "AI Gateway input tokens over the last 24h: {{ humanize $values.B.Value }} (threshold 150M)"
     },
     "execErrState": "Ok",
@@ -24,7 +24,7 @@
             "type": "loki",
             "uid": "grafanacloud-logs"
           },
-          "expr": "(sum(sum_over_time({service_name=\"cf2otel\"} | event_name=\"gen_ai.client.inference.operation.details\" | gen_ai_request_model=\"jev\" | json in=\"result.usage.input_tokens\" | unwrap in [24h])) or vector(0)) + (sum(sum_over_time({service_name=\"cf2otel\"} | event_name=\"cloudflare.ai_gateway.request\" | gen_ai_request_model!=\"jev\" | unwrap gen_ai_usage_input_tokens [24h])) or vector(0))",
+          "expr": "((sum(max by (cloudflare_ai_gateway_gateway_name, cloudflare_ai_gateway_log_id) (max_over_time({service_name=\"cf2otel\"} | event_name=\"gen_ai.client.inference.operation.details\" | gen_ai_request_model=\"jev\" | gen_ai_provider_name=\"workers-ai\" | cloudflare_ai_gateway_content_side=\"response\" | cloudflare_ai_gateway_gateway_name!=\"\" | cloudflare_ai_gateway_log_id!=\"\" | json in=\"result.usage.input_tokens\" | unwrap in | __error__=\"\" [24h])))) or vector(0)) + (sum(sum_over_time({service_name=\"cf2otel\"} | event_name=\"cloudflare.ai_gateway.request\" | gen_ai_request_model!=\"jev\" | unwrap gen_ai_usage_input_tokens [24h])) or vector(0))",
           "queryType": "instant",
           "refId": "A"
         },

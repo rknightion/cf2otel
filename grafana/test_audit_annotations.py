@@ -57,6 +57,21 @@ def without_bot_and_lb_additions(dashboard):
                 rows.remove(row)
 
 
+def without_daily_jev_addition(dashboard):
+    """Exclude the approved reconciliation row from older preservation checks."""
+    ai = next(t for t in dashboard["spec"]["layout"]["spec"]["tabs"]
+              if t["spec"]["title"] == "AI Gateway")
+    rows = ai["spec"]["layout"]["spec"]["rows"]
+    for row in list(rows):
+        if row["spec"]["title"] == "Daily jev reconciliation (all gateways)":
+            panels = [item["spec"]["element"]["name"]
+                      for item in row["spec"]["layout"]["spec"]["items"]]
+            if panels != ["panel-2415"]:
+                raise AssertionError("unexpected objects in daily jev reconciliation row")
+            dashboard["spec"]["elements"].pop("panel-2415")
+            rows.remove(row)
+
+
 class AuditAnnotationsTest(unittest.TestCase):
     def test_generated_layer_reaches_loki_with_audit_context(self):
         # Exercise the generator's public CLI without rewriting the tracked output.
@@ -506,6 +521,7 @@ class WARPFleetTest(unittest.TestCase):
         for asset in (dashboard, original):
             without_resource_and_dex_additions(asset)
             without_bot_and_lb_additions(asset)
+            without_daily_jev_addition(asset)
         self.assertEqual(dashboard, original, "all previous panels, layouts and dashboard settings must survive")
 
     def test_invalid_deployment_settings_fail_without_output(self):
@@ -601,6 +617,7 @@ class HTTPDimensionsTest(unittest.TestCase):
         for asset in (dashboard, original):
             without_resource_and_dex_additions(asset)
             without_bot_and_lb_additions(asset)
+            without_daily_jev_addition(asset)
         self.assertEqual(dashboard, original, "only the new HTTP panels and appended row may change")
 
     def test_invalid_static_intervals_fail_without_output(self):
@@ -685,6 +702,7 @@ class BotAndPoolPanelsTest(unittest.TestCase):
         original = json.loads(baseline.stdout)
         for asset in (dashboard, original):
             without_bot_and_lb_additions(asset)
+            without_daily_jev_addition(asset)
         self.assertEqual(dashboard, original, "all old objects and layout must remain unchanged")
 
 
