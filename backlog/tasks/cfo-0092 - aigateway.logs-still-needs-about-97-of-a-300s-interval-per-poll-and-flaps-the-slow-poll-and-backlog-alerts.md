@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-11-05T21:58:00Z'
-updated_date: '2026-11-05T23:57:00Z'
+updated_date: '2026-11-06T00:25:00Z'
 labels:
   - bug
 dependencies: []
@@ -59,4 +59,6 @@ Rollout checkpoint: exact b05d69e CI42128369086 and Release42128369543 passed. C
 Current observation state: release153f5313811341526adaa52ceb718362c653d066 / version0.20.1 pulled and running healthy, process start1793921557.2273192. Release42129579918, CI42129579022 and final auto-rc42130956461 all success; prior RC also completed. Runtime errors0. Impact watcher PID2316868/session94254 writes /Users/rob/repos/cf2otel/codex/cfo92-release-impact-live.json every900s (bounded2h); unchanged live-hour helper session70164 writes /Users/rob/repos/cf2otel/codex/cfo92-release-hour.json (14 reads/300s,49 collectors, actual intervals). Both sleep-protected with Linux systemd-inhibit because caffeinate is unavailable. First impact read:64 spans,75 requests,165.543s,0 failed polls. One failed monitor bootstrap receipt retained separately, not proof. Next action: inspect15min receipts, verify epoch unchanged and final65min delivery witness; no pushes during observation.
 
 Observation correction: short-name SSH began failing because it resolves to the LAN SSH service and the forwarded agent has no identities. Explicit Tailscale SSH to the existing host succeeds; manual host check confirms original process uptime, healthy,0 restarts and no ERROR/FATAL logs. Original failed watcher receipt retained. Resumable continuation session47580 uses explicit Tailscale SSH and writes /Users/rob/repos/cf2otel/codex/cfo92-release-telemetry-impact.json, preserving the initial observation plus a61s-delayed second read. Original unchanged hour witness still running. Second telemetry read:2 successful polls,103 records,118 requests(1.146/record),123.977s mean,0 failed scrapes. Do not treat the host-check gap as uninterrupted host evidence.
+
+45-minute observation: same release/process,5 successful AI polls,0 failed polls,146 records,189 requests(1.295 overall),71.532s mean. Poll durations165.543,82.411,73.533,25.423,10.752s; lower traffic confounds speedup claims. First2 polls met1.2 target; later missing-body fallback4xx raised aggregate. Tempo operational traces verified correlated poll/API spans:27 total4xx errors across successful polls, consistent with tolerated404/7002 body-unavailable handling. Container remains healthy/no restarts/no runtime ERROR or FATAL; latest checkpoint backlog290.335s, down from590.335s. All3 AI slow/backlog/stale alerts currentlyNormal with healthy evaluations. Keep10m interval; no threshold changes. Delivery hour witness still running/pass. Host short-name DNS fixed persistently with DHCP domains routing-only; explicit Tailscale route remains in observer. Next: final15min sample and unchanged65min delivery completion. No push during observation.
 <!-- SECTION:NOTES:END -->
