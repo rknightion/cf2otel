@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -193,8 +194,14 @@ func (p *Providers) SetExportObserver(fn func(context.Context, string, error)) {
 // BeginCommit captures export failures that can occur before ForceFlush returns.
 func (p *Providers) BeginCommit() uint64 { return p.hook.snapshot() }
 func (p *Providers) FlushCommit(ctx context.Context, since uint64) error {
-	logErr := p.logs.ForceFlush(ctx)
-	traceErr := p.traces.ForceFlush(ctx)
+	// The source signals have separate providers and transports. Flush both
+	// concurrently, but join both acknowledgements before checking the observer
+	// or allowing the caller to advance its checkpoint.
+	var logErr, traceErr error
+	var wg sync.WaitGroup
+	wg.Go(func() { logErr = p.logs.ForceFlush(ctx) })
+	wg.Go(func() { traceErr = p.traces.ForceFlush(ctx) })
+	wg.Wait()
 	var failures []error
 	if logErr != nil {
 		failures = append(failures, &ExportFailure{Signal: "logs", Err: logErr})

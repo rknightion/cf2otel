@@ -87,6 +87,8 @@ internal hostname in a task or doc.
 - The OTLP protobuf marshal rejects a string with invalid UTF-8 before any request is sent, and one
   such record fails its whole commit window on every retry. Byte caps stop on a rune boundary
   (`runeBoundary`) and `internal/telemetry` repairs any remaining invalid string at emission.
+- Each bounded commit chunk flushes source logs and traces concurrently, joins both
+  acknowledgements and checks observed export failures before replay or checkpoint advancement.
 - Completed poll diagnostics use an operational trace pipeline separate from source delivery.
   API header/limiter durations are overlapping request sums, not wall-time phases; committed
   items count checkpointed windows and telemetry records, not AI source rows.
