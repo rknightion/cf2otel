@@ -41,8 +41,10 @@ codex/
 # superpowers plans and specs are local scratch, never committed.
 docs/superpowers/
 
-# Claude Code repo-local config. `settings.json` and `hooks/` ARE tracked — they
-.claude/
+# Claude Code local state (worktrees, scheduler locks, settings.local.json) is never committed.
+# .claude/skills/ is tracked: it holds the links to the contributor skills in .agents/skills/.
+.claude/*
+!.claude/skills/
 
 # Local config and credentials — never commit either.
 config.local.yaml

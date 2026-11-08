@@ -5,9 +5,24 @@ ci-required: ci-success
 release-on-push: yes
 deploy-on-push: yes
 grafana-stack: robknight
+tracker: github
+landing: pr
 
 Public repository: no hostname, account/zone/gateway ID, tenant ID, email or internal identifier in
-any tracked file or loop artifact. `just ci` needs a Docker daemon. Run `just` in a clean worktree: the gitignored `codex/` holds Go files that fail fmt, lint, vet and test in the shared checkout.
+any tracked file or loop artifact. Run `just` in a clean worktree: the gitignored `codex/` holds Go files that fail fmt, lint, vet and test in the shared checkout.
+
+Tracker model: `~/repos/agent-docs/docs/github-tracker.md` (maintainers only).
+
+## Queue
+
+- The queue is `just tracker queue` (Status Ready on the rknightion Project);
+  `.github/tracker/history/` is never a queue.
+- A charter selects by labels and Project fields. Never queue a `needs-triage` issue, the Dependency
+  Dashboard (#1) or a release-please pull request.
+- Only the root writes issues and the Project, through `just tracker`; a lane returns the status and
+  AC ticks it wants.
+- A queue row names the issue as `#N`. `CFO-0001` resolves with `just issue <ID>`
+  (`.github/tracker/id-map.json`). A bare `#N` of 110 or below is a pull request or the Dashboard.
 
 ## Credentials
 
@@ -40,29 +55,22 @@ any tracked file or loop artifact. `just ci` needs a Docker daemon. Run `just` i
   after the first complete cycle and never revert a healthy deploy for it.
 - The scheduled "Cloudflare API drift" workflow is not a required check (`ci-success` is). Read
   its log before treating red as a gate or as real drift.
-- The drift canary reads only what `restProbeQuery` in `tools/apidrift/probe.go` asks for, mostly
-  one row, so a default-paging census does not show what it sees. Two Worker-destination Access
-  apps legitimately have no `domain`; JSON null `domain` counts as missing on a domain-based row.
-  SCIM update-log `resource_user_email` must appear in at least one row of a page, never every row;
-  a nonempty page with none is a canary difference by design, do not suppress it. Null counts as
-  missing only for fields in `optional_when_destination_types` or `required_in_any_row`.
 - `auto-rc` cuts and publishes a `v*-rc.*` tag for any green `main` SHA, and its rollout restarts
   the app on the same SHA. After a restart, including an in-place restart keeping
   `service_instance_id`, old process series stay visible for the 5-minute lookback with different
   `service_version`. After auto-RC completes, fence the epoch on `cf2otel_build_commit` plus
   `cf2otel_process_start_time_seconds` plus exactly one `service_instance_id`; select the full
-  label set, never SHA or instance alone. `loop-pi-audit closeout` attributes release-please branch moves
-  and RC tags to their bot actors and exits 0 when every ref is covered; it exits 1 only on an
-  ungranted ref (an RC tag, a Renovate branch non-fast-forward). Report each by actor and never
-  widen the grants. Merging the release-please PR auto-deletes its branch
-  (`delete_branch_on_merge` is on): expected, report it by actor, not as a fault.
-- Every push to main redeploys and restarts the process, tracker-only commits included. Hold all
-  pushes during an hour proof, and start the hour after `cf2otel_build_commit` matches the landed SHA.
-- Launch every watcher under `caffeinate -i`, measure on the wall clock; an observation gap is not
-  observed, never unhealthy. Read the exact-SHA CI run back with `gh run view`.
+  label set, never SHA or instance alone. `loop-pi-audit closeout` exits 1 only on an ungranted ref
+  (an RC tag, a Renovate branch non-fast-forward): report it by actor, never widen the grants. The
+  release-please PR's branch auto-deletes on merge: expected.
+- Every merge to main redeploys and restarts the process, documentation-only merges included. Hold
+  all merges during an hour proof, and start the hour after `cf2otel_build_commit` matches the landed
+  SHA.
+- Launch every watcher under `caffeinate -i` and measure on the wall clock; an observation gap is
+  not observed, never unhealthy. Read the exact-SHA CI run back with `gh run view`.
 - The push scan flags every email-shaped literal, `example.com` included, and a net-diff scan
   misses a literal added then removed within one push: use opaque non-email strings and scan newly
-  reachable commits too. The private scans allow loopback and the RFC 5737 and RFC 3849 ranges.
+  reachable commits too (`CONTRIBUTING.md` has the scan).
 - On an external write's rejection, capture the full response body, and re-GET before rolling back.
 - A loop lands from a worktree, so the shared checkout's `main` stays put. Never commit there.
 - Fixtures are sanitized before they are written and append-only: add a new one beside a committed
