@@ -22,15 +22,29 @@ is its contract. Run one test or package locally.
   (or `remove <id>`), committed with the change. Never hand-edit `.groma/` except to drop a code
   reference to a deleted file, which the CLI cannot remove.
 
-## Tracker
+## Tracking work
 
-Tasks are `CFO-NNNN` in `backlog/`. **Cloudflare API surface - live-verified reference** is the data
-contract for every collector, and **Parity checklist - reference pollers** is the feature floor.
+Work is tracked in this repository's GitHub issues; they are the only queue. Do not add a checklist
+file such as `ROADMAP.md` beside them.
 
-Loops: the protocol lives in `~/repos/agent-docs/sources/loop/` (this board's "Loop protocol pointer" doc points there); this repository's loop facts are in `LOOP.md`.
+- A pull request body says how it relates to an issue, on a line of its own: `Closes #N` with the
+  `Acceptance evidence` table from `.github/pull_request_template.md` (one row for each acceptance
+  criterion of that issue), `Refs #N` when it only relates to one, or `Task: none, <reason>`.
+- A pull request that changes `.github/workflows/` or `.github/actions/` carries no closing keyword:
+  write `Task: none, <reason>`, with `Refs #N` beside it if you like.
+- Contributors never need the project board or the tracker tooling; a maintainer handles both.
+- Issues and pull requests are public, so they carry no real identifiers: no email addresses,
+  account, zone or gateway ids, host names or addresses. Write the shape, not the instance.
+- Older commits, docs and tests cite legacy board ids such as `CFO-0001`. `just issue <ID>` prints
+  the issue each one became; `.github/tracker/id-map.json` is the map. A bare `#N` of 110 or below
+  is a pull request or the Renovate Dependency Dashboard.
 
-`backlog/` is committed and public: no credential, account/zone/gateway ID, email, public IP or
-internal hostname in a task or doc.
+## Reference docs
+
+The Cloudflare API surface live-verified reference (`CFO` board doc-0003) is the data contract for
+every collector, and the parity checklist for the reference pollers (doc-0004) is the feature floor.
+Both are kept under `backlog/docs/` until they move to `.github/tracker/history/`. Read the API
+reference before changing a collector's query, fields or paging.
 
 ## Ownership seams
 
@@ -95,34 +109,16 @@ internal hostname in a task or doc.
 - The model-specific daily `jev` reconciliation counts outer `workers-ai` response usage
   once per gateway/log ID. Nested `typesafe` records and delivery replays otherwise double-count
   this workload. Generic token counters remain provider-operation totals, not deduplicated billing.
+- The drift canary reads only what `restProbeQuery` in `tools/apidrift/probe.go` asks for, mostly
+  one row, so a default-paging census does not show what it sees. Two Worker-destination Access
+  apps legitimately have no `domain`; JSON null `domain` counts as missing on a domain-based row.
+  SCIM update-log `resource_user_email` must appear in at least one row of a page, never every row;
+  a nonempty page with none is a canary difference by design, do not suppress it. Null counts as
+  missing only for fields in `optional_when_destination_types` or `required_in_any_row`.
 - Every rule in the Grafana "cf2otel alerts" folder comes from `grafana/build_rules.py`. A rule
   made by hand there fails grafana-sync's post-publish check as a stale live rule.
 - Grafana Cloud Tempo on the m7kni stack stores span attribute values truncated at 2048 characters.
   An attribute key present in Tempo proves nothing about its content length.
-
-<!-- BACKLOG.MD GUIDELINES START -->
-<!-- backlog.md-instructions-version: 1.50.1 -->
-<CRITICAL_INSTRUCTION>
-
-## Backlog.md Workflow
-
-This project uses Backlog.md for task and project management.
-
-**For every user request in this project, run `backlog instructions overview` before answering or taking action.**
-
-Use the overview to decide whether to search, read, create, or update Backlog tasks.
-
-Before task lifecycle actions, read the matching detailed guide:
-- `backlog instructions task-creation` before creating or splitting tasks
-- `backlog instructions task-execution` before planning, changing status or assignee, adding a plan or implementation notes, or implementing task work
-- `backlog instructions task-finalization` before checking acceptance criteria, writing final summaries, or moving tasks to terminal statuses
-
-Use `backlog <command> --help` before running unfamiliar commands. Help shows options, fields, and examples.
-
-Do not edit Backlog task, draft, document, decision, or milestone markdown files directly. Use the `backlog` CLI so metadata, relationships, and history stay consistent.
-
-</CRITICAL_INSTRUCTION>
-<!-- BACKLOG.MD GUIDELINES END -->
 
 ## Loop facts
 
