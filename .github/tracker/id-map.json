@@ -1,0 +1,510 @@
+{
+ "held": {},
+ "issues": {
+  "CFO-0001": {
+   "number": 113,
+   "url": "https://github.com/rknightion/cf2otel/issues/113"
+  },
+  "CFO-0002": {
+   "number": 114,
+   "url": "https://github.com/rknightion/cf2otel/issues/114"
+  },
+  "CFO-0003": {
+   "number": 115,
+   "url": "https://github.com/rknightion/cf2otel/issues/115"
+  },
+  "CFO-0004": {
+   "number": 116,
+   "url": "https://github.com/rknightion/cf2otel/issues/116"
+  },
+  "CFO-0005": {
+   "number": 117,
+   "url": "https://github.com/rknightion/cf2otel/issues/117"
+  },
+  "CFO-0006": {
+   "number": 118,
+   "url": "https://github.com/rknightion/cf2otel/issues/118"
+  },
+  "CFO-0007": {
+   "number": 119,
+   "url": "https://github.com/rknightion/cf2otel/issues/119"
+  },
+  "CFO-0008": {
+   "number": 120,
+   "url": "https://github.com/rknightion/cf2otel/issues/120"
+  },
+  "CFO-0009": {
+   "number": 121,
+   "url": "https://github.com/rknightion/cf2otel/issues/121"
+  },
+  "CFO-0010": {
+   "number": 122,
+   "url": "https://github.com/rknightion/cf2otel/issues/122"
+  },
+  "CFO-0011": {
+   "number": 123,
+   "url": "https://github.com/rknightion/cf2otel/issues/123"
+  },
+  "CFO-0012": {
+   "number": 124,
+   "url": "https://github.com/rknightion/cf2otel/issues/124"
+  },
+  "CFO-0013": {
+   "number": 125,
+   "url": "https://github.com/rknightion/cf2otel/issues/125"
+  },
+  "CFO-0014": {
+   "number": 126,
+   "url": "https://github.com/rknightion/cf2otel/issues/126"
+  },
+  "CFO-0015": {
+   "number": 127,
+   "url": "https://github.com/rknightion/cf2otel/issues/127"
+  },
+  "CFO-0016": {
+   "number": 128,
+   "url": "https://github.com/rknightion/cf2otel/issues/128"
+  },
+  "CFO-0017": {
+   "number": 129,
+   "url": "https://github.com/rknightion/cf2otel/issues/129"
+  },
+  "CFO-0018": {
+   "number": 130,
+   "url": "https://github.com/rknightion/cf2otel/issues/130"
+  },
+  "CFO-0019": {
+   "number": 131,
+   "url": "https://github.com/rknightion/cf2otel/issues/131"
+  },
+  "CFO-0020": {
+   "number": 132,
+   "url": "https://github.com/rknightion/cf2otel/issues/132"
+  },
+  "CFO-0021": {
+   "number": 133,
+   "url": "https://github.com/rknightion/cf2otel/issues/133"
+  },
+  "CFO-0022": {
+   "number": 134,
+   "url": "https://github.com/rknightion/cf2otel/issues/134"
+  },
+  "CFO-0023": {
+   "number": 135,
+   "url": "https://github.com/rknightion/cf2otel/issues/135"
+  },
+  "CFO-0024": {
+   "number": 136,
+   "url": "https://github.com/rknightion/cf2otel/issues/136"
+  },
+  "CFO-0025": {
+   "number": 137,
+   "url": "https://github.com/rknightion/cf2otel/issues/137"
+  },
+  "CFO-0026": {
+   "number": 138,
+   "url": "https://github.com/rknightion/cf2otel/issues/138"
+  },
+  "CFO-0027": {
+   "number": 139,
+   "url": "https://github.com/rknightion/cf2otel/issues/139"
+  },
+  "CFO-0028": {
+   "number": 140,
+   "url": "https://github.com/rknightion/cf2otel/issues/140"
+  },
+  "CFO-0029": {
+   "number": 141,
+   "url": "https://github.com/rknightion/cf2otel/issues/141"
+  },
+  "CFO-0030": {
+   "number": 142,
+   "url": "https://github.com/rknightion/cf2otel/issues/142"
+  },
+  "CFO-0031": {
+   "number": 143,
+   "url": "https://github.com/rknightion/cf2otel/issues/143"
+  },
+  "CFO-0032": {
+   "number": 144,
+   "url": "https://github.com/rknightion/cf2otel/issues/144"
+  },
+  "CFO-0033": {
+   "number": 145,
+   "url": "https://github.com/rknightion/cf2otel/issues/145"
+  },
+  "CFO-0034": {
+   "number": 146,
+   "url": "https://github.com/rknightion/cf2otel/issues/146"
+  },
+  "CFO-0035": {
+   "number": 147,
+   "url": "https://github.com/rknightion/cf2otel/issues/147"
+  },
+  "CFO-0036": {
+   "number": 148,
+   "url": "https://github.com/rknightion/cf2otel/issues/148"
+  },
+  "CFO-0037": {
+   "number": 149,
+   "url": "https://github.com/rknightion/cf2otel/issues/149"
+  },
+  "CFO-0038": {
+   "number": 150,
+   "url": "https://github.com/rknightion/cf2otel/issues/150"
+  },
+  "CFO-0039": {
+   "number": 151,
+   "url": "https://github.com/rknightion/cf2otel/issues/151"
+  },
+  "CFO-0040": {
+   "number": 152,
+   "url": "https://github.com/rknightion/cf2otel/issues/152"
+  },
+  "CFO-0041": {
+   "number": 153,
+   "url": "https://github.com/rknightion/cf2otel/issues/153"
+  },
+  "CFO-0042": {
+   "number": 154,
+   "url": "https://github.com/rknightion/cf2otel/issues/154"
+  },
+  "CFO-0043": {
+   "number": 155,
+   "url": "https://github.com/rknightion/cf2otel/issues/155"
+  },
+  "CFO-0044": {
+   "number": 156,
+   "url": "https://github.com/rknightion/cf2otel/issues/156"
+  },
+  "CFO-0045": {
+   "number": 157,
+   "url": "https://github.com/rknightion/cf2otel/issues/157"
+  },
+  "CFO-0046": {
+   "number": 158,
+   "url": "https://github.com/rknightion/cf2otel/issues/158"
+  },
+  "CFO-0046.01": {
+   "number": 159,
+   "url": "https://github.com/rknightion/cf2otel/issues/159"
+  },
+  "CFO-0046.02": {
+   "number": 160,
+   "url": "https://github.com/rknightion/cf2otel/issues/160"
+  },
+  "CFO-0046.03": {
+   "number": 161,
+   "url": "https://github.com/rknightion/cf2otel/issues/161"
+  },
+  "CFO-0046.04": {
+   "number": 162,
+   "url": "https://github.com/rknightion/cf2otel/issues/162"
+  },
+  "CFO-0046.05": {
+   "number": 163,
+   "url": "https://github.com/rknightion/cf2otel/issues/163"
+  },
+  "CFO-0047": {
+   "number": 164,
+   "url": "https://github.com/rknightion/cf2otel/issues/164"
+  },
+  "CFO-0047.01": {
+   "number": 165,
+   "url": "https://github.com/rknightion/cf2otel/issues/165"
+  },
+  "CFO-0047.02": {
+   "number": 166,
+   "url": "https://github.com/rknightion/cf2otel/issues/166"
+  },
+  "CFO-0047.03": {
+   "number": 167,
+   "url": "https://github.com/rknightion/cf2otel/issues/167"
+  },
+  "CFO-0047.04": {
+   "number": 168,
+   "url": "https://github.com/rknightion/cf2otel/issues/168"
+  },
+  "CFO-0048": {
+   "number": 169,
+   "url": "https://github.com/rknightion/cf2otel/issues/169"
+  },
+  "CFO-0048.01": {
+   "number": 170,
+   "url": "https://github.com/rknightion/cf2otel/issues/170"
+  },
+  "CFO-0048.02": {
+   "number": 171,
+   "url": "https://github.com/rknightion/cf2otel/issues/171"
+  },
+  "CFO-0048.03": {
+   "number": 172,
+   "url": "https://github.com/rknightion/cf2otel/issues/172"
+  },
+  "CFO-0048.04": {
+   "number": 173,
+   "url": "https://github.com/rknightion/cf2otel/issues/173"
+  },
+  "CFO-0049": {
+   "number": 174,
+   "url": "https://github.com/rknightion/cf2otel/issues/174"
+  },
+  "CFO-0049.01": {
+   "number": 175,
+   "url": "https://github.com/rknightion/cf2otel/issues/175"
+  },
+  "CFO-0049.02": {
+   "number": 176,
+   "url": "https://github.com/rknightion/cf2otel/issues/176"
+  },
+  "CFO-0050": {
+   "number": 177,
+   "url": "https://github.com/rknightion/cf2otel/issues/177"
+  },
+  "CFO-0050.01": {
+   "number": 178,
+   "url": "https://github.com/rknightion/cf2otel/issues/178"
+  },
+  "CFO-0050.02": {
+   "number": 179,
+   "url": "https://github.com/rknightion/cf2otel/issues/179"
+  },
+  "CFO-0050.03": {
+   "number": 180,
+   "url": "https://github.com/rknightion/cf2otel/issues/180"
+  },
+  "CFO-0050.04": {
+   "number": 181,
+   "url": "https://github.com/rknightion/cf2otel/issues/181"
+  },
+  "CFO-0051": {
+   "number": 182,
+   "url": "https://github.com/rknightion/cf2otel/issues/182"
+  },
+  "CFO-0051.01": {
+   "number": 183,
+   "url": "https://github.com/rknightion/cf2otel/issues/183"
+  },
+  "CFO-0051.02": {
+   "number": 184,
+   "url": "https://github.com/rknightion/cf2otel/issues/184"
+  },
+  "CFO-0051.03": {
+   "number": 185,
+   "url": "https://github.com/rknightion/cf2otel/issues/185"
+  },
+  "CFO-0051.04": {
+   "number": 186,
+   "url": "https://github.com/rknightion/cf2otel/issues/186"
+  },
+  "CFO-0051.05": {
+   "number": 187,
+   "url": "https://github.com/rknightion/cf2otel/issues/187"
+  },
+  "CFO-0051.06": {
+   "number": 188,
+   "url": "https://github.com/rknightion/cf2otel/issues/188"
+  },
+  "CFO-0052": {
+   "number": 189,
+   "url": "https://github.com/rknightion/cf2otel/issues/189"
+  },
+  "CFO-0053": {
+   "number": 190,
+   "url": "https://github.com/rknightion/cf2otel/issues/190"
+  },
+  "CFO-0054": {
+   "number": 191,
+   "url": "https://github.com/rknightion/cf2otel/issues/191"
+  },
+  "CFO-0055": {
+   "number": 192,
+   "url": "https://github.com/rknightion/cf2otel/issues/192"
+  },
+  "CFO-0056": {
+   "number": 193,
+   "url": "https://github.com/rknightion/cf2otel/issues/193"
+  },
+  "CFO-0057": {
+   "number": 194,
+   "url": "https://github.com/rknightion/cf2otel/issues/194"
+  },
+  "CFO-0058": {
+   "number": 195,
+   "url": "https://github.com/rknightion/cf2otel/issues/195"
+  },
+  "CFO-0059": {
+   "number": 196,
+   "url": "https://github.com/rknightion/cf2otel/issues/196"
+  },
+  "CFO-0060": {
+   "number": 197,
+   "url": "https://github.com/rknightion/cf2otel/issues/197"
+  },
+  "CFO-0062": {
+   "number": 198,
+   "url": "https://github.com/rknightion/cf2otel/issues/198"
+  },
+  "CFO-0063": {
+   "number": 199,
+   "url": "https://github.com/rknightion/cf2otel/issues/199"
+  },
+  "CFO-0064": {
+   "number": 200,
+   "url": "https://github.com/rknightion/cf2otel/issues/200"
+  },
+  "CFO-0065": {
+   "number": 201,
+   "url": "https://github.com/rknightion/cf2otel/issues/201"
+  },
+  "CFO-0066": {
+   "number": 202,
+   "url": "https://github.com/rknightion/cf2otel/issues/202"
+  },
+  "CFO-0067": {
+   "number": 203,
+   "url": "https://github.com/rknightion/cf2otel/issues/203"
+  },
+  "CFO-0068": {
+   "number": 204,
+   "url": "https://github.com/rknightion/cf2otel/issues/204"
+  },
+  "CFO-0069": {
+   "number": 205,
+   "url": "https://github.com/rknightion/cf2otel/issues/205"
+  },
+  "CFO-0070": {
+   "number": 206,
+   "url": "https://github.com/rknightion/cf2otel/issues/206"
+  },
+  "CFO-0071": {
+   "number": 207,
+   "url": "https://github.com/rknightion/cf2otel/issues/207"
+  },
+  "CFO-0072": {
+   "number": 208,
+   "url": "https://github.com/rknightion/cf2otel/issues/208"
+  },
+  "CFO-0073": {
+   "number": 209,
+   "url": "https://github.com/rknightion/cf2otel/issues/209"
+  },
+  "CFO-0074": {
+   "number": 210,
+   "url": "https://github.com/rknightion/cf2otel/issues/210"
+  },
+  "CFO-0075": {
+   "number": 211,
+   "url": "https://github.com/rknightion/cf2otel/issues/211"
+  },
+  "CFO-0076": {
+   "number": 212,
+   "url": "https://github.com/rknightion/cf2otel/issues/212"
+  },
+  "CFO-0077": {
+   "number": 213,
+   "url": "https://github.com/rknightion/cf2otel/issues/213"
+  },
+  "CFO-0078": {
+   "number": 214,
+   "url": "https://github.com/rknightion/cf2otel/issues/214"
+  },
+  "CFO-0079": {
+   "number": 215,
+   "url": "https://github.com/rknightion/cf2otel/issues/215"
+  },
+  "CFO-0079.01": {
+   "number": 216,
+   "url": "https://github.com/rknightion/cf2otel/issues/216"
+  },
+  "CFO-0079.02": {
+   "number": 217,
+   "url": "https://github.com/rknightion/cf2otel/issues/217"
+  },
+  "CFO-0079.03": {
+   "number": 218,
+   "url": "https://github.com/rknightion/cf2otel/issues/218"
+  },
+  "CFO-0079.04": {
+   "number": 219,
+   "url": "https://github.com/rknightion/cf2otel/issues/219"
+  },
+  "CFO-0079.05": {
+   "number": 220,
+   "url": "https://github.com/rknightion/cf2otel/issues/220"
+  },
+  "CFO-0080": {
+   "number": 221,
+   "url": "https://github.com/rknightion/cf2otel/issues/221"
+  },
+  "CFO-0081": {
+   "number": 111,
+   "url": "https://github.com/rknightion/cf2otel/issues/111"
+  },
+  "CFO-0082": {
+   "number": 222,
+   "url": "https://github.com/rknightion/cf2otel/issues/222"
+  },
+  "CFO-0083": {
+   "number": 223,
+   "url": "https://github.com/rknightion/cf2otel/issues/223"
+  },
+  "CFO-0083.01": {
+   "number": 224,
+   "url": "https://github.com/rknightion/cf2otel/issues/224"
+  },
+  "CFO-0084": {
+   "number": 225,
+   "url": "https://github.com/rknightion/cf2otel/issues/225"
+  },
+  "CFO-0085": {
+   "number": 226,
+   "url": "https://github.com/rknightion/cf2otel/issues/226"
+  },
+  "CFO-0086": {
+   "number": 227,
+   "url": "https://github.com/rknightion/cf2otel/issues/227"
+  },
+  "CFO-0087": {
+   "number": 228,
+   "url": "https://github.com/rknightion/cf2otel/issues/228"
+  },
+  "CFO-0088": {
+   "number": 229,
+   "url": "https://github.com/rknightion/cf2otel/issues/229"
+  },
+  "CFO-0089": {
+   "number": 230,
+   "url": "https://github.com/rknightion/cf2otel/issues/230"
+  },
+  "CFO-0090": {
+   "number": 231,
+   "url": "https://github.com/rknightion/cf2otel/issues/231"
+  },
+  "CFO-0091": {
+   "number": 232,
+   "url": "https://github.com/rknightion/cf2otel/issues/232"
+  },
+  "CFO-0092": {
+   "number": 112,
+   "url": "https://github.com/rknightion/cf2otel/issues/112"
+  },
+  "CFO-0093": {
+   "number": 233,
+   "url": "https://github.com/rknightion/cf2otel/issues/233"
+  },
+  "CFO-0094": {
+   "number": 234,
+   "url": "https://github.com/rknightion/cf2otel/issues/234"
+  },
+  "CFO-0095": {
+   "number": 235,
+   "url": "https://github.com/rknightion/cf2otel/issues/235"
+  }
+ },
+ "prefix": "CFO",
+ "repo": "rknightion/cf2otel",
+ "schema": 1,
+ "source_sha": "bd4fc29776b81b23592f6666885ce1b05a9f2aac",
+ "synthetic": []
+}
