@@ -22,6 +22,12 @@ just setup
 just check
 ```
 
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Report problems and request
+changes in [GitHub issues](https://github.com/rknightion/cf2otel/issues). Report a security problem
+privately through the repository's Security tab, never in an issue.
+
 ## Licence
 
 Apache-2.0. See [LICENSE](LICENSE).
