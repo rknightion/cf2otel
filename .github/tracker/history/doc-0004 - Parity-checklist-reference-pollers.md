@@ -15,7 +15,7 @@ Tags: **[Go]** and **[Py]** mark the two log-shipping pollers surveyed first (20
 marks the Prometheus-style exporter survey (2026-09-30). The later items name the Backlog task that
 delivers them.
 
-Cardinality policy (Rob, 2026-09-30): low-cardinality dimensions are on by default, high-cardinality
+Cardinality policy (the owner, 2026-09-30): low-cardinality dimensions are on by default, high-cardinality
 ones (colo, ASN, path, per-device, per-user) are opt-in, and every metric stays under a series cap.
 The OTel SDK cardinality limit is per instrument and configurable (CFO-0045).
 
