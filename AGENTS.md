@@ -41,10 +41,13 @@ file such as `ROADMAP.md` beside them.
 
 ## Reference docs
 
-The Cloudflare API surface live-verified reference (`CFO` board doc-0003) is the data contract for
-every collector, and the parity checklist for the reference pollers (doc-0004) is the feature floor.
-Both are kept under `backlog/docs/` until they move to `.github/tracker/history/`. Read the API
-reference before changing a collector's query, fields or paging.
+- `.github/tracker/history/doc-0003 - Cloudflare-API-surface-live-verified-reference.md` is the data
+  contract for every collector. Read it before changing a collector's query, fields or paging. Code
+  and docs cite it as `doc-0003`.
+- `.github/tracker/history/doc-0004 - Parity-checklist-reference-pollers.md` is the feature floor
+  for the reference pollers.
+- `.github/tracker/history/` holds the retired board's documents. They are history: do not add to
+  it, and keep new reference material under `docs/` when it is fit for the published site.
 
 ## Ownership seams
 
