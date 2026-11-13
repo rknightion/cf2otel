@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -97,23 +100,25 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 		if u.Host == "" {
 			return nil, errors.New("OTLP endpoint requires a host")
 		}
-		mx, err = otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpointURL(base+"/v1/metrics"), otlpmetrichttp.WithHeaders(h))
+		transport := otlpHTTPTransport()
+		metricsClient, logsClient, tracesClient := otlpHTTPClient(transport, "METRICS"), otlpHTTPClient(transport, "LOGS"), otlpHTTPClient(transport, "TRACES")
+		mx, err = otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpointURL(base+"/v1/metrics"), otlpmetrichttp.WithHeaders(h), otlpmetrichttp.WithHTTPClient(metricsClient))
 		if err != nil {
 			return nil, err
 		}
-		lx, err = otlploghttp.New(ctx, otlploghttp.WithEndpointURL(base+"/v1/logs"), otlploghttp.WithHeaders(h), otlploghttp.WithRetry(otlploghttp.RetryConfig{Enabled: false}))
+		lx, err = otlploghttp.New(ctx, otlploghttp.WithEndpointURL(base+"/v1/logs"), otlploghttp.WithHeaders(h), otlploghttp.WithHTTPClient(logsClient), otlploghttp.WithRetry(otlploghttp.RetryConfig{Enabled: false}))
 		if err != nil {
 			return nil, err
 		}
-		plx, err = otlploghttp.New(ctx, otlploghttp.WithEndpointURL(base+"/v1/logs"), otlploghttp.WithHeaders(h))
+		plx, err = otlploghttp.New(ctx, otlploghttp.WithEndpointURL(base+"/v1/logs"), otlploghttp.WithHeaders(h), otlploghttp.WithHTTPClient(logsClient))
 		if err != nil {
 			return nil, err
 		}
-		tx, err = otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(base+"/v1/traces"), otlptracehttp.WithHeaders(h), otlptracehttp.WithRetry(otlptracehttp.RetryConfig{Enabled: false}))
+		tx, err = otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(base+"/v1/traces"), otlptracehttp.WithHeaders(h), otlptracehttp.WithHTTPClient(tracesClient), otlptracehttp.WithRetry(otlptracehttp.RetryConfig{Enabled: false}))
 		if err != nil {
 			return nil, err
 		}
-		ox, err = otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(base+"/v1/traces"), otlptracehttp.WithHeaders(h), otlptracehttp.WithRetry(otlptracehttp.RetryConfig{Enabled: false}))
+		ox, err = otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(base+"/v1/traces"), otlptracehttp.WithHeaders(h), otlptracehttp.WithHTTPClient(tracesClient), otlptracehttp.WithRetry(otlptracehttp.RetryConfig{Enabled: false}))
 		if err != nil {
 			return nil, err
 		}
@@ -187,6 +192,27 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 	pp := sdklog.NewLoggerProvider(sdklog.WithResource(res), sdklog.WithProcessor(sdklog.NewBatchProcessor(plx)))
 	return &Providers{Emitter: filterEmitterWithPolicy(emitter, policy), metrics: mp, logs: lp, process: pp, policy: policy, traces: tp, operations: op, hook: hook}, nil
 }
+func otlpHTTPTransport() http.RoundTripper {
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return http.DefaultTransport
+	}
+	transport = transport.Clone()
+	transport.HTTP2 = &http.HTTP2Config{SendPingTimeout: 10 * time.Second, PingTimeout: 5 * time.Second}
+	return transport
+}
+
+func otlpHTTPClient(transport http.RoundTripper, signal string) *http.Client {
+	timeout := 10 * time.Second
+	for _, key := range []string{"OTEL_EXPORTER_OTLP_" + signal + "_TIMEOUT", "OTEL_EXPORTER_OTLP_TIMEOUT"} {
+		if ms, err := strconv.Atoi(os.Getenv(key)); err == nil && ms > 0 {
+			timeout = time.Duration(ms) * time.Millisecond
+			break
+		}
+	}
+	return &http.Client{Transport: transport, Timeout: timeout}
+}
+
 func (p *Providers) SetExportObserver(fn func(context.Context, string, error)) {
 	p.hook.Set(fn)
 }

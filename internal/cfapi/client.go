@@ -71,8 +71,19 @@ func NewObserved(cfg config.CloudflareConfig, obs Observer) *HTTPClient {
 	if cfg.MaxResponseBytes <= 0 {
 		cfg.MaxResponseBytes = 16 << 20
 	}
-	return &HTTPClient{base: strings.TrimRight(cfg.APIBase, "/"), token: cfg.APIToken.Value(), client: &http.Client{Timeout: cfg.Timeout, Transport: observedTransport{next: http.DefaultTransport, observer: obs}, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}, cap: cfg.MaxResponseBytes, observer: obs, settings: make(map[string]cachedSettings), entitlementBackoff: cfg.EntitlementBackoff}
+	return &HTTPClient{base: strings.TrimRight(cfg.APIBase, "/"), token: cfg.APIToken.Value(), client: &http.Client{Timeout: cfg.Timeout, Transport: observedTransport{next: newTransport(), observer: obs}, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}, cap: cfg.MaxResponseBytes, observer: obs, settings: make(map[string]cachedSettings), entitlementBackoff: cfg.EntitlementBackoff}
 }
+
+func newTransport() http.RoundTripper {
+	base, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return http.DefaultTransport
+	}
+	t := base.Clone()
+	t.HTTP2 = &http.HTTP2Config{SendPingTimeout: 10 * time.Second, PingTimeout: 5 * time.Second}
+	return t
+}
+
 func (c *HTTPClient) do(ctx context.Context, method, path string, query url.Values, body []byte) ([]byte, error) {
 	// Guard before URL processing or any I/O.
 	if method != http.MethodGet && (method != http.MethodPost || path != "/graphql") {
