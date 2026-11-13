@@ -1,0 +1,354 @@
+{
+  "evaluation_interval": "1m",
+  "rule_files": [],
+  "tests": [
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\"}",
+          "values": "100+0x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\",cf2otel_error_class=\"timeout\"}",
+          "values": "0+2x20"
+        }
+      ],
+      "interval": "1m",
+      "name": "every request failing fires once",
+      "promql_expr_test": [
+        {
+          "eval_time": "10m",
+          "exp_samples": [
+            {
+              "labels": "{}",
+              "value": 10
+            }
+          ],
+          "expr": "(sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\"}",
+          "values": "100+1x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\",cf2otel_error_class=\"timeout\"}",
+          "values": "0+2x20"
+        }
+      ],
+      "interval": "1m",
+      "name": "one success in five minutes is reachable",
+      "promql_expr_test": [
+        {
+          "eval_time": "10m",
+          "exp_samples": [],
+          "expr": "(sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\"}",
+          "values": "100+0x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\",cf2otel_error_class=\"timeout\"}",
+          "values": "0+0x20"
+        }
+      ],
+      "interval": "1m",
+      "name": "no requests is not unreachable",
+      "promql_expr_test": [
+        {
+          "eval_time": "10m",
+          "exp_samples": [],
+          "expr": "(sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"access.logins\"}",
+          "values": "-600+0x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\"}",
+          "values": "100+0x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\",cf2otel_error_class=\"timeout\"}",
+          "values": "0+2x20"
+        }
+      ],
+      "interval": "1m",
+      "name": "stale collector is held at its threshold while the API is unreachable",
+      "promql_expr_test": [
+        {
+          "eval_time": "10m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"access.logins\"}",
+              "value": 0
+            }
+          ],
+          "expr": "((((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)) unless on () ((sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0))) or clamp_max((((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)), 0)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"access.logins\"}",
+          "values": "-600+0x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\"}",
+          "values": "100+1x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\",cf2otel_error_class=\"timeout\"}",
+          "values": "0+2x20"
+        }
+      ],
+      "interval": "1m",
+      "name": "stale collector fires while the API is reachable",
+      "promql_expr_test": [
+        {
+          "eval_time": "10m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"access.logins\"}",
+              "value": 300
+            }
+          ],
+          "expr": "((((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)) unless on () ((sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0))) or clamp_max((((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector!~\"access.seats|certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 900) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"access.seats\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 2700) or ((time() - max by (cf2otel_collector) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=~\"certs.packs|httpreq.threats|httpreq.transfer\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"})))) - 10800)), 0)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "3000-60x20"
+        },
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "300+0x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\"}",
+          "values": "100+1x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\",cf2otel_error_class=\"timeout\"}",
+          "values": "0+2x20"
+        }
+      ],
+      "interval": "1m",
+      "name": "falling backlog after an outage is held at the threshold",
+      "promql_expr_test": [
+        {
+          "eval_time": "20m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 3
+            }
+          ],
+          "expr": "(max by (cf2otel_collector) ((cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (instance, cf2otel_collector) (max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m]) < max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m] offset 10m))) unless on () ((sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0))) or clamp_max((max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))), 3)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "900+60x20"
+        },
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "300+0x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\"}",
+          "values": "100+1x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\",cf2otel_error_class=\"timeout\"}",
+          "values": "0+2x20"
+        }
+      ],
+      "interval": "1m",
+      "name": "growing backlog fires",
+      "promql_expr_test": [
+        {
+          "eval_time": "20m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 7
+            }
+          ],
+          "expr": "(max by (cf2otel_collector) ((cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (instance, cf2otel_collector) (max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m]) < max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m] offset 10m))) unless on () ((sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0))) or clamp_max((max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))), 3)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "1800+0x20"
+        },
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "300+0x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\"}",
+          "values": "100+1x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\",cf2otel_error_class=\"timeout\"}",
+          "values": "0+2x20"
+        }
+      ],
+      "interval": "1m",
+      "name": "flat backlog over the threshold fires",
+      "promql_expr_test": [
+        {
+          "eval_time": "20m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 6
+            }
+          ],
+          "expr": "(max by (cf2otel_collector) ((cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (instance, cf2otel_collector) (max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m]) < max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m] offset 10m))) unless on () ((sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0))) or clamp_max((max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))), 3)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "900+60x20"
+        },
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "300+0x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\"}",
+          "values": "100+0x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\",cf2otel_error_class=\"timeout\"}",
+          "values": "0+2x20"
+        }
+      ],
+      "interval": "1m",
+      "name": "growing backlog is held while the API is unreachable",
+      "promql_expr_test": [
+        {
+          "eval_time": "20m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 3
+            }
+          ],
+          "expr": "(max by (cf2otel_collector) ((cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (instance, cf2otel_collector) (max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m]) < max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m] offset 10m))) unless on () ((sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0))) or clamp_max((max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))), 3)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "6000-50x20"
+        },
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "300+0x20"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"two\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "1200+60x20"
+        },
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"two\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "300+0x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\"}",
+          "values": "100+1x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\",cf2otel_error_class=\"timeout\"}",
+          "values": "0+2x20"
+        }
+      ],
+      "interval": "1m",
+      "name": "a falling replica does not hide another replica's growing backlog",
+      "promql_expr_test": [
+        {
+          "eval_time": "20m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 8
+            }
+          ],
+          "expr": "(max by (cf2otel_collector) ((cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (instance, cf2otel_collector) (max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m]) < max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m] offset 10m))) unless on () ((sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0))) or clamp_max((max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))), 3)"
+        }
+      ]
+    },
+    {
+      "input_series": [
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "6000-50x20"
+        },
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "300+0x20"
+        },
+        {
+          "series": "cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\",instance=\"two\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "3000-60x20"
+        },
+        {
+          "series": "cf2otel_scrape_interval_seconds{service_name=\"cf2otel\",instance=\"two\",cf2otel_collector=\"aigateway.logs\"}",
+          "values": "300+0x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\"}",
+          "values": "100+1x20"
+        },
+        {
+          "series": "cf2otel_api_requests_total{service_name=\"cf2otel\",instance=\"one\",cf2otel_collector=\"access.logins\",cf2otel_api_method=\"rest\",cf2otel_error_class=\"timeout\"}",
+          "values": "0+2x20"
+        }
+      ],
+      "interval": "1m",
+      "name": "every replica falling is held at the threshold",
+      "promql_expr_test": [
+        {
+          "eval_time": "20m",
+          "exp_samples": [
+            {
+              "labels": "{cf2otel_collector=\"aigateway.logs\"}",
+              "value": 3
+            }
+          ],
+          "expr": "(max by (cf2otel_collector) ((cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (instance, cf2otel_collector) (max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m]) < max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m] offset 10m))) unless on () ((sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0))) or clamp_max((max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))), 3)"
+        }
+      ]
+    }
+  ]
+}

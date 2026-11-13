@@ -14,7 +14,7 @@
     "annotations": {
       "__dashboardUid__": "cf2otel",
       "__panelId__": "404",
-      "description": "A window collector's unprocessed source time exceeds three configured runtime polling intervals for five minutes. Backlog excludes intentional source holdback and complete-bucket alignment, so it can grow despite successful pulls. The query value is the worst backlog-to-interval ratio across instances, calculated separately for each instance before reduction. Snapshot and disabled collectors have no backlog series. Absent backlog data is not proof of health; use the collector-stale rule for missing polling telemetry. Compare checkpoint age and catch-up progress before changing polling or body capture settings; preserve checkpoints.",
+      "description": "A window collector's unprocessed source time exceeds three configured runtime polling intervals for five minutes. Backlog excludes intentional source holdback and complete-bucket alignment, so it can grow despite successful pulls. The query value is the worst backlog-to-interval ratio across instances, calculated separately for each instance before reduction. Snapshot and disabled collectors have no backlog series. Absent backlog data is not proof of health; use the collector-stale rule for missing polling telemetry. Held at the threshold while every replica's backlog is falling (its five-minute peak below the peak ten minutes earlier), so catch-up after an outage does not alert, and while the cannot-reach-Cloudflare-API rule's condition is true. Compare checkpoint age and catch-up progress before changing polling or body capture settings; preserve checkpoints.",
       "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
       "summary": "cf2otel collector checkpoint backlog exceeds three intervals"
     },
@@ -27,7 +27,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))",
+          "expr": "(max by (cf2otel_collector) ((cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (instance, cf2otel_collector) (max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m]) < max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m] offset 10m))) unless on () ((sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0))) or clamp_max((max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))), 3)",
           "instant": true,
           "range": false,
           "refId": "A"

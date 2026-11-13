@@ -1,0 +1,97 @@
+{
+  "apiVersion": "rules.alerting.grafana.app/v0alpha1",
+  "kind": "AlertRule",
+  "metadata": {
+    "annotations": {
+      "grafana.app/folder": "REPLACE_WITH_FOLDER_UID"
+    },
+    "labels": {
+      "grafana.app/folder": "REPLACE_WITH_FOLDER_UID"
+    },
+    "name": "cf2otel-api-unreachable"
+  },
+  "spec": {
+    "annotations": {
+      "__dashboardUid__": "cf2otel",
+      "__panelId__": "408",
+      "description": "Every physical Cloudflare API request in the last five minutes failed (timeout, connection, auth, rate-limit or HTTP error) and at least one was attempted. While this holds, the per-collector stale and checkpoint backlog rules stay at their thresholds, so an outage of the network, DNS or the Cloudflare API notifies once here. A short outage that recovers within five minutes does not fire. No requests at all evaluates as OK; the collector-stale rule covers a stopped exporter.",
+      "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
+      "summary": "cf2otel cannot reach Cloudflare API"
+    },
+    "execErrState": "Error",
+    "expressions": {
+      "A": {
+        "datasourceUID": "grafanacloud-prom",
+        "model": {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "(sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0)",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        },
+        "queryType": "instant",
+        "relativeTimeRange": {
+          "from": "15m",
+          "to": "0s"
+        }
+      },
+      "B": {
+        "datasourceUID": "__expr__",
+        "model": {
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "reducer": "last",
+          "refId": "B",
+          "type": "reduce"
+        }
+      },
+      "C": {
+        "datasourceUID": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  0
+                ],
+                "type": "gt"
+              }
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "B",
+          "refId": "C",
+          "type": "threshold"
+        },
+        "source": true
+      }
+    },
+    "for": "5m",
+    "labels": {
+      "category": "collector",
+      "pipeline": "cf2otel",
+      "service": "cf2otel",
+      "severity": "warning",
+      "source": "cf2otel"
+    },
+    "noDataState": "Ok",
+    "panelRef": {
+      "dashboardUID": "cf2otel",
+      "panelID": 408
+    },
+    "paused": false,
+    "title": "cf2otel cannot reach Cloudflare API",
+    "trigger": {
+      "interval": "1m"
+    }
+  }
+}

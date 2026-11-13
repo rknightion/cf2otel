@@ -26,8 +26,8 @@ Two bundled alerts cover every enabled collector using its actual runtime pollin
   three times `cf2otel.scrape.interval` for five minutes. Backlog is unprocessed source time after
   subtracting intentional source holdback and complete-bucket alignment. It therefore tolerates
   normal hourly and bucketed collectors. Snapshot and disabled collectors have no backlog series;
-  missing data does not prove health. The separate collector-stale alert detects missing or stale
-  last-success telemetry.
+  missing data does not prove health. A falling backlog is catch-up and does not alert. The
+  separate collector-stale alert detects missing or stale last-success telemetry.
 
 In Prometheus these metrics are `cf2otel_scrape_elapsed_seconds`,
 `cf2otel_scrape_interval_seconds` and `cf2otel_checkpoint_backlog_seconds`, grouped by
@@ -45,6 +45,16 @@ the API quota with other collectors. A larger interval can reduce polling pressu
 collection; a large backlog needs enough sustained throughput to shrink. Raw checkpoint age still
 matters for source retention: the Access login alert warns at 12 hours because its REST history
 reaches back only about a day.
+
+## Collectors stale after a network outage
+
+While every Cloudflare API request fails, the **cf2otel cannot reach Cloudflare API** alert fires
+once and holds the per-collector stale and backlog alerts at their thresholds. An outage shorter
+than about ten minutes does not fire it. Collectors resume on their next poll once the network
+returns: HTTP/2 connections to Cloudflare and to an OTLP `http` endpoint are health checked with
+pings, so a connection silently dropped by a router or firewall restart is replaced rather than
+reused. If collectors stay stale after the API alert clears, check OTLP export failures and
+checkpoint age; a restart should not be needed to recover.
 
 ## Dry run behavior
 
