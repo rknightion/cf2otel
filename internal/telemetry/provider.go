@@ -2,6 +2,8 @@ package telemetry
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
@@ -100,8 +103,7 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 		if u.Host == "" {
 			return nil, errors.New("OTLP endpoint requires a host")
 		}
-		transport := otlpHTTPTransport()
-		metricsClient, logsClient, tracesClient := otlpHTTPClient(transport, "METRICS"), otlpHTTPClient(transport, "LOGS"), otlpHTTPClient(transport, "TRACES")
+		metricsClient, logsClient, tracesClient := otlpHTTPClient("METRICS"), otlpHTTPClient("LOGS"), otlpHTTPClient("TRACES")
 		mx, err = otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpointURL(base+"/v1/metrics"), otlpmetrichttp.WithHeaders(h), otlpmetrichttp.WithHTTPClient(metricsClient))
 		if err != nil {
 			return nil, err
@@ -192,17 +194,7 @@ func NewProviders(ctx context.Context, o ProviderOptions) (*Providers, error) {
 	pp := sdklog.NewLoggerProvider(sdklog.WithResource(res), sdklog.WithProcessor(sdklog.NewBatchProcessor(plx)))
 	return &Providers{Emitter: filterEmitterWithPolicy(emitter, policy), metrics: mp, logs: lp, process: pp, policy: policy, traces: tp, operations: op, hook: hook}, nil
 }
-func otlpHTTPTransport() http.RoundTripper {
-	transport, ok := http.DefaultTransport.(*http.Transport)
-	if !ok {
-		return http.DefaultTransport
-	}
-	transport = transport.Clone()
-	transport.HTTP2 = &http.HTTP2Config{SendPingTimeout: 10 * time.Second, PingTimeout: 5 * time.Second}
-	return transport
-}
-
-func otlpHTTPClient(transport http.RoundTripper, signal string) *http.Client {
+func otlpHTTPClient(signal string) *http.Client {
 	timeout := 10 * time.Second
 	for _, key := range []string{"OTEL_EXPORTER_OTLP_" + signal + "_TIMEOUT", "OTEL_EXPORTER_OTLP_TIMEOUT"} {
 		if ms, err := strconv.Atoi(os.Getenv(key)); err == nil && ms > 0 {
@@ -210,7 +202,59 @@ func otlpHTTPClient(transport http.RoundTripper, signal string) *http.Client {
 			break
 		}
 	}
+	base, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return &http.Client{Transport: http.DefaultTransport, Timeout: timeout}
+	}
+	transport := base.Clone()
+	transport.HTTP2 = &http.HTTP2Config{SendPingTimeout: 10 * time.Second, PingTimeout: 5 * time.Second}
+	if rootCAs, certs := otlpEnvTLS(signal); rootCAs != nil || certs != nil {
+		if transport.TLSClientConfig == nil {
+			transport.TLSClientConfig = &tls.Config{}
+		}
+		if rootCAs != nil {
+			transport.TLSClientConfig.RootCAs = rootCAs
+		}
+		if certs != nil {
+			transport.TLSClientConfig.Certificates = certs
+		}
+	}
 	return &http.Client{Transport: transport, Timeout: timeout}
+}
+
+func otlpEnvTLS(signal string) (*x509.CertPool, []tls.Certificate) {
+	var rootCAs *x509.CertPool
+	var errs []error
+	for _, key := range []string{"OTEL_EXPORTER_OTLP_" + signal + "_CERTIFICATE", "OTEL_EXPORTER_OTLP_CERTIFICATE"} {
+		if path := os.Getenv(key); path != "" {
+			pem, err := os.ReadFile(path) //nolint:gosec // Operator-configured OTLP CA path, as in the OTel SDK.
+			if err == nil {
+				rootCAs = x509.NewCertPool()
+				if !rootCAs.AppendCertsFromPEM(pem) {
+					rootCAs, err = nil, errors.New("certificate not added")
+				}
+			}
+			errs = append(errs, err)
+			break
+		}
+	}
+	var certs []tls.Certificate
+	for _, prefix := range []string{"OTEL_EXPORTER_OTLP_" + signal + "_", "OTEL_EXPORTER_OTLP_"} {
+		certPath, keyPath := os.Getenv(prefix+"CLIENT_CERTIFICATE"), os.Getenv(prefix+"CLIENT_KEY")
+		if certPath != "" && keyPath != "" {
+			cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+			if err == nil {
+				certs = []tls.Certificate{cert}
+			}
+			errs = append(errs, err)
+			break
+		}
+	}
+	if err := errors.Join(errs...); err != nil {
+		otel.Handle(fmt.Errorf("failed to load TLS: %w", err))
+		return nil, nil
+	}
+	return rootCAs, certs
 }
 
 func (p *Providers) SetExportObserver(fn func(context.Context, string, error)) {

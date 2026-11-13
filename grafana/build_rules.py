@@ -121,8 +121,7 @@ API_REQUESTS = 'cf2otel_api_requests_total{service_name="cf2otel"}'
 API_UNREACHABLE = (f'(sum(increase({API_REQUESTS}[5m])) > 0) unless '
                    '(sum(increase(cf2otel_api_requests_total{service_name="cf2otel",cf2otel_error_class=""}[5m])) > 0)')
 BACKLOG = 'cf2otel_checkpoint_backlog_seconds{service_name="cf2otel"}'
-BACKLOG_DECREASING = (f'max by (cf2otel_collector) (max_over_time({BACKLOG}[5m])) '
-                      f'< max by (cf2otel_collector) (max_over_time({BACKLOG}[5m] offset 10m))')
+BACKLOG_DECREASING = f'max_over_time({BACKLOG}[5m]) < max_over_time({BACKLOG}[5m] offset 10m)'
 
 
 def poll_health_expr(metric: str) -> str:
@@ -131,20 +130,17 @@ def poll_health_expr(metric: str) -> str:
             '/ (cf2otel_scrape_interval_seconds{service_name="cf2otel"} > 0))')
 
 
-def held_at(expr: str, threshold: int, *suppressions: str) -> str:
-    kept = f"({expr})"
-    for suppression in suppressions:
-        kept = f"({kept} unless {suppression})"
-    return f"{kept} or clamp_max(({expr}), {threshold})"
-
-
 def collector_stale_rule_expr() -> str:
-    return held_at(collector_stale_expr(), 0, f"on () ({API_UNREACHABLE})")
+    stale = collector_stale_expr()
+    return f"(({stale}) unless on () ({API_UNREACHABLE})) or clamp_max(({stale}), 0)"
 
 
 def checkpoint_backlog_expr() -> str:
-    return held_at(poll_health_expr("checkpoint_backlog"), BACKLOG_INTERVALS,
-                   f"on (cf2otel_collector) ({BACKLOG_DECREASING})", f"on () ({API_UNREACHABLE})")
+    """Catch-up is judged per replica, so one recovering replica cannot hide another's growth."""
+    ratio = f'{BACKLOG} / (cf2otel_scrape_interval_seconds{{service_name="cf2otel"}} > 0)'
+    growing = f"max by (cf2otel_collector) (({ratio}) unless on (instance, cf2otel_collector) ({BACKLOG_DECREASING}))"
+    return (f"({growing} unless on () ({API_UNREACHABLE})) "
+            f"or clamp_max(({poll_health_expr('checkpoint_backlog')}), {BACKLOG_INTERVALS})")
 
 
 def collector_stale_description() -> str:
@@ -169,7 +165,7 @@ RULES = [
      collector_stale_rule_expr(), 0, "Alerting"),
     ("cf2otel-collector-slow", "cf2otel collector polling exceeds its interval", "An active poll's elapsed time or the last completed poll's duration exceeds the collector's configured runtime interval for five minutes. Includes window and snapshot collectors; successful polls can still be slow. The query value is the worst elapsed-to-interval ratio across instances, calculated separately for each instance before reduction. Inspect collector status, API limiter waits and OTLP export latency. Silent while the same collector's checkpoint backlog rule is over its threshold, because catch-up polls run long by design and that rule already covers them.", 401,
      f'{poll_health_expr("scrape_elapsed")} unless on (cf2otel_collector) ({poll_health_expr("checkpoint_backlog")} > {BACKLOG_INTERVALS})', 1, "Alerting"),
-    ("cf2otel-checkpoint-backlog", "cf2otel collector checkpoint backlog exceeds three intervals", "A window collector's unprocessed source time exceeds three configured runtime polling intervals for five minutes. Backlog excludes intentional source holdback and complete-bucket alignment, so it can grow despite successful pulls. The query value is the worst backlog-to-interval ratio across instances, calculated separately for each instance before reduction. Snapshot and disabled collectors have no backlog series. Absent backlog data is not proof of health; use the collector-stale rule for missing polling telemetry. Held at the threshold while the backlog is falling (its five-minute peak below the peak ten minutes earlier), so catch-up after an outage does not alert, and while the cannot-reach-Cloudflare-API rule's condition is true. Compare checkpoint age and catch-up progress before changing polling or body capture settings; preserve checkpoints.", 404,
+    ("cf2otel-checkpoint-backlog", "cf2otel collector checkpoint backlog exceeds three intervals", "A window collector's unprocessed source time exceeds three configured runtime polling intervals for five minutes. Backlog excludes intentional source holdback and complete-bucket alignment, so it can grow despite successful pulls. The query value is the worst backlog-to-interval ratio across instances, calculated separately for each instance before reduction. Snapshot and disabled collectors have no backlog series. Absent backlog data is not proof of health; use the collector-stale rule for missing polling telemetry. Held at the threshold while every replica's backlog is falling (its five-minute peak below the peak ten minutes earlier), so catch-up after an outage does not alert, and while the cannot-reach-Cloudflare-API rule's condition is true. Compare checkpoint age and catch-up progress before changing polling or body capture settings; preserve checkpoints.", 404,
      checkpoint_backlog_expr(), BACKLOG_INTERVALS, "NoData"),
     ("cf2otel-api-unreachable", "cf2otel cannot reach Cloudflare API", "Every physical Cloudflare API request in the last five minutes failed (timeout, connection, auth, rate-limit or HTTP error) and at least one was attempted. While this holds, the per-collector stale and checkpoint backlog rules stay at their thresholds, so an outage of the network, DNS or the Cloudflare API notifies once here. A short outage that recovers within five minutes does not fire. No requests at all evaluates as OK; the collector-stale rule covers a stopped exporter.", 408,
      API_UNREACHABLE, 0, "Ok"),
@@ -441,16 +437,24 @@ def outage_fixtures() -> dict:
         tests.append({"name": name, "interval": "1m", "input_series": stale + series, "promql_expr_test": [
             {"expr": rules["cf2otel-collector-stale"], "eval_time": "10m",
              "exp_samples": [{"labels": '{cf2otel_collector="access.logins"}', "value": value}]}]})
-    labels = 'service_name="cf2otel",instance="one",cf2otel_collector="aigateway.logs"'
+    def backlog_case(name: str, replicas: dict[str, str], series: list[dict], value: float) -> None:
+        inputs = []
+        for instance, backlog in replicas.items():
+            labels = f'service_name="cf2otel",instance="{instance}",cf2otel_collector="aigateway.logs"'
+            inputs += [{"series": f"cf2otel_checkpoint_backlog_seconds{{{labels}}}", "values": backlog},
+                       {"series": f"cf2otel_scrape_interval_seconds{{{labels}}}", "values": "300+0x20"}]
+        tests.append({"name": name, "interval": "1m", "input_series": inputs + series,
+                      "promql_expr_test": [{"expr": rules["cf2otel-checkpoint-backlog"], "eval_time": "20m",
+                                            "exp_samples": [{"labels": '{cf2otel_collector="aigateway.logs"}', "value": value}]}]})
+
     for name, backlog, series, value in (("falling backlog after an outage is held at the threshold", "3000-60x20", recovered, 3),
                                          ("growing backlog fires", "900+60x20", recovered, 7),
                                          ("flat backlog over the threshold fires", "1800+0x20", recovered, 6),
                                          ("growing backlog is held while the API is unreachable", "900+60x20", failing, 3)):
-        tests.append({"name": name, "interval": "1m", "input_series": [
-            {"series": f"cf2otel_checkpoint_backlog_seconds{{{labels}}}", "values": backlog},
-            {"series": f"cf2otel_scrape_interval_seconds{{{labels}}}", "values": "300+0x20"}] + series,
-            "promql_expr_test": [{"expr": rules["cf2otel-checkpoint-backlog"], "eval_time": "20m",
-                                  "exp_samples": [{"labels": '{cf2otel_collector="aigateway.logs"}', "value": value}]}]})
+        backlog_case(name, {"one": backlog}, series, value)
+    backlog_case("a falling replica does not hide another replica's growing backlog",
+                 {"one": "6000-50x20", "two": "1200+60x20"}, recovered, 8)
+    backlog_case("every replica falling is held at the threshold", {"one": "6000-50x20", "two": "3000-60x20"}, recovered, 3)
     return {"rule_files": [], "evaluation_interval": "1m", "tests": tests}
 
 
