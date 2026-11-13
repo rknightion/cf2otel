@@ -77,15 +77,20 @@ func TestRegisteredLogsSustainSourceRate(t *testing.T) {
 		defer cancel()
 		graphDone := make(chan int, 1)
 		go func() {
-			tick := time.NewTicker(900 * time.Millisecond)
-			defer tick.Stop()
+			// A fixed schedule that catches up rather than a time.Ticker, which
+			// drops ticks: any admission wait over 0.4s would then discard demand
+			// for good and measure limiter jitter instead of GraphQL throughput.
+			const period = 900 * time.Millisecond
+			start := time.Now()
 			completed := 0
 			defer func() { graphDone <- completed }()
 			for {
+				timer := time.NewTimer(time.Until(start.Add(time.Duration(completed+1) * period)))
 				select {
 				case <-ctx.Done():
+					timer.Stop()
 					return
-				case <-tick.C:
+				case <-timer.C:
 					_, err := cfapi.New(cfg.Cloudflare).DatasetSettings(ctx, cfapi.ZoneScope, "zone-"+strconv.Itoa(completed%8), "events")
 					if err != nil {
 						if ctx.Err() == nil {
