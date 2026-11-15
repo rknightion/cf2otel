@@ -176,61 +176,135 @@ func (b *tokenBucket) pause(delay time.Duration) {
 	}
 }
 
+// admissions orders every waiter on the shared budgets. Waiters that each poll
+// for a refilled token race at the same instant, so one can lose for many
+// token intervals; granting in arrival order bounds a wait by the waiters
+// queued ahead of it.
+var admissions = &admissionQueue{}
+
+type admissionQueue struct {
+	mu      sync.Mutex
+	waiters []*admissionWaiter
+}
+
+type admissionWaiter struct {
+	ctx     context.Context
+	buckets []*tokenBucket
+	granted chan struct{}
+	retry   time.Duration // until this waiter's own budgets could admit it
+}
+
 // Buckets are passed in resource, class, total order. Consume all tokens at
 // the actual admission instant: reserving a class token before waiting on the
 // total ceiling could bunch delayed requests and violate the class quota.
 func acquireBudgets(ctx context.Context, buckets ...*tokenBucket) error {
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		for _, b := range buckets {
-			if b != nil {
-				b.mu.Lock()
-			}
-		}
-		now := time.Now()
-		var delay time.Duration
-		for _, b := range buckets {
-			if b == nil {
-				continue
-			}
-			if !b.started {
-				b.last, b.started = now, true
-			}
-			b.tokens = math.Min(b.capacity, b.tokens+now.Sub(b.last).Seconds()*b.rate)
-			b.last = now
-			delay = max(delay, b.pausedUntil.Sub(now))
-			if b.tokens < 1 {
-				seconds := (1 - b.tokens) / b.rate
-				refill := time.Duration(math.MaxInt64)
-				if seconds < float64(math.MaxInt64)/float64(time.Second) {
-					refill = time.Duration(math.Ceil(seconds * float64(time.Second)))
-				}
-				delay = max(delay, refill)
-			}
-		}
-		if delay <= 0 {
-			for _, b := range buckets {
-				if b != nil {
-					b.tokens--
-				}
-			}
-		}
-		for i := len(buckets) - 1; i >= 0; i-- {
-			if buckets[i] != nil {
-				buckets[i].mu.Unlock()
-			}
-		}
-		if delay <= 0 {
-			return nil
-		}
-		timer := time.NewTimer(delay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-timer.C:
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	w := &admissionWaiter{ctx: ctx, granted: make(chan struct{})}
+	for _, b := range buckets {
+		if b != nil {
+			w.buckets = append(w.buckets, b)
 		}
 	}
+	admissions.mu.Lock()
+	admissions.waiters = append(admissions.waiters, w)
+	admissions.dispatchLocked()
+	admissions.mu.Unlock()
+	for {
+		admissions.mu.Lock()
+		retry := w.retry
+		admissions.mu.Unlock()
+		timer := time.NewTimer(retry)
+		select {
+		case <-w.granted:
+			timer.Stop()
+			return nil
+		case <-ctx.Done():
+			timer.Stop()
+			if admissions.leave(w) {
+				return ctx.Err()
+			}
+			return nil // admitted before the cancellation was seen
+		case <-timer.C:
+			admissions.mu.Lock()
+			admissions.dispatchLocked()
+			admissions.mu.Unlock()
+		}
+	}
+}
+
+// dispatchLocked admits waiters oldest first. A waiter its own budgets hold
+// back (a class pause, an empty resource bucket) is skipped rather than
+// blocking younger waiters; it keeps its place for the next dispatch. A
+// cancelled waiter is dropped without consuming tokens.
+func (q *admissionQueue) dispatchLocked() {
+	now := time.Now()
+	kept := q.waiters[:0]
+	for _, w := range q.waiters {
+		if w.ctx.Err() != nil {
+			continue
+		}
+		if delay := admit(now, w.buckets); delay > 0 {
+			w.retry = delay
+			kept = append(kept, w)
+			continue
+		}
+		close(w.granted)
+	}
+	clear(q.waiters[len(kept):])
+	q.waiters = kept
+}
+
+// leave removes a waiter and reports whether it was still waiting. A
+// cancelled waiter that dispatch dropped was never admitted.
+func (q *admissionQueue) leave(w *admissionWaiter) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	select {
+	case <-w.granted:
+		return false
+	default:
+	}
+	for i, queued := range q.waiters {
+		if queued == w {
+			q.waiters = append(q.waiters[:i], q.waiters[i+1:]...)
+			break
+		}
+	}
+	return true
+}
+
+// admit consumes one token from every bucket if all can spare one now, and
+// otherwise reports how long until they could.
+func admit(now time.Time, buckets []*tokenBucket) time.Duration {
+	for _, b := range buckets {
+		b.mu.Lock()
+	}
+	var delay time.Duration
+	for _, b := range buckets {
+		if !b.started {
+			b.last, b.started = now, true
+		}
+		b.tokens = math.Min(b.capacity, b.tokens+now.Sub(b.last).Seconds()*b.rate)
+		b.last = now
+		delay = max(delay, b.pausedUntil.Sub(now))
+		if b.tokens < 1 {
+			seconds := (1 - b.tokens) / b.rate
+			refill := time.Duration(math.MaxInt64)
+			if seconds < float64(math.MaxInt64)/float64(time.Second) {
+				refill = time.Duration(math.Ceil(seconds * float64(time.Second)))
+			}
+			delay = max(delay, refill)
+		}
+	}
+	if delay <= 0 {
+		for _, b := range buckets {
+			b.tokens--
+		}
+	}
+	for i := len(buckets) - 1; i >= 0; i-- {
+		buckets[i].mu.Unlock()
+	}
+	return delay
 }
