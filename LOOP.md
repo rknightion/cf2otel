@@ -81,9 +81,9 @@ Tracker model: `~/repos/agent-docs/docs/github-tracker.md` (maintainers only).
 ## Mutexes
 
 - The root is the only live Cloudflare API caller; REST and GraphQL
-  share a combined 3.75 rps/burst 5 ceiling with separate class caps
-  (REST 3.75 rps/burst 5 and GraphQL 2.5 rps/burst 5), and GraphQL is
-  also metered per zone/account (0.9 rps/burst 2, account-based header).
+  share a combined 3.5 rps/burst 75 ceiling with separate class caps
+  (REST 3.75 rps/burst 5 and GraphQL 2.5 rps/burst 60), and GraphQL is
+  also metered per zone/account (0.75 rps/burst 60, account-based header).
 - One process-wide commit mutex serializes windowed checkpoint commits. Catch-up commits run
   sequentially, never concurrently.
 - Live external writes are a serial chain: read-only proof, the one authorised write, then deploy.

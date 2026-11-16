@@ -147,19 +147,22 @@ func ConfigureProcessRateLimit(cfg config.RateLimitConfig) error {
 	return nil
 }
 
-// perTokenSafeRate keeps GraphQL under Cloudflare's default per-token quota of
-// 300 queries per five minutes.
-const perTokenSafeRate = 0.9
+// The fallback admits at most 20 + 300*0.9 = 290 queries per five minutes.
+const (
+	perTokenSafeRate  = 0.9
+	perTokenSafeBurst = 20
+)
 
-// clampRate lowers the bucket's rate, never raises it, and reports whether it changed.
+// clampRate lowers rate, capacity and available tokens, never raising any.
 func (b *tokenBucket) clampRate(rate float64) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.rate <= rate {
-		return false
-	}
-	b.rate = rate
-	return true
+	changed := b.rate > rate || b.capacity > perTokenSafeBurst
+	b.rate = min(b.rate, rate)
+	b.capacity = min(b.capacity, perTokenSafeBurst)
+	b.burst = min(b.burst, perTokenSafeBurst)
+	b.tokens = min(b.tokens, b.capacity)
+	return changed
 }
 
 // Extend, never shorten, a shared pause. No caller holds a reservation, so all

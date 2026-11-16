@@ -5,7 +5,7 @@ Settings load in this order: built-in defaults, YAML, then `CF2OTEL_` environmen
 | Section | Important settings |
 | --- | --- |
 | `cloudflare` | `account_id`, optional `zones`, API base, timeout and response limit. `api_token` is environment-only. |
-| `statuspage` | Independent public API origin, `timeout` (15s), `max_response_bytes` (2097152), and `component_cap` (500; 1–5000). No authentication. |
+| `statuspage` | Independent public API origin, `timeout` (15s), `max_response_bytes` (2097152), and `component_cap` (500; 1..5000). No authentication. |
 | `collectors` | `enabled`, `interval`, `initial_lookback` and `max_window` per named collector. |
 | `access` | `include_service_tokens` keeps service-token activity separate from human logins. |
 | `http` | `scope` controls request events and defaults to `access_protected`. `metrics_scope` inherits it by default; set `metrics_scope: all` to collect Groups metrics across account zones without widening events. `hosts` is required for either `hosts` scope. `max_metric_hosts_per_zone` (1000) and `max_metric_series_per_window` (10000) reject oversized metric windows before checkpoint advance. |
@@ -17,7 +17,7 @@ Settings load in this order: built-in defaults, YAML, then `CF2OTEL_` environmen
 | `state` | Persistent checkpoint directory; default `/var/lib/cf2otel`. |
 | `health`, `log` | Loopback health listener and application logging. |
 | `firewall` | `rule_dimensions` defaults to false; `max_metric_series_per_window` is a positive total cap, default 500. |
-| `cloudflare.rate_limit` | `total.requests_per_second` defaults to `3.75`, `total.burst` to `5`; `rest.requests_per_second` defaults to `3.75`, `rest.burst` to `5`; `graphql.requests_per_second` defaults to `2.5`, `graphql.burst` to `5`; `account_based` defaults to `true`; `graphql_scope.requests_per_second` defaults to `0.9`, `graphql_scope.burst` to `2`. Rates must be finite and positive; bursts must be integers in `[1, 1000]`, checked before weak decoding. A combined process-wide bucket covers all REST and GraphQL clients, accounts, pagination, retries and permitted redirect hops. REST and GraphQL retain their own caps and share spare combined capacity; resource, class and total tokens are consumed together at admission. Waiting requests are admitted in arrival order among those whose own class and resource budgets allow it, so a saturated budget delays each request only by the requests queued ahead of it, and a request held by its class pause or resource bucket never delays others. Each class's share of the combined cap follows how many of its requests are waiting. The default combined cap admits at most 1130 requests in five minutes, below Cloudflare's 1200-request per-user limit. A warning is logged when the effective combined ceiling exceeds 4 requests per second. Explicit lower REST settings remain in force; remove an old `1.25` override or raise it to `3.75` to use spare capacity. Other processes and dashboard traffic share the upstream user quota, so lower `total` when they need more headroom. |
+| `cloudflare.rate_limit` | `total.requests_per_second` defaults to `3.5`, `total.burst` to `75`; `rest.requests_per_second` defaults to `3.75`, `rest.burst` to `5`; `graphql.requests_per_second` defaults to `2.5`, `graphql.burst` to `60`; `account_based` defaults to `true`; `graphql_scope.requests_per_second` defaults to `0.75`, `graphql_scope.burst` to `60`. Rates must be finite and positive; bursts must be integers in `[1, 1000]`, checked before weak decoding. A combined process-wide bucket covers all REST and GraphQL clients, accounts, pagination, retries and permitted redirect hops. REST and GraphQL retain their own caps and share spare combined capacity; resource, class and total tokens are consumed together at admission. Waiting requests are admitted in arrival order among those whose own class and resource budgets allow it, so a saturated budget delays each request only by the requests queued ahead of it, and a request held by its class pause or resource bucket never delays others. Each class's share of the combined cap follows how many of its requests are waiting. The default combined cap admits at most 1125 requests in five minutes, below Cloudflare's 1200-request per-user limit. A warning is logged when the effective combined ceiling exceeds 4 requests per second. Explicit lower REST settings remain in force; remove an old `1.25` override or raise it to `3.75` to use spare capacity. Other processes and dashboard traffic share the upstream user quota, so lower `total` when they need more headroom. |
 | `cloudflare.entitlement_backoff` | Positive duration, default `1h`. Disabled or absent GraphQL zone datasets share a timed settings decision across aliases and collectors using the same client, independently per zone and dataset. Override with `CF2OTEL_CLOUDFLARE__ENTITLEMENT_BACKOFF`. |
 
 Collector keys are `access.logins`, `access.login_metrics`, `access.scim`, `access.seats`, `inventory.access`, `httpreq.events`, `httpreq.metrics`, `aigateway.logs`, `aigateway.metrics`, `aigateway.coverage`, `audit.logs`, `firewall.events`, `firewall.metrics`, `dns.events`, `dns.metrics`, `rum.pageloads`, `rum.web_vitals`, `gateway.dns`, `workers.overview`, `workers.invocations`, `turnstile.events`, `logpush.health`, `d1.analytics`, `d1.queries`, `d1.storage`, `kv.operations`, `kv.storage`, `r2.bandwidth`, `r2.catalog_data`, `r2.catalog_maintenance`, `r2.operations`, `r2.storage`, `r2.sql`, `durableobjects.invocations`, `durableobjects.periodic`, `durableobjects.sql_storage`, `durableobjects.subrequests`, `queues.backlog`, `queues.consumer`, `queues.delayed_backlog`, `queues.message_operations`, `email.routing`, `email.sending`, `selfobs`, `certs.packs`, and `tunnels.status`. Enabled collectors default to five-minute intervals. `access.seats` is enabled by default and polls every 15 minutes as a snapshot, without windows or checkpoints. It counts the independent `access_seat` and `gateway_seat` user flags across the complete paginated Access users list, emitting only the bounded seat-type attribute. Both flags may be true for one user; do not sum the two series as a unique billing-user total. An empty list publishes two zeros; missing, null or nonboolean flags, HTTP errors and incomplete pagination fail the scrape without publishing partial counts. To disable it, set `CF2OTEL_COLLECTORS__ACCESS_SEATS__ENABLED=false`; to override its interval, set `CF2OTEL_COLLECTORS__ACCESS_SEATS__INTERVAL=30m`. The email collectors sum Groups counts across account-owned zones over complete five-minute buckets; they emit no zone metric attributes. DMARC is excluded. `aigateway.metrics` is disabled and unscheduled because its GraphQL Groups ingestion lag is not bounded; `aigateway.logs` emits the AI Gateway metrics from REST rows. The default initial lookback is 30 minutes and maximum window is one hour. `aigateway.coverage` is present but disabled by default. The scheduler advances a checkpoint after a successful window or after it drops a window following three payload rejections.
@@ -35,8 +35,8 @@ Override each process-wide class budget with
 `CF2OTEL_CLOUDFLARE__RATE_LIMIT__REST__BURST`,
 `CF2OTEL_CLOUDFLARE__RATE_LIMIT__GRAPHQL__REQUESTS_PER_SECOND` and
 `CF2OTEL_CLOUDFLARE__RATE_LIMIT__GRAPHQL__BURST`, or corresponding YAML keys.
-The default GraphQL sustained rate is 240 queries per five minutes, below the
-documented limit of 300. Saturated GraphQL does not block REST. Other applications
+The default GraphQL class bucket admits at most 810 queries in any five-minute
+span across resources, within the general 1200-request budget. Saturated GraphQL does not block REST. Other applications
 using the same upstream quota are not coordinated by these process-local buckets.
 
 Explicit legacy flat `cloudflare.rate_limit.requests_per_second` and
@@ -75,6 +75,18 @@ message names one zone or account pauses only that resource for 300 seconds;
 any other budget error pauses all GraphQL as before. With `account_based: false`
 the header is not sent and only the shared buckets apply. Dataset settings
 discovery is cached for 45 to 75 minutes per zone and dataset.
+
+A token bucket with burst `b` and rate `r` admits at most `b + 300*r` requests
+in any 300-second span, whether the upstream window is fixed or sliding.
+The defaults allow 285 per zone or account (`60 + 300*0.75`), below 300;
+810 across the GraphQL class (`60 + 300*2.5`); and 1125 across all API traffic
+(`75 + 300*3.5`), below 1200. These bursts let interval-boundary requests proceed
+together while retaining budget headroom. If Cloudflare reports a per-token
+budget despite the account-based header, the fallback lowers the GraphQL rate
+to at most 0.9 rps and burst to at most 20, allowing at most 290 per 300 seconds.
+Enterprise accounts may raise `graphql_scope` to match their 15 rps account and
+10 rps zone quotas, with the shared scope setting chosen for the resources queried.
+
 
 Quota waiting happens before each HTTP exchange starts its `cloudflare.timeout`,
 including every redirect hop. The timeout still bounds network headers and body

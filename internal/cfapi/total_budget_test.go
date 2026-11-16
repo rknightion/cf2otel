@@ -36,9 +36,15 @@ func TestDefaultRESTCanUseSpareCapacity(t *testing.T) {
 
 // Class limits may overlap, but their traffic must still fit one per-user
 // allowance, even when issued concurrently through distinct client instances.
-func TestDefaultTotalBudgetCoversRESTAndGraphQL(t *testing.T) {
+func TestTotalBudgetCoversRESTAndGraphQL(t *testing.T) {
 	if runDefaultBudgetProcess(t) {
 		return
+	}
+	limits := config.Default().Cloudflare.RateLimit
+	// A small total cap makes bypass observable without depending on default bursts.
+	limits.Total = config.BucketConfig{RequestsPerSecond: 3.75, Burst: 5}
+	if err := ConfigureProcessRateLimit(limits); err != nil {
+		t.Fatal(err)
 	}
 	var mu sync.Mutex
 	var starts []time.Time

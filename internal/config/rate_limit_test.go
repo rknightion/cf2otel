@@ -208,13 +208,23 @@ func TestRateLimitValidation(t *testing.T) {
 
 func checkRateLimitDefaults(t *testing.T, c *Config) {
 	t.Helper()
-	rest, graphql := c.Cloudflare.RateLimit.Buckets()
-	if rest != (BucketConfig{3.75, 5}) || graphql != (BucketConfig{2.5, 5}) {
-		t.Fatalf("defaults: REST=%+v GraphQL=%+v", rest, graphql)
+	rl := c.Cloudflare.RateLimit
+	if err := rl.Validate(); err != nil {
+		t.Fatal(err)
 	}
-	if rl := c.Cloudflare.RateLimit; !rl.AccountBased || rl.GraphQLScope != (BucketConfig{0.9, 2}) || rl.ExceedsGeneralLimit() {
-		t.Fatalf("defaults: account_based=%v graphql_scope=%+v", rl.AccountBased, rl.GraphQLScope)
+	for name, bucket := range map[string]BucketConfig{"rest": rl.REST, "graphql": rl.GraphQL, "total": rl.Total, "scope": rl.GraphQLScope} {
+		budget := 1200.0
+		if name == "scope" {
+			budget = 300
+		}
+		if float64(bucket.Burst)+300*bucket.RequestsPerSecond > budget {
+			t.Errorf("%s exceeds five-minute budget %g: %+v", name, budget, bucket)
+		}
 	}
+	if !rl.AccountBased || rl.ExceedsGeneralLimit() {
+		t.Fatalf("unsafe default rate limits: %+v", rl)
+	}
+
 }
 
 func checkRateLimit(t *testing.T, c *Config, rate, burst float64) {

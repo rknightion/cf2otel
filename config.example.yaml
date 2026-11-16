@@ -13,18 +13,18 @@ cloudflare:
   rate_limit:
     max_pause: 5m # REST header pause ceiling; duration in [1s, 60m].
     total:
-      requests_per_second: 3.75 # Combined REST + GraphQL ceiling; leave room below 4 rps.
-      burst: 5 # Integer in [1, 1000].
+      requests_per_second: 3.5 # Combined REST + GraphQL ceiling: at most 1125 per 300s.
+      burst: 75 # Integer in [1, 1000].
     rest:
       requests_per_second: 3.75 # Can use spare total capacity when GraphQL is quiet.
       burst: 5 # Integer in [1, 1000].
     graphql:
       requests_per_second: 2.5 # Process-wide GraphQL cap.
-      burst: 5 # Integer in [1, 1000].
+      burst: 60 # Integer in [1, 1000].
     account_based: true # Send X-Rate-Limit-Type: account-based; meter GraphQL per zone and account.
     graphql_scope:
-      requests_per_second: 0.9 # Per zone or account; Cloudflare allows 1 rps each.
-      burst: 2 # Integer in [1, 1000].
+      requests_per_second: 0.75 # Per zone or account: at most 285 per 300s.
+      burst: 60 # Integer in [1, 1000].
 # Independent public status API; never receives the Cloudflare token.
 statuspage:
   base_url: https://www.cloudflarestatus.com

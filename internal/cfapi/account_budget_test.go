@@ -14,13 +14,19 @@ import (
 	"github.com/rknightion/cf2otel/internal/config"
 )
 
-// Under the default configuration GraphQL is metered per zone and account:
+// Under account-based configuration GraphQL is metered per zone and account:
 // every request opts in with the account-based header, distinct zones are not
 // held to one shared 1 rps quota, a single zone is, and a budget error that
 // names one zone pauses only that zone.
 func TestAccountBasedGraphQLBudgetIsPerResource(t *testing.T) {
 	if runDefaultBudgetProcess(t) {
 		return
+	}
+	limits := config.Default().Cloudflare.RateLimit
+	// Keep the resource-isolation timing scenario independent of default tuning.
+	limits.GraphQLScope = config.BucketConfig{RequestsPerSecond: 0.9, Burst: 2}
+	if err := ConfigureProcessRateLimit(limits); err != nil {
+		t.Fatal(err)
 	}
 	var mu sync.Mutex
 	headers := map[string]int{}
