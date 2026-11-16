@@ -157,7 +157,7 @@ file such as `ROADMAP.md` beside them.
   headers); `*_head_complete=true` means the head is the whole body. Capture reads a raw
   body only for an incomplete head, so a typical log costs one REST read. The live limit is
   per token, `Ratelimit-Policy` `q=1200;w=300`. REST and GraphQL share a
-  combined 3.75 rps/burst 5 ceiling; REST can use spare capacity. Explicit old REST overrides
+  combined 3.5 rps/burst 75 ceiling; REST can use spare capacity. Explicit old REST overrides
   still apply. Judge recovery by declining checkpoint age as well as scrape success.
 - AI Gateway budgeted detail reads overlap across source seconds, but emission and checkpoints
   remain ordered whole-second operations. Three-row lookahead shares a two-request physical

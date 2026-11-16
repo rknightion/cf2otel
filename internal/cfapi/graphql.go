@@ -141,7 +141,7 @@ func (c *HTTPClient) graph(ctx context.Context, scope Scope, id, q string) (grap
 			// means Cloudflare is not applying it: fall back to a rate the
 			// per-token quota sustains instead of exhausting it every cycle.
 			if scopeBudgets.enabled() && graphqlBudget.clampRate(perTokenSafeRate) {
-				slog.Warn("cloudflare GraphQL budget is per token despite account-based rate limiting; process GraphQL rate lowered", "requests_per_second", perTokenSafeRate)
+				slog.Warn("cloudflare GraphQL budget is per token despite account-based rate limiting; process GraphQL rate lowered", "requests_per_second", perTokenSafeRate, "burst", perTokenSafeBurst)
 			}
 		}
 		if attempt == 1 {
