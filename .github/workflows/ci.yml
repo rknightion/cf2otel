@@ -112,6 +112,8 @@ jobs:
           file: Dockerfile
           push: false
           tags: cf2otel:ci
+          # Read the amd64 cache written by the image publish workflow.
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache-linux-amd64
           build-args: |
             VERSION=ci-${{ github.sha }}
             COMMIT=${{ github.sha }}
