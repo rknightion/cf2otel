@@ -238,14 +238,12 @@ func TestRESTRetryAfterPausesSiblingOnly(t *testing.T) {
 	if err := ConfigureProcessRateLimit(config.RateLimitConfig{RequestsPerSecond: 10000, Burst: 5}); err != nil {
 		t.Fatal(err)
 	}
-	received := make(chan struct{}, 1)
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/limited" {
 			calls.Add(1)
 			w.Header().Set("Retry-After", "1")
 			w.WriteHeader(http.StatusTooManyRequests)
-			received <- struct{}{}
 			return
 		}
 		if r.Method == http.MethodPost {
@@ -257,12 +255,32 @@ func TestRESTRetryAfterPausesSiblingOnly(t *testing.T) {
 	defer server.Close()
 	cfg := config.Default().Cloudflare
 	cfg.APIBase = server.URL
+	callLimited := func(ctx context.Context) (bool, error) {
+		sawRateLimit := false
+		api := NewRequestObserved(cfg, func(_ context.Context, observation RequestObservation) {
+			if observation.Status == http.StatusTooManyRequests {
+				sawRateLimit = true
+			}
+		})
+		var out []any
+		err := api.Get(ctx, "/limited", nil, &out)
+		return sawRateLimit, err
+	}
+	t.Run("deadline before handler", func(t *testing.T) {
+		expired, cancel := context.WithDeadline(t.Context(), time.Time{})
+		defer cancel()
+		sawRateLimit, err := callLimited(expired)
+		if sawRateLimit || !errors.Is(err, context.DeadlineExceeded) || calls.Load() != 0 {
+			t.Fatalf("want caller deadline before any upstream request: err=%v calls=%d rateLimited=%t", err, calls.Load(), sawRateLimit)
+		}
+	})
 	first, stop := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer stop()
-	done := make(chan error, 1)
-	go func() { var out []any; done <- New(cfg).Get(first, "/limited", nil, &out) }()
-	<-received
-	if err := <-done; !errors.Is(err, context.DeadlineExceeded) {
+	sawRateLimit, err := callLimited(first)
+	if !sawRateLimit {
+		t.Fatalf("limited request finished before receiving the upstream rate limit response: %v (requests=%d)", err, calls.Load())
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("limited request did not cancel during pause: %v", err)
 	}
 	rest, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
