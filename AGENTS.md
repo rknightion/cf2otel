@@ -81,6 +81,18 @@ Off the Mac, when the remote gate runner is installed (`which gaterun`): `gateru
 `just check`), paced across lanes with `gaterun-slot <lane> -- gaterun -- just ci`; `.gaterunner.yaml`
 is its contract. Run one test or package locally.
 
+## Cursor Cloud specific instructions
+
+The environment runs `just cloud-bootstrap` to prepare the Go, Groma and Helm checks. It needs
+only public dependency sources and leaves the exporter stopped.
+
+- Fast check: `just fmt-check gen-check verify-deployment-test </dev/null`.
+- Full source and chart checks: `just check groma-check cloud-helm-check </dev/null`.
+
+The checks use local fixtures and rendered Kubernetes manifests. Live Cloudflare probes, OTLP
+delivery and deployment verification require an authorized environment with provider credentials.
+GitHub CI also builds the release snapshot and the container image.
+
 ## Review and architecture map
 
 - Before committing a non-trivial change, run `just review` and read `.review/report.md`: duplication
