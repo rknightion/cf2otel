@@ -15,7 +15,7 @@ while ingestion lag is unbounded; the REST log collector supplies AI Gateway met
 See the [getting started guide](docs/getting-started.md), [configuration](docs/configuration.md)
 and [signal catalogue](docs/signals.md).
 
-## Build and check
+## Build and test locally
 
 ```sh
 just setup
