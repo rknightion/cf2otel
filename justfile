@@ -98,7 +98,17 @@ vuln:
 
 # The pre-commit gate: everything that runs with only the Go toolchain
 [group('check')]
-check: fmt-check lint vet test tidy-check build vuln gen-check
+check: fmt-check lint vet test tidy-check build vuln gen-check verify-deployment-test
+
+# Confirm the requested revision through the provisioned Grafana read path.
+# Set CF2OTEL_DEPLOY_QUERY_URL and CF2OTEL_DEPLOY_TOKEN_FILE on the authorized
+# landing host. Run loop-land verify after edge publication and the runtime update.
+verify-deployment sha:
+    @python3 scripts/verify_deployment.py {{ quote(sha) }}
+
+# Exercise the deployment verifier without a live provider or real credentials.
+verify-deployment-test:
+    python3 -m unittest discover -s scripts -p test_verify_deployment.py
 
 # Build release archives locally without publishing
 [group('build')]
