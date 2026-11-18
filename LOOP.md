@@ -4,6 +4,8 @@ gate: just check && just groma-check
 ci-required: ci-success
 release-on-push: yes
 deploy-on-push: yes
+deploy-verify: just verify-deployment {sha}
+  0 fresh match, 1 invalid revision, 2 unread.
 grafana-stack: robknight
 tracker: github
 landing: pr
