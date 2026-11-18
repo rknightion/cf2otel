@@ -23,7 +23,7 @@ type Options struct {
 
 func ClampInterval(d time.Duration) time.Duration {
 	if d < MinimumInterval {
-		return MinimumInterval
+		return MinimumInterval + time.Second
 	}
 	return d
 }
