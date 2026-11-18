@@ -18,6 +18,13 @@ concurrency:
 jobs:
   build-test:
     name: build / vet / test
+    needs: backlog-freeze
+    if: >-
+      ${{
+        !cancelled() && (github.event_name != 'pull_request' ||
+          needs.backlog-freeze.result != 'success' ||
+          needs.backlog-freeze.outputs.build-test != 'readme-only')
+      }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -112,6 +119,8 @@ jobs:
           file: Dockerfile
           push: false
           tags: cf2otel:ci
+          # Read the amd64 cache written by the image publish workflow.
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache-linux-amd64
           build-args: |
             VERSION=ci-${{ github.sha }}
             COMMIT=${{ github.sha }}
@@ -145,6 +154,8 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      build-test: ${{ steps.paths.outputs.build-test }}
     permissions:
       contents: read
       pull-requests: read
@@ -175,6 +186,58 @@ jobs:
           fi
           echo "No file under backlog/ is added or changed."
 
+      - name: Classify the exact tree for the Go gate
+        id: paths
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MERGE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          sha='^[a-f0-9]{40}$'
+          readme_entry=$'^100644 blob ([a-f0-9]{40})\tREADME\\.md$'
+          export GIT_TERMINAL_PROMPT=0
+          readme_only() (
+            [[ "$CHANGED_FILES" == 1 && "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || return 1
+            [[ "$BASE_SHA" =~ $sha && "$HEAD_SHA" =~ $sha && "$MERGE_SHA" =~ $sha ]] || return 1
+            candidate="$(timeout 10s gh api "repos/${REPO}/pulls/${PR_NUMBER}/files?per_page=2" \
+              --jq 'select(length == 1) | .[0] | select(.filename == "README.md" and .status == "modified" and .previous_filename == null) | .filename')" || return 1
+            [[ "$candidate" == README.md ]] || return 1
+            scratch="$(mktemp -d)" || return 1
+            trap 'rm -rf -- "$scratch"' EXIT
+            git -C "$scratch" init --bare --quiet || return 1
+            timeout 15s git -C "$scratch" -c credential.helper= fetch --quiet --no-tags --filter=blob:none \
+              "${GITHUB_SERVER_URL}/${REPO}.git" "$MERGE_SHA" || return 1
+            [[ "$(git -C "$scratch" rev-parse FETCH_HEAD)" == "$MERGE_SHA" ]] || return 1
+            [[ "$(git -C "$scratch" show -s --format=%P "$MERGE_SHA")" == "$BASE_SHA $HEAD_SHA" ]] || return 1
+            [[ "$(git -C "$scratch" rev-parse --is-shallow-repository)" == false ]] || return 1
+            fork_point="$(git -C "$scratch" merge-base --all "$BASE_SHA" "$HEAD_SHA")" || return 1
+            [[ "$fork_point" =~ $sha ]] || return 1
+
+            base_readme="$(git -C "$scratch" ls-tree "$BASE_SHA" -- README.md)" || return 1
+            fork_readme="$(git -C "$scratch" ls-tree "$fork_point" -- README.md)" || return 1
+            head_readme="$(git -C "$scratch" ls-tree "$HEAD_SHA" -- README.md)" || return 1
+            merge_readme="$(git -C "$scratch" ls-tree "$MERGE_SHA" -- README.md)" || return 1
+            [[ "$base_readme" =~ $readme_entry && "$fork_readme" =~ $readme_entry && "$head_readme" =~ $readme_entry ]] || return 1
+            [[ "$base_readme" != "$merge_readme" && "$fork_readme" != "$head_readme" && "$head_readme" == "$merge_readme" ]] || return 1
+            git -C "$scratch" diff-tree --quiet -r --no-ext-diff --no-textconv --no-renames \
+              --ignore-submodules=none "$fork_point" "$HEAD_SHA" -- ':(top,literal,exclude)README.md' || return 1
+            git -C "$scratch" diff-tree --quiet -r --no-ext-diff --no-textconv --no-renames \
+              --ignore-submodules=none "$BASE_SHA" "$MERGE_SHA" -- ':(top,literal,exclude)README.md'
+          )
+          # README.md is prose. The Go package, fixture and generated Grafana checks do not read it.
+          if readme_only; then
+            echo "build-test=readme-only" >> "$GITHUB_OUTPUT"
+            echo "Only the ordinary README.md blob changed in the pull request and tested merge."
+          else
+            echo "build-test=full" >> "$GITHUB_OUTPUT"
+            echo "The complete Go gate is required."
+          fi
+
   # zizmor fails a pull request on any finding (enforce); push runs upload SARIF instead.
   zizmor:
     permissions:
@@ -191,18 +254,44 @@ jobs:
     if: always()
     needs: [build-test, groma-check, lint, govulncheck, goreleaser-snapshot, docker-build, ac-evidence, privacy-sweep, backlog-freeze, zizmor]
     steps:
-      - if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
-        run: exit 1
-      # A skipped job reports success, so on a pull request the pull request checks must have
-      # actually run and passed.
-      - name: Fail if a pull request check did not run
-        if: ${{ github.event_name == 'pull_request' }}
+      - name: Require each gate or its explicit skip
         env:
+          BUILD_TEST: ${{ needs.build-test.result }}
+          BUILD_TEST_PATHS: ${{ needs.backlog-freeze.outputs.build-test }}
+          GROMA_CHECK: ${{ needs.groma-check.result }}
+          LINT: ${{ needs.lint.result }}
+          GOVULNCHECK: ${{ needs.govulncheck.result }}
+          GORELEASER_SNAPSHOT: ${{ needs.goreleaser-snapshot.result }}
+          DOCKER_BUILD: ${{ needs.docker-build.result }}
           AC_EVIDENCE: ${{ needs.ac-evidence.result }}
           PRIVACY_SWEEP: ${{ needs.privacy-sweep.result }}
           BACKLOG_FREEZE: ${{ needs.backlog-freeze.result }}
+          ZIZMOR: ${{ needs.zizmor.result }}
         run: |
-          if [[ "$AC_EVIDENCE" != "success" || "$PRIVACY_SWEEP" != "success" || "$BACKLOG_FREEZE" != "success" ]]; then
-            echo "ac-evidence: ${AC_EVIDENCE}, privacy-sweep: ${PRIVACY_SWEEP}, backlog-freeze: ${BACKLOG_FREEZE}; all must pass on a pull request"
-            exit 1
+          require_result() {
+            if [[ "$2" != "$3" ]]; then
+              echo "$1 was '$2', expected '$3'" >&2
+              exit 1
+            fi
+          }
+          build_expected=success
+          pr_expected=skipped
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            pr_expected=success
+            require_result backlog-freeze "$BACKLOG_FREEZE" success
+            case "$BUILD_TEST_PATHS" in
+              readme-only) build_expected=skipped ;;
+              full) ;;
+              *) echo "The Go gate path decision is missing or invalid" >&2; exit 1 ;;
+            esac
           fi
+          require_result build-test "$BUILD_TEST" "$build_expected"
+          require_result groma-check "$GROMA_CHECK" success
+          require_result lint "$LINT" success
+          require_result govulncheck "$GOVULNCHECK" success
+          require_result goreleaser-snapshot "$GORELEASER_SNAPSHOT" success
+          require_result docker-build "$DOCKER_BUILD" success
+          require_result ac-evidence "$AC_EVIDENCE" "$pr_expected"
+          require_result privacy-sweep "$PRIVACY_SWEEP" "$pr_expected"
+          require_result backlog-freeze "$BACKLOG_FREEZE" "$pr_expected"
+          require_result zizmor "$ZIZMOR" success
