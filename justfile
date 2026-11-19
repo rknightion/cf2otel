@@ -14,6 +14,11 @@ govulncheck_version := "v1.9.0"
 goreleaser_version := "v2.19.0"
 # renovate: datasource=npm depName=groma.md
 groma_version := "0.7.8"
+cloud_helm_version := "v4.2.2"
+cloud_kubeconform_version := "v0.8.0"
+cloud_helm := tools_dir + "/helm-" + cloud_helm_version + "/helm"
+cloud_kubeconform_dir := tools_dir + "/kubeconform-" + cloud_kubeconform_version
+cloud_crd_schema := "https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json"
 # renovate: datasource=git-refs depName=https://github.com/rknightion/fleet-review currentValue=main
 fleet_review_rev := "5352a064f4140509b58c679162ecb6cc17642040"
 golangci_lint_dir := tools_dir + "/golangci-lint-" + golangci_lint_version
@@ -25,6 +30,46 @@ default:
 # Install pinned tools and download modules
 setup: _install-golangci-lint
     go mod download
+
+# Warm the source checks in Cursor Cloud without running tests or starting cf2otel.
+cloud-bootstrap: setup _cloud-install-helm
+    #!/usr/bin/env bash
+    set -euo pipefail
+    scratch="$(mktemp -d)"
+    trap 'rm -rf "$scratch"' EXIT
+    mkdir -p {{ quote(cloud_kubeconform_dir) }}
+    GOBIN={{ quote(cloud_kubeconform_dir) }} go install github.com/yannh/kubeconform/cmd/kubeconform@{{ cloud_kubeconform_version }}
+    GOBIN={{ quote(tools_dir) }} go install golang.org/x/vuln/cmd/govulncheck@{{ govulncheck_version }}
+    npx -y groma.md@{{ groma_version }} plugin install
+    go test -race -c -o "$scratch/" ./...
+
+[private]
+_cloud-install-helm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    helm={{ quote(cloud_helm) }}
+    if [[ -x "$helm" ]] && [[ "$("$helm" version --short)" == "{{ cloud_helm_version }}"+* ]]; then
+      exit 0
+    fi
+    arch="$(go env GOARCH)"
+    case "$arch" in
+      amd64) checksum=9adafecab4d406853bba163a70e9f104f47dbbf65ce24b7653bae7e36150bcb6 ;;
+      arm64) checksum=78803142087a0069fa4b50d3f32a84d3ef25c14d1ee8a40fbccf86a6216d2f36 ;;
+      *) printf 'Unsupported Helm architecture: %s\n' "$arch" >&2; exit 1 ;;
+    esac
+    scratch="$(mktemp -d)"
+    trap 'rm -rf "$scratch"' EXIT
+    archive="helm-{{ cloud_helm_version }}-linux-$arch.tar.gz"
+    curl -qfsSL --retry 2 --max-time 120 -o "$scratch/$archive" "https://get.helm.sh/$archive"
+    (cd "$scratch" && printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check)
+    tar -xzf "$scratch/$archive" -C "$scratch" "linux-$arch/helm"
+    install -D -m 0755 "$scratch/linux-$arch/helm" "$helm"
+
+# Validate the default chart against the same Kubernetes floor and schemas as CI.
+[group('check')]
+cloud-helm-check:
+    {{ quote(cloud_helm) }} lint charts/cf2otel
+    {{ quote(cloud_helm) }} template test charts/cf2otel | {{ quote(cloud_kubeconform_dir + "/kubeconform") }} -strict -summary -kubernetes-version 1.29.0 -schema-location default -schema-location {{ quote(cloud_crd_schema) }} -
 
 [private]
 _install-golangci-lint:
