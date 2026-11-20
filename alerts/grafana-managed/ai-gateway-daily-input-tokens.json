@@ -77,6 +77,7 @@
       "page": "false",
       "service": "cf2otel",
       "severity": "warning",
+      "skipinvestigation": "true",
       "source": "cf2otel"
     },
     "noDataState": "Ok",

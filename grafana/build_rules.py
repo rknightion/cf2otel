@@ -193,7 +193,7 @@ def resource(name: str, title: str, description: str, panel_id: int, expr: str, 
     return {"apiVersion": "rules.alerting.grafana.app/v0alpha1", "kind": "AlertRule",
         "metadata": {"name": name, "annotations": {"grafana.app/folder": FOLDER}, "labels": {"grafana.app/folder": FOLDER}},
         "spec": {"title": title, "trigger": {"interval": "1m"}, "for": FOR_OVERRIDES.get(name, "5m"), "paused": False,
-        "noDataState": no_data_state, "execErrState": "Error", "labels": {"category": "collector", "pipeline": "cf2otel", "service": "cf2otel", "severity": "warning", "source": "cf2otel"},
+        "noDataState": no_data_state, "execErrState": "Error", "labels": {"category": "collector", "domain": "observability", "page": "false", "pipeline": "cf2otel", "service": "cf2otel", "severity": "warning", "skipinvestigation": "true", "source": "cf2otel"},
         "annotations": {"__dashboardUid__": "cf2otel", "__panelId__": str(panel_id), "summary": title,
             "description": description, "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md"},
         "expressions": {"A": {"datasourceUID": PROM, "queryType": "instant", "relativeTimeRange": {"from": "15m", "to": "0s"},
@@ -225,7 +225,7 @@ def daily_input_tokens_rule() -> dict:
         "metadata": {"name": "ai-gateway-daily-input-tokens", "annotations": {"grafana.app/folder": FOLDER}, "labels": {"grafana.app/folder": FOLDER}},
         "spec": {"title": "AIGatewayDailyInputTokensHigh", "trigger": {"interval": "15m"}, "paused": False,
         "noDataState": "Ok", "execErrState": "Ok",
-        "labels": {"category": "spend", "domain": "observability", "page": "false", "service": "cf2otel", "severity": "warning", "source": "cf2otel"},
+        "labels": {"category": "spend", "domain": "observability", "page": "false", "service": "cf2otel", "severity": "warning", "skipinvestigation": "true", "source": "cf2otel"},
         "annotations": {"summary": "AI Gateway input tokens over the last 24h: {{ humanize $values.B.Value }} (threshold 150M)",
             "description": "Rolling 24h input tokens by source-log timestamp. jev uses captured result.usage.input_tokens from the outer "
                            "Workers AI response leg, once per gateway/log ID, excluding the paired provider leg and replay copies. "
