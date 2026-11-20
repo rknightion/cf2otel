@@ -78,9 +78,12 @@
     "for": "5m",
     "labels": {
       "category": "collector",
+      "domain": "observability",
+      "page": "false",
       "pipeline": "cf2otel",
       "service": "cf2otel",
       "severity": "warning",
+      "skipinvestigation": "true",
       "source": "cf2otel"
     },
     "noDataState": "NoData",
