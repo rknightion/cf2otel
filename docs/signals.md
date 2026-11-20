@@ -116,7 +116,7 @@ This opt-in collector uses the existing expiring SDK snapshot batch emitter,
 never ordinary cumulative Gauge fallback. The row shape is **doc-derived** from
 the [official device method](https://developers.cloudflare.com/api/resources/zero_trust/subresources/dex/subresources/fleet_status/subresources/devices/methods/list/)
 and pinned by local fixtures. The root's current canary observed only successful
-empty rows (`doc-0003`, section 16); populated rows and real fleet pagination are
+empty rows ([API reference](https://github.com/rknightion/cf2otel/blob/main/.github/tracker/history/doc-0003%20-%20Cloudflare-API-surface-live-verified-reference.md), section 16); populated rows and real fleet pagination are
 not live-verified. Dashboard delivery is a separate pending work item.
 
 ## DEX test results

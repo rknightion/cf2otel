@@ -18,7 +18,7 @@ metrics. OTLP remains required and active. See [configuration](configuration.md#
 
 The table maps every configured collector name to its expected read group. For GraphQL collectors, use `Account Analytics Read` for account datasets and `Analytics Read` for zone datasets. Scope each token to only the account and zones it needs. These group names follow Cloudflare's [API token permissions](https://developers.cloudflare.com/fundamentals/api/reference/permissions/), [GraphQL Analytics token setup](https://developers.cloudflare.com/analytics/graphql-api/getting-started/authentication/api-token-auth/), and the [Audit Logs v2 endpoint](https://developers.cloudflare.com/api/resources/accounts/subresources/logs/subresources/audit/methods/list/).
 
-**Unverified** means the least required group has not been confirmed by a live permission check recorded in the project's Cloudflare API reference (`doc-0003`). The reference records live permission behavior only for AI Gateway: metadata access lists logs, while body fetches require `AI Gateway Read`. Dataset and field entitlements can still vary by account and zone.
+**Unverified** means the least required group has not been confirmed by a live permission check recorded in the project's [Cloudflare API reference](https://github.com/rknightion/cf2otel/blob/main/.github/tracker/history/doc-0003%20-%20Cloudflare-API-surface-live-verified-reference.md) (`doc-0003`, kept in the repository under `.github/tracker/history/`). The reference records live permission behavior only for AI Gateway: metadata access lists logs, while body fetches require `AI Gateway Read`. Dataset and field entitlements can still vary by account and zone.
 
 | Collector | Cloudflare permission group(s) | Evidence |
 | --- | --- | --- |
@@ -37,7 +37,7 @@ The table maps every configured collector name to its expected read group. For G
 | `logpush.failures` | `Account Analytics Read` (Account) and `Analytics Read` (Zone) | Disabled by default; explicit opt-in to numeric job-ID labels, bounded by the platform series cap. Destination/status/final flags only, never raw error text; zone names rather than zone IDs. Least permission groups unverified. (CFO-0047.03) |
 | `healthchecks.events` | `Analytics Read` (Zone) | Disabled by default; Pro entitlement verified, Free disabled and skipped. Explicit origin-label opt-in: bounded non-IP FQDN or human name, never origin IP or health-check ID. Omit timings without usable identity. Least permission group unverified; this seam registers no collector yet. (CFO-0050.03) |
 | `httpreq.metrics` | `Analytics Read` (Zone) | Unverified |
-| `aigateway.logs` | `AI Gateway Metadata Read` (Account); add `AI Gateway Read` (Account) when body capture is enabled | Live-verified in `doc-0003` |
+| `aigateway.logs` | `AI Gateway Metadata Read` (Account); add `AI Gateway Read` (Account) when body capture is enabled | Live-verified: metadata access lists logs and body fetches need `AI Gateway Read` ([API reference](https://github.com/rknightion/cf2otel/blob/main/.github/tracker/history/doc-0003%20-%20Cloudflare-API-surface-live-verified-reference.md)) |
 | `aigateway.metrics` | `Account Analytics Read` (Account); collector is disabled while GraphQL Groups ingestion lag is unbounded | Unverified |
 | `audit.logs` | `Account Settings Read` (Account) | Unverified |
 | `firewall.events` | `Analytics Read` (Zone) | Unverified |
