@@ -1,0 +1,5 @@
+# Reproducible outputs of grafana/build_dashboard.py and grafana/build_rules.py (just gen).
+# Drift is checked by just gen-check, which runs in just check.
+/dashboards/cf2otel.json linguist-generated=true
+/alerts/grafana-managed/*.json linguist-generated=true
+/alerts/grafana-managed/fixtures/*.test.yaml linguist-generated=true
