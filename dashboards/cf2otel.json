@@ -14727,7 +14727,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=~\"$zone\"} and cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=~\"$zone\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)",
+                        "expr": "(cloudflare_certificate_expiry_seconds{service_name=\"cf2otel\",cloudflare_certificate_zone=~\"$zone\"} and cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=~\"$zone\"} == 1) and on(instance) (time() - max by (instance) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"}))) < 10800)",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "",
@@ -15185,7 +15185,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=~\"$zone\"} == 1) and on(instance) (time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"}) < 10800)",
+                        "expr": "(cloudflare_certificate_pack{service_name=\"cf2otel\",cloudflare_certificate_zone=~\"$zone\"} == 1) and on(instance) (time() - max by (instance) ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"} != 0) or ((cf2otel_scrape_last_success_timestamp_seconds{service_name=\"cf2otel\",cf2otel_collector=\"certs.packs\"} == 0) + on (instance) group_left () max by (instance) (cf2otel_process_start_time_seconds{service_name=\"cf2otel\"}))) < 10800)",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "",
