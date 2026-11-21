@@ -8,7 +8,8 @@ import os
 from pathlib import Path
 
 from build_dashboard import (ACCESS_SEATS_INTERVAL_SECONDS, CERT_FRESH, CERTS_PACKS_FRESHNESS_SECONDS, DAILY_JEV_INPUT_TOKENS,
-                             CERTS_PACKS_INTERVAL_SECONDS, WARP_INTERVAL_SECONDS, render, warp_deployment_seconds)
+                             CERTS_PACKS_INTERVAL_SECONDS, WARP_INTERVAL_SECONDS, last_success_or_start, render,
+                             warp_deployment_seconds)
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "alerts" / "grafana-managed"
@@ -54,7 +55,8 @@ CERT_ID = 'cloudflare_certificate_zone, cloudflare_certificate_pack_id'
 CERT_EXPIRY = f'max by ({CERT_ID}) (((cloudflare_certificate_expiry_seconds{{service_name="cf2otel",cloudflare_certificate_status!="backup_issued"}} < bool 1209600) and ({CERT_PACK} == 1)) and on(instance) {CERT_FRESH})'
 CERT_STATUS = f'(max by ({CERT_ID}) ((cloudflare_certificate_pack{{service_name="cf2otel",cloudflare_certificate_status!~"active|backup_issued"}} == 1) and on(instance) {CERT_FRESH}) or on ({CERT_ID}) (0 * max by ({CERT_ID}) (({CERT_PACK} == 1) and on(instance) {CERT_FRESH})))'
 CERT_DESCRIPTION = (f"Requires opt-in certs.packs and collector last success less than {CERTS_PACKS_FRESHNESS_SECONDS} seconds old "
-                    f"(three deployment polling intervals of {CERTS_PACKS_INTERVAL_SECONDS} seconds). Removed packs and previous statuses retire. "
+                    f"(three deployment polling intervals of {CERTS_PACKS_INTERVAL_SECONDS} seconds). Before the collector's first success after a restart, "
+                    "the process start time stands in for its last success. Removed packs and previous statuses retire. "
                     "Absent/stale data is not proof of health. For a non-default interval regenerate with GRAFANA_CERTS_PACKS_INTERVAL_SECONDS matching the deployment.")
 
 # Collector staleness is three polling intervals per collector. Intervals mirror
@@ -100,17 +102,11 @@ def collector_stale_expr() -> str:
     Alerting, so the query must keep returning fresh collectors rather than
     filtering them out.
 
-    The exporter reports a last success of 0 until a collector's first
-    successful poll after start. That replica's process start time stands in
-    for it, so a restart is not stale but a collector that never succeeds
-    still fires one threshold after the process started.
+    A restart is not stale, but a collector that never succeeds still fires
+    one threshold after the process started (see last_success_or_start).
     """
-    def last_success(selector: str) -> str:
-        series = f'cf2otel_scrape_last_success_timestamp_seconds{{service_name="cf2otel",{selector}}}'
-        return (f'max by (cf2otel_collector) (({series} != 0) or (({series} == 0) + on (instance) group_left () '
-                'max by (instance) (cf2otel_process_start_time_seconds{service_name="cf2otel"})))')
     return " or ".join(
-        f'((time() - {last_success(selector)}) - {threshold})'
+        f'((time() - max by (cf2otel_collector) ({last_success_or_start(selector)})) - {threshold})'
         for threshold, selector in stale_classes())
 
 
@@ -159,8 +155,8 @@ RULES = [
      CERT_EXPIRY, 0, "NoData"),
     ("cf2otel-certificate-status", "Cloudflare certificate pack is not active", "A present certificate pack has a status other than active or backup_issued (Cloudflare's normal standby state for a second-CA backup certificate), including packs with unknown expiry. " + CERT_DESCRIPTION, 2645,
      CERT_STATUS, 0, "NoData"),
-    ("cf2otel-tunnel-unhealthy", "Cloudflare tunnel is not healthy", f"The current (value 1) tunnel status has been non-healthy for five minutes, with collector last success less than {TUNNELS_STATUS_FRESHNESS_SECONDS} seconds old (three deployment polling intervals of {TUNNELS_STATUS_INTERVAL_SECONDS} seconds). Retired value-0 states are excluded. The deployment polls tunnels.status every 300 seconds (the exporter's built-in default is 60), so the generator default is 300; regenerate with GRAFANA_TUNNELS_STATUS_INTERVAL_SECONDS for any other interval. Collector is disabled by default; stale/absent data is not proof of health.", 2641,
-     '(max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel",cloudflare_tunnel_status!="healthy"} == 1) or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel"} == 1))) and on() (time() - max(cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="tunnels.status"}) < ' + str(TUNNELS_STATUS_FRESHNESS_SECONDS) + ')', 0, "NoData"),
+    ("cf2otel-tunnel-unhealthy", "Cloudflare tunnel is not healthy", f"The current (value 1) tunnel status has been non-healthy for five minutes, with collector last success less than {TUNNELS_STATUS_FRESHNESS_SECONDS} seconds old (three deployment polling intervals of {TUNNELS_STATUS_INTERVAL_SECONDS} seconds); before its first success after a restart, the process start time stands in. Retired value-0 states are excluded. The deployment polls tunnels.status every 300 seconds (the exporter's built-in default is 60), so the generator default is 300; regenerate with GRAFANA_TUNNELS_STATUS_INTERVAL_SECONDS for any other interval. Collector is disabled by default; stale/absent data is not proof of health.", 2641,
+     '(max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel",cloudflare_tunnel_status!="healthy"} == 1) or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel"} == 1))) and on() (time() - max(' + last_success_or_start('cf2otel_collector="tunnels.status"') + ') < ' + str(TUNNELS_STATUS_FRESHNESS_SECONDS) + ')', 0, "NoData"),
     ("cf2otel-collector-stale", "cf2otel collector is stale", collector_stale_description(), 401,
      collector_stale_rule_expr(), 0, "Alerting"),
     ("cf2otel-collector-slow", "cf2otel collector polling exceeds its interval", "An active poll's elapsed time or the last completed poll's duration exceeds the collector's configured runtime interval for five minutes. Includes window and snapshot collectors; successful polls can still be slow. The query value is the worst elapsed-to-interval ratio across instances, calculated separately for each instance before reduction. Inspect collector status, API limiter waits and OTLP export latency. Silent while the same collector's checkpoint backlog rule is over its threshold, because catch-up polls run long by design and that rule already covers them.", 401,
@@ -281,7 +277,8 @@ def certificate_fixtures() -> dict:
     for replacement in (True, False):
         series = [{"series": f'{metric}{{{labels},cloudflare_certificate_status="pending"}}', "values": f'{value} stale'}
                   for metric, value in (("cloudflare_certificate_pack", 1), ("cloudflare_certificate_expiry_seconds", 100))]
-        series.append({"series": 'cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="certs.packs"}', "values": "0 60"})
+        # -1, not 0: the exporter reports 0 for a collector that has not succeeded yet.
+        series.append({"series": 'cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="certs.packs"}', "values": "-1 60"})
         if replacement:
             series.extend({"series": f'{metric}{{{labels},cloudflare_certificate_status="active"}}', "values": f'_ {value}'}
                           for metric, value in (("cloudflare_certificate_pack", 1), ("cloudflare_certificate_expiry_seconds", 2000000)))
@@ -289,9 +286,25 @@ def certificate_fixtures() -> dict:
                    "exp_samples": [{"labels": identity, "value": score}] if score is not None else []}
                   for suffix in ("expiry", "status") for when, score in (("0s", 1), ("1m", 0 if replacement else None))]
         tests.append({"name": "healthy replacement" if replacement else "empty snapshot retirement", "interval": "1m", "input_series": series, "promql_expr_test": checks})
+    # A restart: the old replica's series have aged out, and the new replica's
+    # first certs.packs success has not reached a report yet, so it still reports
+    # the 0 placeholder beside its current packs. Its process start stands in for
+    # the last success; a replica started more than three intervals ago proves nothing.
+    horizon = CERTS_PACKS_FRESHNESS_SECONDS + 3600
+    for name, started, score in (("restarted replica before its first reported success", horizon - 300, 0),
+                                 ("replica that never reported a success", horizon - CERTS_PACKS_FRESHNESS_SECONDS - 1, None)):
+        replica = 'instance="new-demo"'
+        series = [{"series": f'{metric}{{{labels},{replica},cloudflare_certificate_status="active"}}', "values": f"{value}x{horizon // 60}"}
+                  for metric, value in (("cloudflare_certificate_pack", 1), ("cloudflare_certificate_expiry_seconds", 2000000))]
+        series += [{"series": f'cf2otel_scrape_last_success_timestamp_seconds{{service_name="cf2otel",cf2otel_collector="certs.packs",{replica}}}', "values": f"0x{horizon // 60}"},
+                   {"series": f'cf2otel_process_start_time_seconds{{service_name="cf2otel",{replica}}}', "values": f"{started}x{horizon // 60}"}]
+        tests.append({"name": name, "interval": "1m", "input_series": series,
+                      "promql_expr_test": [{"expr": expressions[f"cf2otel-certificate-{suffix}"], "eval_time": f"{horizon}s",
+                                            "exp_samples": [] if score is None else [{"labels": identity, "value": score}]}
+                                           for suffix in ("expiry", "status")]})
     # A fresh exporter must not resurrect a stale exporter's pending pack.
     mixed = []
-    for instance, status, expiry, timestamp in (("stale-demo", "pending", 100, -CERTS_PACKS_FRESHNESS_SECONDS), ("fresh-demo", "active", 2000000, 0)):
+    for instance, status, expiry, timestamp in (("stale-demo", "pending", 100, -CERTS_PACKS_FRESHNESS_SECONDS), ("fresh-demo", "active", 2000000, -1)):
         mixed.extend({"series": f'{metric}{{{labels},instance="{instance}",cloudflare_certificate_status="{status}"}}', "values": str(value)}
                      for metric, value in (("cloudflare_certificate_pack", 1), ("cloudflare_certificate_expiry_seconds", expiry)))
         mixed.append({"series": f'cf2otel_scrape_last_success_timestamp_seconds{{service_name="cf2otel",cf2otel_collector="certs.packs",instance="{instance}"}}', "values": str(timestamp)})

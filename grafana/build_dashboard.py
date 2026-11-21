@@ -95,8 +95,23 @@ ACCESS_SEATS_FRESH = '(time() - max by (instance) (cf2otel_scrape_last_success_t
 
 CERTS_PACKS_INTERVAL_SECONDS = certs_packs_interval_seconds()
 CERTS_PACKS_FRESHNESS_SECONDS = 3 * CERTS_PACKS_INTERVAL_SECONDS
+def last_success_or_start(selector: str) -> str:
+    """Per-replica last-success series, with the never-succeeded placeholder replaced.
+
+    The exporter reports a last success of 0 until a collector's first successful
+    poll after start reaches a self-observability report. A restarted replica's
+    previous series age out first, so that replica's process start time stands in:
+    a restart stays fresh, and a collector that never succeeds still goes stale
+    one threshold after the process started.
+    """
+    series = f'cf2otel_scrape_last_success_timestamp_seconds{{service_name="cf2otel",{selector}}}'
+    return (f'({series} != 0) or (({series} == 0) + on (instance) group_left () '
+            'max by (instance) (cf2otel_process_start_time_seconds{service_name="cf2otel"}))')
+
+
 # OTLP service.instance.id translates to the Prometheus instance label.
-CERT_FRESH = '(time() - max by (instance) (cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="certs.packs"}) < ' + str(CERTS_PACKS_FRESHNESS_SECONDS) + ')'
+CERT_FRESH = ('(time() - max by (instance) (' + last_success_or_start('cf2otel_collector="certs.packs"') + ') < '
+              + str(CERTS_PACKS_FRESHNESS_SECONDS) + ')')
 FW = S + ',cloudflare_firewall_zone=~"$zone"'
 DNS = S + ',cloudflare_dns_zone=~"$zone"'
 GW = S + ',cloudflare_ai_gateway_gateway_name=~"$gateway"'
