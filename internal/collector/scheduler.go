@@ -105,12 +105,31 @@ func NewScheduler(r *Registry, e telemetry.Emitter, store CheckpointStore) *Sche
 	return &Scheduler{Registry: r, Emitter: e, Checkpoints: store, Now: time.Now, Logger: slog.Default()}
 }
 func (s *Scheduler) Run(ctx context.Context) {
+	s.observeStoredCursors()
 	var wg sync.WaitGroup
 	for _, entry := range s.Registry.Entries() {
 		wg.Add(1)
 		go func(e Entry) { defer wg.Done(); s.runEntry(ctx, e) }(entry)
 	}
 	wg.Wait()
+}
+
+// observeStoredCursors reports each window collector's persisted cursor before
+// any staggered first poll, so a restart does not hide checkpoint age until
+// that collector's first window starts.
+func (s *Scheduler) observeStoredCursors() {
+	if s.OnWindowStart == nil || s.Checkpoints == nil {
+		return
+	}
+	for _, e := range s.Registry.Entries() {
+		c, ok := e.Collector.(WindowCollector)
+		if !ok || e.Interval <= 0 {
+			continue
+		}
+		if from, ok := s.Checkpoints.Get(c.Name()); ok {
+			s.OnWindowStart(c.Name(), from.Truncate(time.Second))
+		}
+	}
 }
 func (s *Scheduler) runEntry(ctx context.Context, e Entry) {
 	interval := e.Interval
