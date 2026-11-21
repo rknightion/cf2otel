@@ -15,7 +15,7 @@ jobs:
   validate:
     permissions:
       contents: read
-    uses: rknightion/.github/.github/workflows/helm-validate.yml@a2399dd9935cb45b1a1d7840ff8a99cf586c5dfe # v1.30.28
+    uses: rknightion/.github/.github/workflows/helm-validate.yml@9428b04f600bf6a50a3152ee9414085856911460 # v1.30.29
     with:
       chart-path: charts/cf2otel
       kubernetes-versions: "1.29.0"
