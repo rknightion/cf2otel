@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -66,19 +67,40 @@ func TestPollPhasesIncludeEarlyLockWaitAndPanic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := NewScheduler(nil, &recordingEmitter{}, store)
+	// A stored cursor skips the first-run cursor write, a file write of
+	// unbounded duration between the checkpoint read and the lock.
+	if err := store.Set("fixture", time.Now().Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	reads := &signalingStore{CheckpointStore: store, read: make(chan struct{})}
+	s := NewScheduler(nil, &recordingEmitter{}, reads)
 	var summary telemetry.PollSummary
 	s.OnRun = func(ctx context.Context, _ string) (context.Context, func(telemetry.PollSummary)) {
 		return ctx, func(v telemetry.PollSummary) { summary = v }
 	}
+	// Hold the lock for 30ms from the scheduler's checkpoint read, its last
+	// step before the early commit lock, not from the RunOnce call: setup
+	// before that read is unbounded on a loaded host.
 	commitMu.Lock()
 	released := make(chan struct{})
-	go func() { time.Sleep(30 * time.Millisecond); commitMu.Unlock(); close(released) }()
-	err = s.RunOnce(context.Background(), Entry{Collector: &panicSummaryWindow{}, InitialLookback: time.Minute})
+	go func() { <-reads.read; time.Sleep(30 * time.Millisecond); commitMu.Unlock(); close(released) }()
+	err = s.RunOnce(context.Background(), Entry{Collector: &panicSummaryWindow{}})
 	<-released
 	if err == nil || summary.Outcome != "error" || summary.CollectSeconds < 0.01 || summary.CommitLockSeconds < 0.02 {
 		t.Fatalf("panic phases lost: %+v err=%v", summary, err)
 	}
+}
+
+// signalingStore closes read on the first checkpoint read.
+type signalingStore struct {
+	CheckpointStore
+	once sync.Once
+	read chan struct{}
+}
+
+func (s *signalingStore) Get(name string) (time.Time, bool) {
+	s.once.Do(func() { close(s.read) })
+	return s.CheckpointStore.Get(name)
 }
 
 type panicSummaryWindow struct{ summaryWindow }
