@@ -28,7 +28,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Read schema probe token
-        uses: rknightion/.github/.github/actions/bao-secret@9428b04f600bf6a50a3152ee9414085856911460 # v1.30.29
+        uses: rknightion/.github/.github/actions/bao-secret@ce131b215475bf6e6200de028e31d3e3f2be20a5 # v1.30.30
         with:
           role: rknightion-cf2otel
           path: rknightion/cf2otel
