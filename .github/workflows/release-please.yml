@@ -20,7 +20,7 @@ jobs:
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - id: bao
-        uses: rknightion/.github/.github/actions/broker-token@afbcaaa3db04dcf410a9e45e92db5cc130792034 # bounded broker requests and safe retries
+        uses: rknightion/.github/.github/actions/broker-token@84486af028f18f4a2d93ee5c4eb954fdd541d800 # v1.31.10
         with:
           permission-set: release-please-cf2otel
           role: release-please-cf2otel
