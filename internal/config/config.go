@@ -25,7 +25,7 @@ import (
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
 	"github.com/rknightion/cf2otel/internal/semconv"
-	yamlv3 "go.yaml.in/yaml/v3"
+	yamlv3 "go.yaml.in/yaml/v4"
 )
 
 const EnvPrefix = "CF2OTEL_"
