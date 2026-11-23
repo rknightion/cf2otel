@@ -20,7 +20,7 @@ cloud_helm := tools_dir + "/helm-" + cloud_helm_version + "/helm"
 cloud_kubeconform_dir := tools_dir + "/kubeconform-" + cloud_kubeconform_version
 cloud_crd_schema := "https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json"
 # renovate: datasource=git-refs depName=https://github.com/rknightion/fleet-review currentValue=main
-fleet_review_rev := "5f0ae27af9cab2d88ae463fcdea3bc2e641cb29e"
+fleet_review_rev := "ceab8d46464b7490207262ec3253386e7ba8be93"
 golangci_lint_dir := tools_dir + "/golangci-lint-" + golangci_lint_version
 
 # List available recipes
