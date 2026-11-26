@@ -27,7 +27,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "(max by (cf2otel_collector) ((cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (instance, cf2otel_collector) (max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m]) < max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m] offset 10m))) unless on () ((sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0))) or clamp_max((max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))), 3)",
+          "expr": "(max by (cf2otel_collector) ((cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0)) unless on (instance, cf2otel_collector) (max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m]) < max_over_time(cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"}[5m] offset 10m))) unless on () ((sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class!=\"\"}[5m])) / sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m]))) >= 0.9)) or clamp_max((max by (cf2otel_collector) (cf2otel_checkpoint_backlog_seconds{service_name=\"cf2otel\"} / (cf2otel_scrape_interval_seconds{service_name=\"cf2otel\"} > 0))), 3)",
           "instant": true,
           "range": false,
           "refId": "A"

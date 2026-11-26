@@ -48,8 +48,10 @@ reaches back only about a day.
 
 ## Collectors stale after a network outage
 
-While every Cloudflare API request fails, the **cf2otel cannot reach Cloudflare API** alert fires
-once and holds the per-collector stale and backlog alerts at their thresholds. An outage shorter
+While at least 90% of Cloudflare API requests fail, the **cf2otel cannot reach Cloudflare API** alert
+fires once and holds the per-collector stale, slow-poll and backlog alerts at their thresholds. A
+partial Cloudflare API incident, where a few requests still succeed, counts. Absent tunnel status
+after a restart reads as healthy meanwhile, rather than raising a tunnel NoData alert. An outage shorter
 than about ten minutes does not fire it. Collectors resume on their next poll once the network
 returns: HTTP/2 connections to Cloudflare and to an OTLP `http` endpoint are health checked with
 pings, so a connection silently dropped by a router or firewall restart is replaced rather than

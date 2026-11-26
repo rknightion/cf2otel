@@ -14,7 +14,7 @@
     "annotations": {
       "__dashboardUid__": "cf2otel",
       "__panelId__": "408",
-      "description": "Every physical Cloudflare API request in the last five minutes failed (timeout, connection, auth, rate-limit or HTTP error) and at least one was attempted. While this holds, the per-collector stale and checkpoint backlog rules stay at their thresholds, so an outage of the network, DNS or the Cloudflare API notifies once here. A short outage that recovers within five minutes does not fire. No requests at all evaluates as OK; the collector-stale rule covers a stopped exporter.",
+      "description": "At least 90% of physical Cloudflare API requests in the last five minutes failed (timeout, connection, auth, rate-limit or HTTP error), so a partial Cloudflare API incident where a few requests still succeed counts. The query value is the failed share. While this holds, the per-collector stale, slow-poll and checkpoint backlog rules stay at their thresholds and absent tunnel status reads as healthy, so an outage of the network, DNS or the Cloudflare API notifies once here. A short outage that recovers within five minutes does not fire. No requests at all evaluates as OK; the collector-stale rule covers a stopped exporter.",
       "runbook_url": "https://github.com/rknightion/cf2otel/blob/main/docs/troubleshooting.md",
       "summary": "cf2otel cannot reach Cloudflare API"
     },
@@ -27,7 +27,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "(sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m])) > 0) unless (sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class=\"\"}[5m])) > 0)",
+          "expr": "(sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\",cf2otel_error_class!=\"\"}[5m])) / sum(increase(cf2otel_api_requests_total{service_name=\"cf2otel\"}[5m]))) >= 0.9",
           "instant": true,
           "range": false,
           "refId": "A"
