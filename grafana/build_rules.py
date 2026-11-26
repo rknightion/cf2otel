@@ -113,9 +113,14 @@ def collector_stale_expr() -> str:
 # Backlog score above which a collector is catching up rather than slow.
 BACKLOG_INTERVALS = 3
 
+# A Cloudflare API incident is often partial: a few requests still succeed while
+# nearly all fail, so "no successful request" alone misses it. The value is the
+# failed share of the last five minutes; below 1 in 10 succeeding counts as an
+# outage. No requests (or no failures) returns nothing.
 API_REQUESTS = 'cf2otel_api_requests_total{service_name="cf2otel"}'
-API_UNREACHABLE = (f'(sum(increase({API_REQUESTS}[5m])) > 0) unless '
-                   '(sum(increase(cf2otel_api_requests_total{service_name="cf2otel",cf2otel_error_class=""}[5m])) > 0)')
+API_FAILURE_RATIO = 0.9
+API_UNREACHABLE = (f'(sum(increase(cf2otel_api_requests_total{{service_name="cf2otel",cf2otel_error_class!=""}}[5m])) '
+                   f'/ sum(increase({API_REQUESTS}[5m]))) >= {API_FAILURE_RATIO}')
 BACKLOG = 'cf2otel_checkpoint_backlog_seconds{service_name="cf2otel"}'
 BACKLOG_DECREASING = f'max_over_time({BACKLOG}[5m]) < max_over_time({BACKLOG}[5m] offset 10m)'
 
@@ -126,9 +131,29 @@ def poll_health_expr(metric: str) -> str:
             '/ (cf2otel_scrape_interval_seconds{service_name="cf2otel"} > 0))')
 
 
+def held_while_unreachable(expr: str, threshold: float) -> str:
+    """Hold a per-collector score at its threshold while the API is unreachable,
+    so one Cloudflare outage notifies once through the API rule."""
+    return f"(({expr}) unless on () ({API_UNREACHABLE})) or clamp_max(({expr}), {threshold})"
+
+
+def collector_slow_expr() -> str:
+    slow = f'{poll_health_expr("scrape_elapsed")} unless on (cf2otel_collector) ({poll_health_expr("checkpoint_backlog")} > {BACKLOG_INTERVALS})'
+    return held_while_unreachable(slow, 1)
+
+
+def tunnel_unhealthy_expr() -> str:
+    """Absent tunnel gauges after a restart read as healthy while the API is
+    unreachable, so the outage does not also raise a tunnel NoData alert."""
+    status = ('(max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel",cloudflare_tunnel_status!="healthy"} == 1) '
+              'or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel"} == 1))) '
+              f'and on() (time() - max({last_success_or_start('cf2otel_collector="tunnels.status"')}) < {TUNNELS_STATUS_FRESHNESS_SECONDS})')
+    return f"({status}) or on () (0 * ({API_UNREACHABLE}))"
+
+
 def collector_stale_rule_expr() -> str:
     stale = collector_stale_expr()
-    return f"(({stale}) unless on () ({API_UNREACHABLE})) or clamp_max(({stale}), 0)"
+    return held_while_unreachable(stale, 0)
 
 
 def checkpoint_backlog_expr() -> str:
@@ -155,15 +180,15 @@ RULES = [
      CERT_EXPIRY, 0, "NoData"),
     ("cf2otel-certificate-status", "Cloudflare certificate pack is not active", "A present certificate pack has a status other than active or backup_issued (Cloudflare's normal standby state for a second-CA backup certificate), including packs with unknown expiry. " + CERT_DESCRIPTION, 2645,
      CERT_STATUS, 0, "NoData"),
-    ("cf2otel-tunnel-unhealthy", "Cloudflare tunnel is not healthy", f"The current (value 1) tunnel status has been non-healthy for five minutes, with collector last success less than {TUNNELS_STATUS_FRESHNESS_SECONDS} seconds old (three deployment polling intervals of {TUNNELS_STATUS_INTERVAL_SECONDS} seconds); before its first success after a restart, the process start time stands in. Retired value-0 states are excluded. The deployment polls tunnels.status every 300 seconds (the exporter's built-in default is 60), so the generator default is 300; regenerate with GRAFANA_TUNNELS_STATUS_INTERVAL_SECONDS for any other interval. Collector is disabled by default; stale/absent data is not proof of health.", 2641,
-     '(max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel",cloudflare_tunnel_status!="healthy"} == 1) or on (cloudflare_tunnel_id, cloudflare_tunnel_name) (0 * max by (cloudflare_tunnel_id, cloudflare_tunnel_name) (cloudflare_tunnel_status{service_name="cf2otel"} == 1))) and on() (time() - max(' + last_success_or_start('cf2otel_collector="tunnels.status"') + ') < ' + str(TUNNELS_STATUS_FRESHNESS_SECONDS) + ')', 0, "NoData"),
+    ("cf2otel-tunnel-unhealthy", "Cloudflare tunnel is not healthy", f"The current (value 1) tunnel status has been non-healthy for five minutes, with collector last success less than {TUNNELS_STATUS_FRESHNESS_SECONDS} seconds old (three deployment polling intervals of {TUNNELS_STATUS_INTERVAL_SECONDS} seconds); before its first success after a restart, the process start time stands in. While the cannot-reach-Cloudflare-API rule's condition is true, absent tunnel status evaluates as healthy rather than NoData, so a restart during an outage does not alert here as well. Retired value-0 states are excluded. The deployment polls tunnels.status every 300 seconds (the exporter's built-in default is 60), so the generator default is 300; regenerate with GRAFANA_TUNNELS_STATUS_INTERVAL_SECONDS for any other interval. Collector is disabled by default; stale/absent data is not proof of health.", 2641,
+     tunnel_unhealthy_expr(), 0, "NoData"),
     ("cf2otel-collector-stale", "cf2otel collector is stale", collector_stale_description(), 401,
      collector_stale_rule_expr(), 0, "Alerting"),
-    ("cf2otel-collector-slow", "cf2otel collector polling exceeds its interval", "An active poll's elapsed time or the last completed poll's duration exceeds the collector's configured runtime interval for five minutes. Includes window and snapshot collectors; successful polls can still be slow. The query value is the worst elapsed-to-interval ratio across instances, calculated separately for each instance before reduction. Inspect collector status, API limiter waits and OTLP export latency. Silent while the same collector's checkpoint backlog rule is over its threshold, because catch-up polls run long by design and that rule already covers them.", 401,
-     f'{poll_health_expr("scrape_elapsed")} unless on (cf2otel_collector) ({poll_health_expr("checkpoint_backlog")} > {BACKLOG_INTERVALS})', 1, "Alerting"),
+    ("cf2otel-collector-slow", "cf2otel collector polling exceeds its interval", "An active poll's elapsed time or the last completed poll's duration exceeds the collector's configured runtime interval for five minutes. Includes window and snapshot collectors; successful polls can still be slow. The query value is the worst elapsed-to-interval ratio across instances, calculated separately for each instance before reduction. Inspect collector status, API limiter waits and OTLP export latency. Silent while the same collector's checkpoint backlog rule is over its threshold, because catch-up polls run long by design and that rule already covers them. Held at the threshold while the cannot-reach-Cloudflare-API rule's condition is true, because failing requests and their retries run long.", 401,
+     collector_slow_expr(), 1, "Alerting"),
     ("cf2otel-checkpoint-backlog", "cf2otel collector checkpoint backlog exceeds three intervals", "A window collector's unprocessed source time exceeds three configured runtime polling intervals for five minutes. Backlog excludes intentional source holdback and complete-bucket alignment, so it can grow despite successful pulls. The query value is the worst backlog-to-interval ratio across instances, calculated separately for each instance before reduction. Snapshot and disabled collectors have no backlog series. Absent backlog data is not proof of health; use the collector-stale rule for missing polling telemetry. Held at the threshold while every replica's backlog is falling (its five-minute peak below the peak ten minutes earlier), so catch-up after an outage does not alert, and while the cannot-reach-Cloudflare-API rule's condition is true. Compare checkpoint age and catch-up progress before changing polling or body capture settings; preserve checkpoints.", 404,
      checkpoint_backlog_expr(), BACKLOG_INTERVALS, "NoData"),
-    ("cf2otel-api-unreachable", "cf2otel cannot reach Cloudflare API", "Every physical Cloudflare API request in the last five minutes failed (timeout, connection, auth, rate-limit or HTTP error) and at least one was attempted. While this holds, the per-collector stale and checkpoint backlog rules stay at their thresholds, so an outage of the network, DNS or the Cloudflare API notifies once here. A short outage that recovers within five minutes does not fire. No requests at all evaluates as OK; the collector-stale rule covers a stopped exporter.", 408,
+    ("cf2otel-api-unreachable", "cf2otel cannot reach Cloudflare API", "At least 90% of physical Cloudflare API requests in the last five minutes failed (timeout, connection, auth, rate-limit or HTTP error), so a partial Cloudflare API incident where a few requests still succeed counts. The query value is the failed share. While this holds, the per-collector stale, slow-poll and checkpoint backlog rules stay at their thresholds and absent tunnel status reads as healthy, so an outage of the network, DNS or the Cloudflare API notifies once here. A short outage that recovers within five minutes does not fire. No requests at all evaluates as OK; the collector-stale rule covers a stopped exporter.", 408,
      API_UNREACHABLE, 0, "Ok"),
     ("cf2otel-export-failure", "cf2otel export is failing", "OTLP export failures occurred in the last 15 minutes.", 403,
      'sum(increase(cf2otel_export_errors_total{service_name="cf2otel"}[15m])) or on() (0 * sum(increase(cf2otel_export_success_total{service_name="cf2otel"}[15m])))', 0, "Alerting"),
@@ -437,15 +462,19 @@ def outage_fixtures() -> dict:
         return [{"series": api + "}", "values": ok}, {"series": api + ',cf2otel_error_class="timeout"}', "values": failed}]
 
     failing, recovered, idle = requests("100+0x20", "0+2x20"), requests("100+1x20", "0+2x20"), requests("100+0x20", "0+0x20")
+    # A partial API outage: about one request in 25 still succeeds.
+    partial = requests("100+1x20", "0+24x20")
     tests = []
-    for name, series, expected in (("every request failing fires once", failing, [{"labels": "{}", "value": 10}]),
-                                   ("one success in five minutes is reachable", recovered, []),
+    for name, series, expected in (("every request failing fires once", failing, [{"labels": "{}", "value": 1}]),
+                                   ("a partial outage with a few successes fires once", partial, [{"labels": "{}", "value": 0.96}]),
+                                   ("a third of requests succeeding is reachable", recovered, []),
                                    ("no requests is not unreachable", idle, [])):
         tests.append({"name": name, "interval": "1m", "input_series": series, "promql_expr_test": [
             {"expr": rules["cf2otel-api-unreachable"], "eval_time": "10m", "exp_samples": expected}]})
     stale = [{"series": 'cf2otel_scrape_last_success_timestamp_seconds{service_name="cf2otel",cf2otel_collector="access.logins"}',
               "values": f"{600 - 1200}+0x20"}]
     for name, series, value in (("stale collector is held at its threshold while the API is unreachable", failing, 0),
+                                ("stale collector is held at its threshold during a partial outage", partial, 0),
                                 ("stale collector fires while the API is reachable", recovered, 300)):
         tests.append({"name": name, "interval": "1m", "input_series": stale + series, "promql_expr_test": [
             {"expr": rules["cf2otel-collector-stale"], "eval_time": "10m",
@@ -463,11 +492,29 @@ def outage_fixtures() -> dict:
     for name, backlog, series, value in (("falling backlog after an outage is held at the threshold", "3000-60x20", recovered, 3),
                                          ("growing backlog fires", "900+60x20", recovered, 7),
                                          ("flat backlog over the threshold fires", "1800+0x20", recovered, 6),
-                                         ("growing backlog is held while the API is unreachable", "900+60x20", failing, 3)):
+                                         ("growing backlog is held while the API is unreachable", "900+60x20", failing, 3),
+                                         ("growing backlog is held during a partial outage", "900+60x20", partial, 3)):
         backlog_case(name, {"one": backlog}, series, value)
     backlog_case("a falling replica does not hide another replica's growing backlog",
                  {"one": "6000-50x20", "two": "1200+60x20"}, recovered, 8)
     backlog_case("every replica falling is held at the threshold", {"one": "6000-50x20", "two": "3000-60x20"}, recovered, 3)
+
+    slow_labels = 'service_name="cf2otel",instance="one",cf2otel_collector="tunnels.status"'
+    slow = [{"series": f"cf2otel_scrape_elapsed_seconds{{{slow_labels}}}", "values": "600+0x20"},
+            {"series": f"cf2otel_scrape_interval_seconds{{{slow_labels}}}", "values": "300+0x20"}]
+    for name, series, value in (("slow poll is held at its threshold while the API is unreachable", failing, 1),
+                                ("slow poll is held at its threshold during a partial outage", partial, 1),
+                                ("slow poll fires while the API is reachable", recovered, 2)):
+        tests.append({"name": name, "interval": "1m", "input_series": slow + series, "promql_expr_test": [
+            {"expr": rules["cf2otel-collector-slow"], "eval_time": "10m",
+             "exp_samples": [{"labels": '{cf2otel_collector="tunnels.status"}', "value": value}]}]})
+
+    # After a restart during an outage the tunnel gauges are absent until the
+    # first success. The rule must evaluate to healthy, not NoData, meanwhile.
+    for name, series, expected in (("absent tunnel status is healthy, not NoData, during a partial outage", partial, [{"labels": "{}", "value": 0}]),
+                                   ("absent tunnel status stays NoData while the API is reachable", recovered, [])):
+        tests.append({"name": name, "interval": "1m", "input_series": series, "promql_expr_test": [
+            {"expr": rules["cf2otel-tunnel-unhealthy"], "eval_time": "10m", "exp_samples": expected}]})
     return {"rule_files": [], "evaluation_interval": "1m", "tests": tests}
 
 
