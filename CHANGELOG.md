@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.20.2](https://github.com/rknightion/cf2otel/compare/v0.20.1...v0.20.2) (2026-11-27)
+
+
+### Bug Fixes
+
+* **alerts:** label poller rules with the investigation contract ([#289](https://github.com/rknightion/cf2otel/issues/289)) ([0327be0](https://github.com/rknightion/cf2otel/commit/0327be0965ff9f940b0f8f94b3ce651b347b3a17))
+* **cfapi:** admit shared-budget waiters in arrival order ([#254](https://github.com/rknightion/cf2otel/issues/254)) ([455244b](https://github.com/rknightion/cf2otel/commit/455244bad6fbf0178b367281825d7e65b55f0617))
+* **cfapi:** raise limiter bursts within Cloudflare's 5-minute budgets ([#259](https://github.com/rknightion/cf2otel/issues/259)) ([3c2b6c7](https://github.com/rknightion/cf2otel/commit/3c2b6c750f10e908b9791caae8b407a552169f37))
+* **ci:** adopt broker connection retries ([#258](https://github.com/rknightion/cf2otel/issues/258)) ([b13e126](https://github.com/rknightion/cf2otel/commit/b13e1260b2b9d6e09b4e32dcd548c4a3ff450f40))
+* **deps:** build with Go 1.27.4 ([#250](https://github.com/rknightion/cf2otel/issues/250)) ([6541736](https://github.com/rknightion/cf2otel/commit/654173654d4ba09de354801054f0236518aff24a))
+* **deps:** update golang.org/x/net to v0.62.0 ([#256](https://github.com/rknightion/cf2otel/issues/256)) ([162e384](https://github.com/rknightion/cf2otel/commit/162e3848d59b023b77d442f821728a04d708b74c))
+* **deps:** update module github.com/prometheus/common to v0.74.0 ([#284](https://github.com/rknightion/cf2otel/issues/284)) ([dc0ac60](https://github.com/rknightion/cf2otel/commit/dc0ac60f847cf3acfecb5ab6beda6c1420bb3836))
+* **deps:** update module go.yaml.in/yaml/v3 to v4 ([#285](https://github.com/rknightion/cf2otel/issues/285)) ([755541c](https://github.com/rknightion/cf2otel/commit/755541c509cadaa9eb2a61f9821fe8ec7ed2d7ef))
+* **grafana:** keep certificate rules evaluating across restarts ([#320](https://github.com/rknightion/cf2otel/issues/320)) ([d8f6c9c](https://github.com/rknightion/cf2otel/commit/d8f6c9c032f717d085361ef7d6fb8dd02894add4))
+* **grafana:** reconcile daily jev usage without duplicate provider legs ([42a2c7c](https://github.com/rknightion/cf2otel/commit/42a2c7c1a0026c49f8cb4e40568358cee5205cc0))
+* **grafana:** treat a partial Cloudflare API outage as unreachable ([#358](https://github.com/rknightion/cf2otel/issues/358)) ([6006a41](https://github.com/rknightion/cf2otel/commit/6006a41187e8b375183a84eb423725c37aa9137c))
+* replace silenced HTTP/2 connections after a network outage ([#251](https://github.com/rknightion/cf2otel/issues/251)) ([9faf4ec](https://github.com/rknightion/cf2otel/commit/9faf4eced3be615eba6b12e254fd37efe29f2fe1))
+* **selfobs:** report persisted checkpoints before the first poll ([#311](https://github.com/rknightion/cf2otel/issues/311)) ([6c3635a](https://github.com/rknightion/cf2otel/commit/6c3635a75f5366f84bacc51dd9fa0a78cf0c80f9))
+
+
+### Performance
+
+* **telemetry:** overlap acknowledged source signal flushes ([177a147](https://github.com/rknightion/cf2otel/commit/177a147abb939d6c0ea237f679f6064c6982f68f))
+
 ## [0.20.1](https://github.com/rknightion/cf2otel/compare/v0.20.0...v0.20.1) (2026-11-05)
 
 
