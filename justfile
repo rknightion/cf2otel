@@ -13,7 +13,7 @@ govulncheck_version := "v1.10.0"
 # renovate: datasource=go depName=github.com/goreleaser/goreleaser/v2
 goreleaser_version := "v2.20.3"
 # renovate: datasource=npm depName=groma.md
-groma_version := "0.7.8"
+groma_version := "0.8.0"
 cloud_helm_version := "v4.2.2"
 cloud_kubeconform_version := "v0.8.0"
 cloud_helm := tools_dir + "/helm-" + cloud_helm_version + "/helm"
